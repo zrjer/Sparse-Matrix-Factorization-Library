@@ -1,0 +1,11 @@
+!.gitignore
+
+*.a
+*.bak
+*.mtx
+*.o
+*.obj
+*.out
+*.so
+*.so.*
+*.swp
