@@ -6,3 +6,7 @@ all:
 
 library:
 	( cd Lib ; $(MAKE) )
+
+clean:
+	( cd Lib ; $(MAKE) clean )
+	( cd Demo ; $(MAKE) clean )

@@ -1,7 +1,9 @@
 MAKE = make
+
 CC = gcc
 CXX = g++
 NVCC = nvcc
+
 CFLAGS = -O3 -fPIC
 CXXFLAGS = -O3 -fPIC
 NVCCFLAGS = -O3 \
