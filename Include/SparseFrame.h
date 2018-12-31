@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+    int SparseFrame (int argc, char **argv);
+
 #ifdef __cplusplus
 }
 #endif
