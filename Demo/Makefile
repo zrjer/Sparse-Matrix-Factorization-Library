@@ -2,9 +2,11 @@ include ../Config/SparseFrame.mk
 
 C = $(CC) $(CFLAGS)
 I = -I../Include
+RPATH = $(realpath $(CURDIR)/../Lib)
 LIBS = $(LDLIBS) \
 	   -L../Lib \
-	   -lSparseFrame
+	   -lSparseFrame \
+	   -Wl,-rpath=$(RPATH)
 
 all: library demo
 
@@ -12,7 +14,7 @@ library:
 	( cd ../Lib ; $(MAKE) )
 
 demo: demo.c
-	$(C) $(I) $(LDFLAGS) -Wl,-rpath=$(realpath $(CURDIR)/../Lib) $(LIBS) $< -o $@
+	$(C) $(I) $(LDFLAGS) $(LIBS) $< -o $@
 
 clean:
 	rm -fr demo
