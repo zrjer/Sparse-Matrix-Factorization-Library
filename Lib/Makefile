@@ -14,7 +14,7 @@ library: $(OBJS)
 	$(CC) $(SOFLAGS) $(LDFLAGS) $(LIBS) $^ -o $(LIBRARY).so
 
 clean:
-	rm -fr *.o
+	rm -fr *.o *.so
 
 SparseFrame.o: ../Source/SparseFrame.c
 	$(C) $(I) -c $< -o $@
