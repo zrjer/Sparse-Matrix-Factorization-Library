@@ -11,7 +11,7 @@ OBJS = SparseFrame.o
 all: library
 
 library: $(OBJS)
-	$(CC) $(SOFLAGS) $(LDFLAGS) $(LIBS) $^ -o $(LIBRARY).so
+	$(CC) $(SOFLAGS) $(LDFLAGS) $^ -o $(LIBRARY).so $(LIBS)
 
 clean:
 	rm -fr *.o *.so

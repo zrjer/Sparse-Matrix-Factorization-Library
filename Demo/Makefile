@@ -14,7 +14,7 @@ library:
 	( cd ../Lib ; $(MAKE) )
 
 demo: demo.c
-	$(C) $(I) $(LDFLAGS) $(LIBS) $< -o $@
+	$(C) $(I) $(LDFLAGS) $< -o $@ $(LIBS)
 
 clean:
 	rm -fr demo
