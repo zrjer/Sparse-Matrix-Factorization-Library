@@ -3,6 +3,7 @@
 
 #include "arch.h"
 #include "parameters.h"
+#include "info.h"
 
 #ifdef __cplusplus
 extern "C" {

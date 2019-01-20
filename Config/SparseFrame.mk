@@ -7,9 +7,9 @@ NVCC = nvcc
 CFOPENMP = -fopenmp
 CFPTHREADS = -pthread
 
-CFLAGS = -O3 -fPIC -Wall $(CFOPENMP)
-CXXFLAGS = -O3 -fPIC -Wall $(CFOPENMP)
-NVCCFLAGS = -O3 \
+CFLAGS = -O0 -fPIC -Wall $(CFOPENMP)
+CXXFLAGS = -O0 -fPIC -Wall $(CFOPENMP)
+NVCCFLAGS = -O0 \
     -Xcompiler -fPIC \
 	-gencode arch=compute_30,code=sm_30 \
 	-gencode arch=compute_35,code=sm_35 \
