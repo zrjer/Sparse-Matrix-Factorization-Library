@@ -17,9 +17,8 @@ NVCCFLAGS = -O0 \
 	-gencode arch=compute_60,code=sm_60
 
 LBLAS = -lopenblas
-LLAPACK = -llapack
 LCUDA = -lcudart -lcublas -lcusolver
-LDLIBS = -lgfortran -lm -lrt $(LBLAS) $(LLAPACK) $(LCUDA)
+LDLIBS = -lgfortran -lm -lrt $(LBLAS) $(LCUDA)
 
 SOFLAGS = -shared
 LDFLAGS = $(CFOPENMP)
