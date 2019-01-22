@@ -1,6 +1,8 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
+#define PRINT_INFO
+
 #define MEM_LIMITS
 
 #ifdef MEM_LIMITS

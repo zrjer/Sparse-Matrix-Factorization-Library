@@ -19,7 +19,7 @@ NVCCFLAGS = -O0 \
 LBLAS = -lopenblas
 LLAPACK = -llapack
 LCUDA = -lcudart -lcublas -lcusolver
-LDLIBS = -lgfortran -lm -lrt # $(LBLAS) $(LLAPACK) $(LCUDA)
+LDLIBS = -lgfortran -lm -lrt $(LBLAS) $(LLAPACK) $(LCUDA)
 
 SOFLAGS = -shared
 LDFLAGS = $(CFOPENMP)

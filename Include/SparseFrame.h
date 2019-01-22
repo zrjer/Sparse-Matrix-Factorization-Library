@@ -1,6 +1,8 @@
 #ifndef SPARSEFRAME_H
 #define SPARSEFRAME_H
 
+#include <cuda_runtime.h>
+
 #include "arch.h"
 #include "parameters.h"
 #include "info.h"

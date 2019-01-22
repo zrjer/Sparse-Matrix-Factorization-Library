@@ -1,28 +1,24 @@
 #ifndef INFO_H
 #define INFO_H
 
-typedef
 struct common_info_struct
 {
-    void *mem;
-    size_t memsize;
-}
-common_info;
+    int numGPU = 0;
+};
 
-typedef
 struct gpu_info_struct
 {
-    void *host_mem;
-    size_t host_memsize;
-    void *dev_mem;
-    size_t dev_memsize;
-}
-gpu_info;
+    int busy = 0;
 
-typedef
+    void *host_mem = NULL;
+    size_t host_memsize = 0;
+    void *dev_mem = NULL;
+    size_t dev_memsize = 0;
+};
+
 struct matrix_info_struct
 {
-}
-matrix_info;
+    int state;
+};
 
 #endif
