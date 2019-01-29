@@ -19,6 +19,8 @@ struct gpu_info_struct
 
 struct matrix_info_struct
 {
+    FILE *file;
+
     int isComplex;
 
     int state;
