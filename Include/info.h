@@ -18,7 +18,14 @@ struct gpu_info_struct
 
 struct matrix_info_struct
 {
+    int isComplex;
+
     int state;
+
+    uLong *Ti;
+    uLong *Tj;
+    Float *Tx;
+    Float *Ty;
 };
 
 #endif
