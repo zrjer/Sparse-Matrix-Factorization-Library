@@ -101,7 +101,7 @@ int SparseFrame_free_gpu ( struct gpu_info_struct **gpu_info_ptr, struct common_
         (*gpu_info_ptr)[gpu_index].host_memsize = 0;
     }
 
-    free ( (*gpu_info_ptr) );
+    free ( *gpu_info_ptr );
     *gpu_info_ptr = NULL;
 
     common_info->numGPU = 0;
@@ -133,11 +133,36 @@ int SparseFrame_free_matrix ( struct matrix_info_struct **matrix_info_ptr, struc
     return 1;
 }
 
-int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info, struct common_info_struct *common_info )
+int SparseFrame_read_matrix_triplet ( struct matrix_info_struct *matrix_info )
+{
+    return 1;
+}
+
+int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
+{
+    if ( matrix_info->Ti != NULL) free ( matrix_info->Ti );
+    if ( matrix_info->Tj != NULL) free ( matrix_info->Tj );
+    if ( matrix_info->Tx != NULL) free ( matrix_info->Tx );
+    if ( matrix_info->Ty != NULL) free ( matrix_info->Ty );
+
+    matrix_info->nzmax = 0;
+    matrix_info->Ti = NULL;
+    matrix_info->Tj = NULL;
+    matrix_info->Tx = NULL;
+    matrix_info->Ty = NULL;
+
+    return 1;
+}
+
+int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info )
 {
     matrix_info->file = fopen ( path, "r" );
 
     if ( matrix_info->file == NULL ) return 0;
+
+    SparseFrame_read_matrix_triplet ( matrix_info );
+
+    SparseFrame_cleanup_matrix ( matrix_info );
 
     fclose ( matrix_info->file );
 
@@ -166,7 +191,7 @@ int SparseFrame ( int argc, char **argv )
     {
         // Read matrices
 
-        SparseFrame_read_matrix ( argv [ 1 + matrixIndex ], matrix_info + matrixIndex, common_info );
+        SparseFrame_read_matrix ( argv [ 1 + matrixIndex ], matrix_info + matrixIndex );
 
         // Factorize
 

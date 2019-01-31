@@ -25,6 +25,8 @@ struct matrix_info_struct
 
     int state;
 
+    uLong nzmax;
+
     uLong *Ti;
     uLong *Tj;
     Float *Tx;
