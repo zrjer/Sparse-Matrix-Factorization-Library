@@ -17,6 +17,9 @@ struct gpu_info_struct
     size_t host_memsize;
 };
 
+#define MAXMMLINE 1024
+size_t max_mm_line_size = MAXMMLINE + 1;
+
 struct matrix_info_struct
 {
     FILE *file;
@@ -25,6 +28,8 @@ struct matrix_info_struct
 
     int state;
 
+    uLong ncol;
+    uLong nrow;
     uLong nzmax;
 
     uLong *Ti;

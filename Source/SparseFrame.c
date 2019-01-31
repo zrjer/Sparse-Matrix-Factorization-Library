@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "SparseFrame.h"
 
 int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct common_info_struct *common_info )
@@ -72,6 +70,9 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
 #endif
         }
     }
+#ifdef PRINT_INFO
+                printf ( "\n" );
+#endif
 
     return 1;
 }
@@ -133,8 +134,85 @@ int SparseFrame_free_matrix ( struct matrix_info_struct **matrix_info_ptr, struc
     return 1;
 }
 
-int SparseFrame_read_matrix_triplet ( struct matrix_info_struct *matrix_info )
+int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct *matrix_info )
 {
+    char s0[max_mm_line_size];
+    char s1[max_mm_line_size];
+    char s2[max_mm_line_size];
+    char s3[max_mm_line_size];
+    char s4[max_mm_line_size];
+
+    int n_scanned;
+    uLong ncol, nrow, nzmax;
+    uLong Ti, Tj;
+    Float Tx, Ty;
+
+    uLong nz;
+
+    while ( ( getline ( buf_ptr, &max_mm_line_size, matrix_info->file ) != -1 ) && ( strcmp (*buf_ptr, "") == 0 ) );
+
+    if ( strncmp ( *buf_ptr, "%%MatrixMarket", 14 ) != 0 )
+    {
+        printf ("Matrix format error\n\n");
+        return 0;
+    }
+
+    sscanf ( *buf_ptr, "%s %s %s %s %s\n", s0, s1, s2, s3, s4 );
+
+    if ( strcmp ( s3, "real" ) == 0 )
+        matrix_info->isComplex = 0;
+    else
+        matrix_info->isComplex = 1;
+
+    while ( ( getline ( buf_ptr, &max_mm_line_size, matrix_info->file ) != -1 ) && ( ( strcmp (*buf_ptr, "") == 0 ) || ( strncmp (*buf_ptr, "%", 1) == 0 ) ) );
+
+    n_scanned = sscanf ( *buf_ptr, "%ld %ld %ld\n", &ncol, &nrow, &nzmax );
+
+    if (n_scanned != 3)
+    {
+        printf ("Matrix format error\n\n");
+        return 0;
+    }
+
+#ifdef PRINT_INFO
+    if ( matrix_info->isComplex == 0 )
+        printf ("matrix is real, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
+    else
+        printf ("matrix is complex, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
+#endif
+
+    matrix_info->Ti = malloc ( sizeof(uLong) * nzmax );
+    matrix_info->Tj = malloc ( sizeof(uLong) * nzmax );
+    matrix_info->Tx = malloc ( sizeof(Float) * nzmax );
+    if ( matrix_info->isComplex )
+        matrix_info->Ty = malloc ( sizeof(Float) * nzmax );
+
+    nz = 0;
+
+    while ( ( getline ( buf_ptr, &max_mm_line_size, matrix_info->file ) != -1 ) )
+    {
+        if ( strcmp (*buf_ptr, "") != 0 )
+        {
+            if ( nz >= nzmax )
+            {
+                printf ( "Error: nzmax exceeded\n" );
+                return 0;
+            }
+            n_scanned = sscanf ( *buf_ptr, "%ld %ld %lg %lg\n", &Tj, &Ti, &Tx, &Ty );
+            if ( matrix_info->isComplex && n_scanned < 4 )
+            {
+                printf ( "Error: imaginary part not present\n" );
+                return 0;
+            }
+            matrix_info->Ti[nz] = Ti;
+            matrix_info->Tj[nz] = Tj;
+            matrix_info->Tx[nz] = Tx;
+            if ( matrix_info->isComplex )
+                matrix_info->Ty[nz] = Ty;
+            nz++;
+        }
+    }
+
     return 1;
 }
 
@@ -145,6 +223,8 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Tx != NULL) free ( matrix_info->Tx );
     if ( matrix_info->Ty != NULL) free ( matrix_info->Ty );
 
+    matrix_info->ncol = 0;
+    matrix_info->nrow = 0;
     matrix_info->nzmax = 0;
     matrix_info->Ti = NULL;
     matrix_info->Tj = NULL;
@@ -156,15 +236,21 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info )
 {
+    char *buf;
+
     matrix_info->file = fopen ( path, "r" );
 
     if ( matrix_info->file == NULL ) return 0;
 
-    SparseFrame_read_matrix_triplet ( matrix_info );
+    buf = malloc ( sizeof(char) * max_mm_line_size );
 
-    SparseFrame_cleanup_matrix ( matrix_info );
+    SparseFrame_read_matrix_triplet ( &buf, matrix_info );
 
     fclose ( matrix_info->file );
+
+    free ( buf );
+
+    SparseFrame_cleanup_matrix ( matrix_info );
 
     return 1;
 }
