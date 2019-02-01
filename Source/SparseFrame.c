@@ -144,7 +144,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 
     int n_scanned;
     uLong ncol, nrow, nzmax;
-    uLong Ti, Tj;
+    uLong Tj, Ti;
     Float Tx, Ty;
 
     uLong nz;
@@ -181,11 +181,13 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
         printf ("matrix is complex, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
 #endif
 
-    matrix_info->Ti = malloc ( sizeof(uLong) * nzmax );
     matrix_info->Tj = malloc ( sizeof(uLong) * nzmax );
+    matrix_info->Ti = malloc ( sizeof(uLong) * nzmax );
     matrix_info->Tx = malloc ( sizeof(Float) * nzmax );
     if ( matrix_info->isComplex )
         matrix_info->Ty = malloc ( sizeof(Float) * nzmax );
+    else
+        matrix_info->Ty = NULL;
 
     nz = 0;
 
@@ -204,8 +206,8 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
                 printf ( "Error: imaginary part not present\n" );
                 return 0;
             }
-            matrix_info->Ti[nz] = Ti;
             matrix_info->Tj[nz] = Tj;
+            matrix_info->Ti[nz] = Ti;
             matrix_info->Tx[nz] = Tx;
             if ( matrix_info->isComplex )
                 matrix_info->Ty[nz] = Ty;
@@ -216,20 +218,76 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     return 1;
 }
 
-int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
+int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
 {
-    if ( matrix_info->Ti != NULL) free ( matrix_info->Ti );
+    uLong nz, nzmax;
+    uLong p;
+    uLong *workspace;
+
+    nzmax = matrix_info->nzmax;
+
+    matrix_info->Cp = calloc ( 0, sizeof(uLong) * ( nzmax + 1 ) );
+    matrix_info->Ci = malloc ( sizeof(uLong) * nzmax );
+    matrix_info->Cx = malloc ( sizeof(Float) * nzmax );
+    if ( matrix_info->isComplex )
+        matrix_info->Cy = malloc ( sizeof(Float) * nzmax );
+    else
+        matrix_info->Cy = NULL;
+
+    for ( nz = 0; nz < nzmax; nz++ )
+        matrix_info->Cp[ matrix_info->Tj[nz] + 1 ] ++;
+
+    for ( nz = 0; nz < nzmax; nz++ )
+        matrix_info->Cp[nz+1] += matrix_info->Cp[nz];
+
+    workspace = malloc ( sizeof(uLong) * nzmax );
+    memcpy ( workspace, matrix_info->Cp, sizeof(uLong) * nzmax );
+
+    for ( nz = 0; nz < nzmax; nz++ )
+    {
+        p = workspace [ matrix_info->Tj [ nz ] ] ++;
+        matrix_info->Ci [p] = matrix_info->Ti[nz];
+        matrix_info->Cx [p] = matrix_info->Tx[nz];
+        if ( matrix_info->isComplex )
+            matrix_info->Cy [p] = matrix_info->Ty[nz];
+    }
+
     if ( matrix_info->Tj != NULL) free ( matrix_info->Tj );
+    if ( matrix_info->Ti != NULL) free ( matrix_info->Ti );
     if ( matrix_info->Tx != NULL) free ( matrix_info->Tx );
     if ( matrix_info->Ty != NULL) free ( matrix_info->Ty );
+
+    matrix_info->Tj = NULL;
+    matrix_info->Ti = NULL;
+    matrix_info->Tx = NULL;
+    matrix_info->Ty = NULL;
+
+    return 1;
+}
+
+int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
+{
+    if ( matrix_info->Tj != NULL) free ( matrix_info->Tj );
+    if ( matrix_info->Ti != NULL) free ( matrix_info->Ti );
+    if ( matrix_info->Tx != NULL) free ( matrix_info->Tx );
+    if ( matrix_info->Ty != NULL) free ( matrix_info->Ty );
+
+    if ( matrix_info->Cp != NULL) free ( matrix_info->Cp );
+    if ( matrix_info->Ci != NULL) free ( matrix_info->Ci );
+    if ( matrix_info->Cx != NULL) free ( matrix_info->Cx );
+    if ( matrix_info->Cy != NULL) free ( matrix_info->Cy );
 
     matrix_info->ncol = 0;
     matrix_info->nrow = 0;
     matrix_info->nzmax = 0;
-    matrix_info->Ti = NULL;
     matrix_info->Tj = NULL;
+    matrix_info->Ti = NULL;
     matrix_info->Tx = NULL;
     matrix_info->Ty = NULL;
+    matrix_info->Cp = NULL;
+    matrix_info->Ci = NULL;
+    matrix_info->Cx = NULL;
+    matrix_info->Cy = NULL;
 
     return 1;
 }

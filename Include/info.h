@@ -32,10 +32,15 @@ struct matrix_info_struct
     uLong nrow;
     uLong nzmax;
 
-    uLong *Ti;
     uLong *Tj;
+    uLong *Ti;
     Float *Tx;
     Float *Ty;
+
+    uLong *Cp;
+    uLong *Ci;
+    Float *Cx;
+    Float *Cy;
 };
 
 #endif
