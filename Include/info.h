@@ -19,10 +19,13 @@ struct gpu_info_struct
 
 #define MAXMMLINE 1024
 size_t max_mm_line_size = MAXMMLINE + 1;
+enum FactorizeType {TYPE_CHOLESKY, TYPE_QR, TYPE_LU};
 
 struct matrix_info_struct
 {
     FILE *file;
+
+    enum FactorizeType factorize_type;
 
     int isComplex;
 
@@ -41,6 +44,11 @@ struct matrix_info_struct
     uLong *Ci;
     Float *Cx;
     Float *Cy;
+
+    double read_time;
+    double analyze_time;
+    double factorize_time;
+    double solve_time;
 };
 
 #endif

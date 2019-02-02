@@ -1,5 +1,14 @@
 #include "SparseFrame.h"
 
+double SparseFrame_time ()
+{
+    struct timespec tp;
+
+    clock_gettime ( CLOCK_REALTIME, &tp );
+
+    return ( tp.tv_sec + ( double ) ( tp.tv_nsec ) / 1.0e9 );
+}
+
 int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct common_info_struct *common_info )
 {
     int numGPU;
@@ -296,6 +305,10 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
 {
     char *buf;
 
+    double timestamp;
+
+    timestamp = SparseFrame_time ();
+
     matrix_info->file = fopen ( path, "r" );
 
     if ( matrix_info->file == NULL ) return 0;
@@ -307,6 +320,14 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
     fclose ( matrix_info->file );
 
     free ( buf );
+
+    SparseFrame_compress ( matrix_info );
+
+    matrix_info->read_time = SparseFrame_time () - timestamp;
+
+#ifdef PRINT_INFO
+    printf ( "Matrix read time: %lf seconds\n", matrix_info->read_time );
+#endif
 
     SparseFrame_cleanup_matrix ( matrix_info );
 
