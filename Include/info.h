@@ -20,6 +20,7 @@ struct gpu_info_struct
 #define MAXMMLINE 1024
 size_t max_mm_line_size = MAXMMLINE + 1;
 enum FactorizeType {TYPE_CHOLESKY, TYPE_QR, TYPE_LU};
+enum MatrixState {MATRIX_STATE_IDLE, MATRIX_STATE_TRIPLET, MATRIX_STATE_COMPRESSED};
 
 struct matrix_info_struct
 {
@@ -29,7 +30,7 @@ struct matrix_info_struct
 
     int isComplex;
 
-    int state;
+    enum MatrixState state;
 
     uLong ncol;
     uLong nrow;
@@ -44,6 +45,15 @@ struct matrix_info_struct
     uLong *Ci;
     Float *Cx;
     Float *Cy;
+
+    uLong *Len;
+    uLong *Nv;
+    uLong *Next;
+    uLong *Perm;
+    uLong *Head;
+    uLong *Elen;
+    uLong *Degree;
+    uLong *Wi;
 
     double read_time;
     double analyze_time;

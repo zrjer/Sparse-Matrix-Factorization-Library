@@ -1,6 +1,7 @@
-#ifndef PARAMETERS_H
-#define PARAMETERS_H
+#ifndef PARAMETER_H
+#define PARAMETER_H
 
+#define PRINT_CALLS
 #define PRINT_INFO
 
 #define MEM_LIMITS
@@ -13,5 +14,8 @@
 #endif
 
 #undef MEM_LIMITS
+
+const double prune_dense = 10.0;
+const double aggressive = 1;
 
 #endif

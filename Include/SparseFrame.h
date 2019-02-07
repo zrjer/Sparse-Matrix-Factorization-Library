@@ -8,8 +8,11 @@
 
 #include <cuda_runtime.h>
 
+#include "amd.h"
+
 #include "arch.h"
-#include "parameters.h"
+#include "parameter.h"
+#include "macro.h"
 #include "info.h"
 
 #ifdef __cplusplus
