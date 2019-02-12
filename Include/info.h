@@ -30,30 +30,36 @@ struct matrix_info_struct
 
     int isComplex;
 
+    int isSymmetric;
+
     enum MatrixState state;
 
-    uLong ncol;
-    uLong nrow;
-    uLong nzmax;
+    Long ncol;
+    Long nrow;
+    Long nzmax;
 
-    uLong *Tj;
-    uLong *Ti;
+    Long *Tj;
+    Long *Ti;
     Float *Tx;
     Float *Ty;
 
-    uLong *Cp;
-    uLong *Ci;
+    Long *Cp;
+    Long *Ci;
     Float *Cx;
     Float *Cy;
 
-    uLong *Len;
-    uLong *Nv;
-    uLong *Next;
-    uLong *Perm;
-    uLong *Head;
-    uLong *Elen;
-    uLong *Degree;
-    uLong *Wi;
+    Long anz;
+    Long *Ap;
+    Long *Ai;
+
+    Long *Len;
+    Long *Nv;
+    Long *Next;
+    Long *Perm;
+    Long *Head;
+    Long *Elen;
+    Long *Degree;
+    Long *Wi;
 
     double read_time;
     double analyze_time;

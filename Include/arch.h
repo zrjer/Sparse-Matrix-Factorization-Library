@@ -7,10 +7,8 @@
 
 #define Int ARCH_INT
 #define uInt unsigned Int
-
 #define Long ARCH_LONG
 #define uLong unsigned Long
-
 #define Float ARCH_FLOAT
 
 #endif
