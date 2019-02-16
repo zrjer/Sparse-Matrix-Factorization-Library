@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 
 #include "amd.h"
+#include "metis.h"
 
 #include "arch.h"
 #include "parameter.h"

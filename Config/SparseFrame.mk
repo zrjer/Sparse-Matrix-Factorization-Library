@@ -32,7 +32,7 @@ NVCCFLAGS = -O0 \
 
 LBLAS = -lopenblas
 LCUDA = -lcudart -lcublas -lcusolver
-LDLIBS += -lgfortran -lm -lrt -lamd -lcamd $(LBLAS) $(LCUDA)
+LDLIBS += -lgfortran -lm -lrt -lamd -lcamd -lcolamd -lccolamd -lmetis $(LBLAS) $(LCUDA)
 
 SOFLAGS = -shared
 LDFLAGS = $(CFOPENMP)

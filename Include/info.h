@@ -48,18 +48,12 @@ struct matrix_info_struct
     Float *Cx;
     Float *Cy;
 
-    Long anz;
-    Long *Ap;
-    Long *Ai;
-
-    Long *Len;
-    Long *Nv;
+    Long *Head;
     Long *Next;
     Long *Perm;
-    Long *Head;
-    Long *Elen;
-    Long *Degree;
-    Long *Wi;
+
+    void *workspace;
+    size_t workSize;
 
     double read_time;
     double analyze_time;

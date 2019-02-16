@@ -5,7 +5,7 @@ double SparseFrame_time ()
     struct timespec tp;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_time================\n\n");
+    printf ("\n================SparseFrame_time================\n");
 #endif
 
     clock_gettime ( CLOCK_REALTIME, &tp );
@@ -19,7 +19,7 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
     int gpu_index;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_allocate_gpu================\n\n");
+    printf ("\n================SparseFrame_allocate_gpu================\n");
 #endif
 
     cudaGetDeviceCount ( &numGPU );
@@ -87,9 +87,6 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
 #endif
         }
     }
-#ifdef PRINT_INFO
-    printf ( "\n" );
-#endif
 
     return 0;
 }
@@ -100,7 +97,7 @@ int SparseFrame_free_gpu ( struct gpu_info_struct **gpu_info_ptr, struct common_
     int gpu_index;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_free_gpu================\n\n");
+    printf ("\n================SparseFrame_free_gpu================\n");
 #endif
 
     if ( *gpu_info_ptr == NULL ) return 1;
@@ -136,7 +133,7 @@ int SparseFrame_allocate_matrix ( struct matrix_info_struct **matrix_info_ptr, s
     int numSparseMatrix;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_allocate_matrix================\n\n");
+    printf ("\n================SparseFrame_allocate_matrix================\n");
 #endif
 
     numSparseMatrix = common_info->numSparseMatrix;
@@ -151,7 +148,7 @@ int SparseFrame_allocate_matrix ( struct matrix_info_struct **matrix_info_ptr, s
 int SparseFrame_free_matrix ( struct matrix_info_struct **matrix_info_ptr, struct common_info_struct *common_info )
 {
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_free_matrix================\n\n");
+    printf ("\n================SparseFrame_free_matrix================\n");
 #endif
 
     if ( *matrix_info_ptr == NULL ) return 1;
@@ -179,7 +176,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     Long nz;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_read_matrix_triplet================\n\n");
+    printf ("\n================SparseFrame_read_matrix_triplet================\n");
 #endif
 
     while ( ( getline ( buf_ptr, &max_mm_line_size, matrix_info->file ) != -1 ) && ( strcmp (*buf_ptr, "") == 0 ) );
@@ -271,21 +268,20 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
 {
     int isComplex;
-    Long j, ncol, nrow;
+    Long j, ncol;
     Long nz, nzmax;
     Long p;
-    Long *Tj, *Ti, *Tx, *Ty;
-    Long *Cp, *Ci, *Cx, *Cy;
+    Long *Tj, *Ti, *Cp, *Ci;
+    Float *Tx, *Ty, *Cx, *Cy;
 
     Long *workspace;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_compress================\n\n");
+    printf ("\n================SparseFrame_compress================\n");
 #endif
 
     isComplex = matrix_info->isComplex;
     ncol = matrix_info->ncol;
-    nrow = matrix_info->nrow;
     nzmax = matrix_info->nzmax;
 
     Tj = matrix_info->Tj;
@@ -314,7 +310,7 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     for ( j = 0; j < ncol; j++ )
         Cp[j+1] += Cp[j];
 
-    workspace = malloc ( ( ncol + 1 ) * sizeof(Long) );
+    workspace = matrix_info->workspace;
     memcpy ( workspace, Cp, sizeof(Long) * ( ncol + 1 ) );
 
     for ( nz = 0; nz < nzmax; nz++ )
@@ -325,9 +321,6 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
         if ( isComplex )
             Cy [p] = Ty[nz];
     }
-
-    free (workspace);
-
 
     if ( Tj != NULL ) free ( Tj );
     if ( Ti != NULL ) free ( Ti );
@@ -349,7 +342,7 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
     double timestamp;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_read_matrix================\n\n");
+    printf ("\n================SparseFrame_read_matrix================\n");
 #endif
 
     timestamp = SparseFrame_time ();
@@ -366,6 +359,9 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
 
     free ( buf );
 
+    matrix_info->workSize = MAX ( ( 6 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(Long), ( 3 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(idx_t) );
+    matrix_info->workspace = malloc ( matrix_info->workSize );
+
     SparseFrame_compress ( matrix_info );
 
     matrix_info->read_time = SparseFrame_time () - timestamp;
@@ -377,32 +373,43 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
     return 0;
 }
 
-int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
+int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, ncol, nrow, nzmax, p, anz;
-    Long *Cp, *Ci, *Ap, *Ai;
+    Long j, i, ncol, nrow, p;
+    Long *Cp, *Ci;
+    Long *Head, *Next, *Perm;
 
     Long *workspace;
+    Long anz;
+    Long *Ap, *Ai, *Len, *Nv, *Elen, *Degree, *Wi;
 
     double Control[AMD_CONTROL], Info[AMD_INFO];
 
-    double timestamp;
-
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_analyze================\n\n");
+    printf ("\n================SparseFrame_amd================\n");
 #endif
-
-    timestamp = SparseFrame_time ();
 
     ncol = matrix_info->ncol;
     nrow = matrix_info->nrow;
-    nzmax = matrix_info->nzmax;
 
     Cp = matrix_info->Cp;
     Ci = matrix_info->Ci;
 
-    Ap = calloc ( ( nrow + 1 ), sizeof(Long) );
-    matrix_info->Ap = Ap;
+    Head = matrix_info->Head;
+    Next = matrix_info->Next;
+    Perm = matrix_info->Perm;
+
+    workspace = matrix_info->workspace;
+
+    Len    = workspace + 0 * nrow;
+    Nv     = workspace + 1 * nrow;
+    Elen   = workspace + 2 * nrow;
+    Degree = workspace + 3 * nrow;
+    Wi     = workspace + 4 * nrow;
+    Ap     = workspace + 5 * nrow;
+    Ai     = workspace + 6 * nrow + 1;
+
+    memset ( Ap, 0, ( nrow + 1 ) * sizeof(Long) );
 
     for ( j = 0; j < ncol; j++ )
     {
@@ -423,13 +430,8 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
     }
 
     anz = Ap[nrow];
-    matrix_info->anz = anz;
 
-    Ai = malloc ( anz * sizeof(Long) );
-    matrix_info->Ai = Ai;
-
-    workspace = malloc ( ( nrow + 1 ) * sizeof(Long) );
-    memcpy ( workspace, Ap, ( nrow + 1 ) * sizeof(Long) );
+    memcpy ( workspace, Ap, ( nrow + 1 ) * sizeof(Long) ); // Be careful of overwriting Ap
 
     for ( j = 0; j < ncol; j++ )
     {
@@ -444,28 +446,128 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    free (workspace);
-
-    matrix_info->Len = malloc ( matrix_info->nrow * sizeof(Long) );
-    matrix_info->Nv = malloc ( matrix_info->nrow * sizeof(Long) );
-    matrix_info->Next = malloc ( matrix_info->nrow * sizeof(Long) );
-    matrix_info->Perm = malloc ( matrix_info->nrow * sizeof(Long) );
-    matrix_info->Head = malloc ( matrix_info->nrow * sizeof(Long) );
-    matrix_info->Elen = malloc ( matrix_info->nrow * sizeof(Long) );
-    matrix_info->Degree = malloc ( matrix_info->nrow * sizeof(Long) );
-    matrix_info->Wi = malloc ( matrix_info->nrow * sizeof(Long) );
-
     for ( j = 0; j < matrix_info->nrow; j++ )
-        matrix_info->Len[j] = matrix_info->Ap[j+1] - matrix_info->Ap[j];
+        Len[j] = Ap[j+1] - Ap[j];
 
     Control[AMD_DENSE] = prune_dense;
     Control[AMD_AGGRESSIVE] = aggressive;
 
-    amd_l2 ( matrix_info->nrow, matrix_info->Ap, matrix_info->Ai, matrix_info->Len,
-            matrix_info->anz, matrix_info->Ap[matrix_info->nrow],
-            matrix_info->Nv, matrix_info->Next, matrix_info->Perm, matrix_info->Head,
-            matrix_info->Elen, matrix_info->Degree, matrix_info->Wi,
-            Control, Info );
+    amd_l2 ( nrow, Ap, Ai, Len, anz, Ap[nrow], Nv, Next, Perm, Head, Elen, Degree, Wi, Control, Info );
+
+    return 0;
+}
+
+int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
+{
+    Long j, i, ncol, nrow, p;
+    Long *Cp, *Ci;
+    Long *Head, *Next, *Perm;
+
+    idx_t *Mworkspace;
+    Long mnz;
+    idx_t *Mp, *Mi, *Mperm, *Miperm;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_metis================\n");
+#endif
+
+    ncol = matrix_info->ncol;
+    nrow = matrix_info->nrow;
+
+    Cp = matrix_info->Cp;
+    Ci = matrix_info->Ci;
+
+    Head = matrix_info->Head;
+    Next = matrix_info->Next;
+    Perm = matrix_info->Perm;
+
+    Mworkspace = matrix_info->workspace;
+
+    if ( sizeof(idx_t) == sizeof(Long) )
+        Mperm = Perm;
+    else
+        Mperm  = Mworkspace + 0 * nrow;
+    Miperm = Mworkspace + 1 * nrow;
+    Mp     = Mworkspace + 2 * nrow;
+    Mi     = Mworkspace + 3 * nrow + 1;
+
+    memset ( Mp, 0, ( nrow + 1 ) * sizeof(idx_t) );
+
+    for ( j = 0; j < ncol; j++ )
+    {
+        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        {
+            i = Ci[p];
+            if (i > j)
+            {
+                Mp[i+1]++;
+                Mp[j+1]++;
+            }
+        }
+    }
+
+    for ( j = 0; j < nrow; j++)
+    {
+        Mp[j+1] += Mp[j];
+    }
+
+    mnz = Mp[nrow];
+
+    memcpy ( Mworkspace, Mp, ( nrow + 1 ) * sizeof(idx_t) ); // Be careful of overwriting Mp
+
+    for ( j = 0; j < ncol; j++ )
+    {
+        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        {
+            i = Ci[p];
+            if (i > j)
+            {
+                Mi [ Mworkspace[i]++ ] = j;
+                Mi [ Mworkspace[j]++ ] = i;
+            }
+        }
+    }
+
+    if ( mnz == 0 )
+    {
+        for ( i = 0; i < nrow; i++ )
+        {
+            Mperm[i] = i;
+        }
+    }
+    else
+    {
+        METIS_NodeND (&nrow, Mp, Mi, NULL, NULL, Mperm, Miperm);
+    }
+
+    if ( sizeof(idx_t) != sizeof(Long) )
+    {
+        for ( i = 0; i < nrow; i++ )
+        {
+            Perm[i] = Mperm[i];
+        }
+    }
+
+    return 0;
+}
+
+int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
+{
+    double timestamp;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_analyze================\n");
+#endif
+
+    timestamp = SparseFrame_time ();
+
+    matrix_info->Head = malloc ( matrix_info->nrow * sizeof(Long) );
+    matrix_info->Next = malloc ( matrix_info->nrow * sizeof(Long) );
+    matrix_info->Perm = malloc ( matrix_info->nrow * sizeof(Long) );
+
+    SparseFrame_amd ( matrix_info );
+
+    SparseFrame_metis ( matrix_info );
 
     matrix_info->analyze_time = SparseFrame_time () - timestamp;
 
@@ -475,7 +577,7 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
 {
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame_cleanup_matrix================\n\n");
+    printf ("\n================SparseFrame_cleanup_matrix================\n");
 #endif
 
     if ( matrix_info->Tj != NULL ) free ( matrix_info->Tj );
@@ -488,17 +590,11 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Cx != NULL ) free ( matrix_info->Cx );
     if ( matrix_info->Cy != NULL ) free ( matrix_info->Cy );
 
-    if ( matrix_info->Ap != NULL ) free ( matrix_info->Ap );
-    if ( matrix_info->Ai != NULL ) free ( matrix_info->Ai );
+    if ( matrix_info->Head != NULL ) free ( matrix_info->Head );
+    if ( matrix_info->Next != NULL ) free ( matrix_info->Next );
+    if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
 
-    if ( matrix_info->Len    != NULL ) free ( matrix_info->Len    );
-    if ( matrix_info->Nv     != NULL ) free ( matrix_info->Nv     );
-    if ( matrix_info->Next   != NULL ) free ( matrix_info->Next   );
-    if ( matrix_info->Perm   != NULL ) free ( matrix_info->Perm   );
-    if ( matrix_info->Head   != NULL ) free ( matrix_info->Head   );
-    if ( matrix_info->Elen   != NULL ) free ( matrix_info->Elen   );
-    if ( matrix_info->Degree != NULL ) free ( matrix_info->Degree );
-    if ( matrix_info->Wi     != NULL ) free ( matrix_info->Wi     );
+    if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
 
     matrix_info->ncol = 0;
     matrix_info->nrow = 0;
@@ -511,17 +607,12 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Ci = NULL;
     matrix_info->Cx = NULL;
     matrix_info->Cy = NULL;
-    matrix_info->Ap = NULL;
-    matrix_info->Ai = NULL;
 
-    matrix_info->Len    = NULL;
-    matrix_info->Nv     = NULL;
-    matrix_info->Next   = NULL;
-    matrix_info->Perm   = NULL;
-    matrix_info->Head   = NULL;
-    matrix_info->Elen   = NULL;
-    matrix_info->Degree = NULL;
-    matrix_info->Wi     = NULL;
+    matrix_info->Head = NULL;
+    matrix_info->Next = NULL;
+    matrix_info->Perm = NULL;
+
+    matrix_info->workspace = NULL;
 
     return 0;
 }
@@ -536,7 +627,7 @@ int SparseFrame ( int argc, char **argv )
     struct matrix_info_struct *matrix_info;
 
 #ifdef PRINT_CALLS
-    printf ("================SparseFrame================\n\n");
+    printf ("\n================SparseFrame================\n");
 #endif
 
     // Allocate resources
@@ -557,6 +648,16 @@ int SparseFrame ( int argc, char **argv )
         // Analyze
 
         SparseFrame_analyze ( matrix_info + matrixIndex );
+
+        {
+            Long k;
+            for (k = 0; k < (matrix_info+matrixIndex)->ncol; k++)
+            {
+                printf ("Head[%8ld] = %8ld Next[%8ld] = %8ld Perm[%8ld] = %8ld\n", k, (matrix_info+matrixIndex)->Head[k], k, (matrix_info+matrixIndex)->Next[k], k, (matrix_info+matrixIndex)->Perm[k]);
+                //if (k != -1 && (matrix_info+matrixIndex)->Next[k] != -1 && (matrix_info+matrixIndex)->Perm[(matrix_info+matrixIndex)->Next[k]] != k)
+                //    printf ("exception k = %ld\n", k);
+            }
+        }
 
         // Factorize
 
