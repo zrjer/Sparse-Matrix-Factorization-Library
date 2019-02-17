@@ -1,5 +1,5 @@
-#ifndef PARAMETER_H
-#define PARAMETER_H
+#ifndef INCLUDE_PARAMETER_H
+#define INCLUDE_PARAMETER_H
 
 #define PRINT_CALLS
 #define PRINT_INFO
@@ -14,6 +14,11 @@
 #endif
 
 #undef MEM_LIMITS
+
+#define MAXMMLINE 1024
+size_t max_mm_line_size = MAXMMLINE + 1;
+
+const enum PermMethod perm_method = PERM_METIS;
 
 const double prune_dense = 10.0;
 const double aggressive = 1;

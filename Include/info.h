@@ -1,5 +1,5 @@
-#ifndef INFO_H
-#define INFO_H
+#ifndef INCLUDE_INFO_H
+#define INCLUDE_INFO_H
 
 struct common_info_struct
 {
@@ -11,22 +11,17 @@ struct gpu_info_struct
 {
     int busy;
 
-    void *dev_mem;
-    size_t dev_memsize;
-    void *host_mem;
-    size_t host_memsize;
+    void *devMem;
+    size_t devMemSize;
+    void *hostMem;
+    size_t hostMemSize;
 };
-
-#define MAXMMLINE 1024
-size_t max_mm_line_size = MAXMMLINE + 1;
-enum FactorizeType {TYPE_CHOLESKY, TYPE_QR, TYPE_LU};
-enum MatrixState {MATRIX_STATE_IDLE, MATRIX_STATE_TRIPLET, MATRIX_STATE_COMPRESSED};
 
 struct matrix_info_struct
 {
     FILE *file;
 
-    enum FactorizeType factorize_type;
+    enum FactorizeType factorizeType;
 
     int isComplex;
 
@@ -48,17 +43,21 @@ struct matrix_info_struct
     Float *Cx;
     Float *Cy;
 
+    enum PermMethod permMethod;
+
     Long *Head;
     Long *Next;
     Long *Perm;
 
+    Long *ColCount;
+
     void *workspace;
     size_t workSize;
 
-    double read_time;
-    double analyze_time;
-    double factorize_time;
-    double solve_time;
+    double readTime;
+    double analyzeTime;
+    double factorizeTime;
+    double solveTime;
 };
 
 #endif

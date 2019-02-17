@@ -1,5 +1,5 @@
-#ifndef SPARSEFRAME_H
-#define SPARSEFRAME_H
+#ifndef INCLUDE_SPARSEFRAME_H
+#define INCLUDE_SPARSEFRAME_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +12,7 @@
 #include "metis.h"
 
 #include "arch.h"
+#include "type.h"
 #include "parameter.h"
 #include "macro.h"
 #include "info.h"

@@ -5,7 +5,7 @@ double SparseFrame_time ()
     struct timespec tp;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_time================\n");
+    printf ("\n================SparseFrame_time================\n\n");
 #endif
 
     clock_gettime ( CLOCK_REALTIME, &tp );
@@ -19,7 +19,7 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
     int gpu_index;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_allocate_gpu================\n");
+    printf ("\n================SparseFrame_allocate_gpu================\n\n");
 #endif
 
     cudaGetDeviceCount ( &numGPU );
@@ -36,40 +36,40 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
     for ( gpu_index = 0; gpu_index < numGPU; gpu_index++ )
     {
         struct cudaDeviceProp prop;
-        size_t dev_memsize;
-        size_t host_memsize;
+        size_t devMemSize;
+        size_t hostMemSize;
 
         cudaError_t cudaStatus;
 
         cudaSetDevice ( gpu_index );
         cudaGetDeviceProperties ( &prop, gpu_index );
 
-        dev_memsize = prop.totalGlobalMem;
-        dev_memsize = ( size_t ) ( ( double ) dev_memsize * 0.9 );
-        dev_memsize = dev_memsize - dev_memsize % ( 0x400 * 0x400 ); // align to 1 MB
-        cudaStatus = cudaMalloc ( &( (*gpu_info_ptr)[gpu_index].dev_mem ), dev_memsize );
+        devMemSize = prop.totalGlobalMem;
+        devMemSize = ( size_t ) ( ( double ) devMemSize * 0.9 );
+        devMemSize = devMemSize - devMemSize % ( 0x400 * 0x400 ); // align to 1 MB
+        cudaStatus = cudaMalloc ( &( (*gpu_info_ptr)[gpu_index].devMem ), devMemSize );
 
         if ( cudaStatus == cudaSuccess )
         {
-            host_memsize = dev_memsize;
-            cudaStatus = cudaMallocHost ( &( (*gpu_info_ptr)[gpu_index].host_mem ), host_memsize );
+            hostMemSize = devMemSize;
+            cudaStatus = cudaMallocHost ( &( (*gpu_info_ptr)[gpu_index].hostMem ), hostMemSize );
 
             if ( cudaStatus == cudaSuccess )
             {
                 (*gpu_info_ptr)[gpu_index].busy = 0;
-                (*gpu_info_ptr)[gpu_index].dev_memsize = dev_memsize;
-                (*gpu_info_ptr)[gpu_index].host_memsize = host_memsize;
+                (*gpu_info_ptr)[gpu_index].devMemSize = devMemSize;
+                (*gpu_info_ptr)[gpu_index].hostMemSize = hostMemSize;
 #ifdef PRINT_INFO
-                printf ( "GPU %d device memory size = %lf GiB host memory size = %lf GiB\n", gpu_index, ( double ) dev_memsize / ( 0x400 * 0x400 * 0x400 ), ( double ) host_memsize / ( 0x400 * 0x400 * 0x400 ) );
+                printf ( "GPU %d device memory size = %lf GiB host memory size = %lf GiB\n", gpu_index, ( double ) devMemSize / ( 0x400 * 0x400 * 0x400 ), ( double ) hostMemSize / ( 0x400 * 0x400 * 0x400 ) );
 #endif
             }
             else
             {
                 (*gpu_info_ptr)[gpu_index].busy = 1;
-                (*gpu_info_ptr)[gpu_index].dev_mem = NULL;
-                (*gpu_info_ptr)[gpu_index].dev_memsize = 0;
-                (*gpu_info_ptr)[gpu_index].host_mem = NULL;
-                (*gpu_info_ptr)[gpu_index].host_memsize = 0;
+                (*gpu_info_ptr)[gpu_index].devMem = NULL;
+                (*gpu_info_ptr)[gpu_index].devMemSize = 0;
+                (*gpu_info_ptr)[gpu_index].hostMem = NULL;
+                (*gpu_info_ptr)[gpu_index].hostMemSize = 0;
 #ifdef PRINT_INFO
                 printf ( "GPU %d cudaMalloc fail\n", gpu_index );
 #endif
@@ -78,10 +78,10 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
         else
         {
             (*gpu_info_ptr)[gpu_index].busy = 1;
-            (*gpu_info_ptr)[gpu_index].dev_mem = NULL;
-            (*gpu_info_ptr)[gpu_index].dev_memsize = 0;
-            (*gpu_info_ptr)[gpu_index].host_mem = NULL;
-            (*gpu_info_ptr)[gpu_index].host_memsize = 0;
+            (*gpu_info_ptr)[gpu_index].devMem = NULL;
+            (*gpu_info_ptr)[gpu_index].devMemSize = 0;
+            (*gpu_info_ptr)[gpu_index].hostMem = NULL;
+            (*gpu_info_ptr)[gpu_index].hostMemSize = 0;
 #ifdef PRINT_INFO
             printf ( "GPU %d cudaMalloc fail\n", gpu_index );
 #endif
@@ -97,7 +97,7 @@ int SparseFrame_free_gpu ( struct gpu_info_struct **gpu_info_ptr, struct common_
     int gpu_index;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_free_gpu================\n");
+    printf ("\n================SparseFrame_free_gpu================\n\n");
 #endif
 
     if ( *gpu_info_ptr == NULL ) return 1;
@@ -108,16 +108,16 @@ int SparseFrame_free_gpu ( struct gpu_info_struct **gpu_info_ptr, struct common_
     {
         cudaSetDevice ( gpu_index );
 
-        if ( (*gpu_info_ptr)[gpu_index].dev_mem != NULL )
-            cudaFree ( (*gpu_info_ptr)[gpu_index].dev_mem );
-        if ( (*gpu_info_ptr)[gpu_index].host_mem != NULL )
-            cudaFreeHost ( (*gpu_info_ptr)[gpu_index].host_mem );
+        if ( (*gpu_info_ptr)[gpu_index].devMem != NULL )
+            cudaFree ( (*gpu_info_ptr)[gpu_index].devMem );
+        if ( (*gpu_info_ptr)[gpu_index].hostMem != NULL )
+            cudaFreeHost ( (*gpu_info_ptr)[gpu_index].hostMem );
 
         (*gpu_info_ptr)[gpu_index].busy = 1;
-        (*gpu_info_ptr)[gpu_index].dev_mem = NULL;
-        (*gpu_info_ptr)[gpu_index].dev_memsize = 0;
-        (*gpu_info_ptr)[gpu_index].host_mem = NULL;
-        (*gpu_info_ptr)[gpu_index].host_memsize = 0;
+        (*gpu_info_ptr)[gpu_index].devMem = NULL;
+        (*gpu_info_ptr)[gpu_index].devMemSize = 0;
+        (*gpu_info_ptr)[gpu_index].hostMem = NULL;
+        (*gpu_info_ptr)[gpu_index].hostMemSize = 0;
     }
 
     free ( *gpu_info_ptr );
@@ -133,7 +133,7 @@ int SparseFrame_allocate_matrix ( struct matrix_info_struct **matrix_info_ptr, s
     int numSparseMatrix;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_allocate_matrix================\n");
+    printf ("\n================SparseFrame_allocate_matrix================\n\n");
 #endif
 
     numSparseMatrix = common_info->numSparseMatrix;
@@ -148,7 +148,7 @@ int SparseFrame_allocate_matrix ( struct matrix_info_struct **matrix_info_ptr, s
 int SparseFrame_free_matrix ( struct matrix_info_struct **matrix_info_ptr, struct common_info_struct *common_info )
 {
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_free_matrix================\n");
+    printf ("\n================SparseFrame_free_matrix================\n\n");
 #endif
 
     if ( *matrix_info_ptr == NULL ) return 1;
@@ -176,7 +176,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     Long nz;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_read_matrix_triplet================\n");
+    printf ("\n================SparseFrame_read_matrix_triplet================\n\n");
 #endif
 
     while ( ( getline ( buf_ptr, &max_mm_line_size, matrix_info->file ) != -1 ) && ( strcmp (*buf_ptr, "") == 0 ) );
@@ -277,7 +277,7 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     Long *workspace;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_compress================\n");
+    printf ("\n================SparseFrame_compress================\n\n");
 #endif
 
     isComplex = matrix_info->isComplex;
@@ -342,7 +342,7 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
     double timestamp;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_read_matrix================\n");
+    printf ("\n================SparseFrame_read_matrix================\n\n");
 #endif
 
     timestamp = SparseFrame_time ();
@@ -364,10 +364,10 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
 
     SparseFrame_compress ( matrix_info );
 
-    matrix_info->read_time = SparseFrame_time () - timestamp;
+    matrix_info->readTime = SparseFrame_time () - timestamp;
 
 #ifdef PRINT_INFO
-    printf ( "Matrix read time: %lf seconds\n", matrix_info->read_time );
+    printf ( "Matrix read time: %lf seconds\n", matrix_info->readTime );
 #endif
 
     return 0;
@@ -386,7 +386,7 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
     double Control[AMD_CONTROL], Info[AMD_INFO];
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_amd================\n");
+    printf ("\n================SparseFrame_amd================\n\n");
 #endif
 
     ncol = matrix_info->ncol;
@@ -468,7 +468,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     idx_t *Mp, *Mi, *Mperm, *Miperm;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_metis================\n");
+    printf ("\n================SparseFrame_metis================\n\n");
 #endif
 
     ncol = matrix_info->ncol;
@@ -551,12 +551,39 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
+int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
+{
+    Long nrow;
+    Long *Head, *Next, *Perm, *ColCount;
+
+    Long *workspace;
+    Long *Parent, *Post, *First, *Level;
+
+    nrow = matrix_info->nrow;
+
+    Head = matrix_info->Head;
+    Next = matrix_info->Next;
+    Perm = matrix_info->Perm;
+
+    ColCount = malloc ( nrow * sizeof(Long) );
+    matrix_info->ColCount = ColCount;
+
+    workspace = matrix_info->workspace;
+
+    Parent = workspace + 0 * nrow;
+    Post   = workspace + 1 * nrow;
+    First  = workspace + 2 * nrow;
+    Level  = workspace + 3 * nrow;
+
+    return 0;
+}
+
 int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 {
     double timestamp;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_analyze================\n");
+    printf ("\n================SparseFrame_analyze================\n\n");
 #endif
 
     timestamp = SparseFrame_time ();
@@ -569,7 +596,9 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 
     SparseFrame_metis ( matrix_info );
 
-    matrix_info->analyze_time = SparseFrame_time () - timestamp;
+    SparseFrame_etree ( matrix_info );
+
+    matrix_info->analyzeTime = SparseFrame_time () - timestamp;
 
     return 0;
 }
@@ -577,7 +606,7 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
 {
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_cleanup_matrix================\n");
+    printf ("\n================SparseFrame_cleanup_matrix================\n\n");
 #endif
 
     if ( matrix_info->Tj != NULL ) free ( matrix_info->Tj );
@@ -593,6 +622,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Head != NULL ) free ( matrix_info->Head );
     if ( matrix_info->Next != NULL ) free ( matrix_info->Next );
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
+    if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
 
@@ -611,6 +641,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Head = NULL;
     matrix_info->Next = NULL;
     matrix_info->Perm = NULL;
+    matrix_info->ColCount = NULL;
 
     matrix_info->workspace = NULL;
 
@@ -627,7 +658,7 @@ int SparseFrame ( int argc, char **argv )
     struct matrix_info_struct *matrix_info;
 
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame================\n");
+    printf ("\n================SparseFrame================\n\n");
 #endif
 
     // Allocate resources
@@ -670,10 +701,10 @@ int SparseFrame ( int argc, char **argv )
         // Output
 
 #ifdef PRINT_INFO
-        printf ("Read time:      %lf\n", matrix_info->read_time);
-        printf ("Analyze time:   %lf\n", matrix_info->analyze_time);
-        printf ("Factorize time: %lf\n", matrix_info->factorize_time);
-        printf ("Solve time:     %lf\n", matrix_info->solve_time);
+        printf ("Read time:      %lf\n", (matrix_info+matrixIndex)->readTime);
+        printf ("Analyze time:   %lf\n", (matrix_info+matrixIndex)->analyzeTime);
+        printf ("Factorize time: %lf\n", (matrix_info+matrixIndex)->factorizeTime);
+        printf ("Solve time:     %lf\n", (matrix_info+matrixIndex)->solveTime);
 #endif
     }
 

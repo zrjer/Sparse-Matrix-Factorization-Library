@@ -1,5 +1,5 @@
-#ifndef ARCH_H
-#define ARCH_H
+#ifndef INCLUDE_ARCH_H
+#define INCLUDE_ARCH_H
 
 #define ARCH_INT int
 #define ARCH_LONG long
