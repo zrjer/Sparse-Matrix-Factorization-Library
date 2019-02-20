@@ -43,11 +43,17 @@ struct matrix_info_struct
     Float *Cx;
     Float *Cy;
 
+    Long *Lp;
+    Long *Li;
+    Float *Lx;
+    Float *Ly;
+
     enum PermMethod permMethod;
 
     Long *Head;
     Long *Next;
     Long *Perm;
+    Long *Pinv;
 
     Long *ColCount;
 

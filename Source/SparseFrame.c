@@ -169,6 +169,8 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     char s4[max_mm_line_size];
 
     int n_scanned;
+
+    int isComplex, isSymmetric;
     Long ncol, nrow, nzmax;
     Long Tj, Ti;
     Float Tx, Ty;
@@ -190,14 +192,18 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     sscanf ( *buf_ptr, "%s %s %s %s %s\n", s0, s1, s2, s3, s4 );
 
     if ( strcmp ( s4, "symmetric" ) == 0 )
-        matrix_info->isSymmetric = 1;
+        isSymmetric = 1;
     else
-        matrix_info->isSymmetric = 0;
+        isSymmetric = 0;
+
+        matrix_info->isSymmetric = isSymmetric;
 
     if ( strcmp ( s3, "real" ) == 0 )
-        matrix_info->isComplex = 0;
+        isComplex = 0;
     else
-        matrix_info->isComplex = 1;
+        isComplex = 1;
+
+        matrix_info->isComplex = isComplex;
 
     while ( ( getline ( buf_ptr, &max_mm_line_size, matrix_info->file ) != -1 ) && ( ( strcmp (*buf_ptr, "") == 0 ) || ( strncmp (*buf_ptr, "%", 1) == 0 ) ) );
 
@@ -213,11 +219,11 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     }
 
 #ifdef PRINT_INFO
-    if ( matrix_info->isComplex == 0 && matrix_info->isSymmetric != 0)
+    if ( isComplex == 0 && isSymmetric != 0)
         printf ("matrix is real symmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
-    else if ( matrix_info->isComplex == 1 && matrix_info->isSymmetric != 0)
+    else if ( isComplex != 0 && isSymmetric != 0)
         printf ("matrix is complex symmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
-    else if ( matrix_info->isComplex == 0 && matrix_info->isSymmetric == 0)
+    else if ( isComplex == 0 && isSymmetric == 0)
         printf ("matrix is real unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
     else
         printf ("matrix is complex unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
@@ -226,7 +232,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     matrix_info->Tj = malloc ( nzmax * sizeof(Long) );
     matrix_info->Ti = malloc ( nzmax * sizeof(Long) );
     matrix_info->Tx = malloc ( nzmax * sizeof(Float) );
-    if ( matrix_info->isComplex )
+    if ( isComplex )
         matrix_info->Ty = malloc ( nzmax * sizeof(Float) );
     else
         matrix_info->Ty = NULL;
@@ -243,7 +249,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
                 return 1;
             }
             n_scanned = sscanf ( *buf_ptr, "%ld %ld %lg %lg\n", &Ti, &Tj, &Tx, &Ty );
-            if ( matrix_info->isComplex && n_scanned < 4 )
+            if ( isComplex && n_scanned < 4 )
             {
                 printf ( "Error: imaginary part not present\n" );
                 return 1;
@@ -251,7 +257,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
             matrix_info->Tj[nz] = Tj - 1;
             matrix_info->Ti[nz] = Ti - 1;
             matrix_info->Tx[nz] = Tx;
-            if ( matrix_info->isComplex )
+            if ( isComplex )
                 matrix_info->Ty[nz] = Ty;
             nz++;
         }
@@ -375,7 +381,7 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
 
 int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, ncol, nrow, p;
+    Long j, i, p, ncol, nrow;
     Long *Cp, *Ci;
     Long *Head, *Next, *Perm;
 
@@ -459,7 +465,7 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, ncol, nrow, p;
+    Long j, i, p, ncol, nrow;
     Long *Cp, *Ci;
     Long *Head, *Next, *Perm;
 
@@ -551,6 +557,109 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
+int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
+{
+    int isComplex;
+    Long j, i, p, nrow, nzmax;
+    Long jold, iold, pold;
+    Long *Cp, *Ci;
+    Float *Cx, *Cy;
+    Long *Lp, *Li;
+    Float *Lx, *Ly;
+    Long *Head, *Next, *Perm, *Pinv;
+
+    Long *workspace;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_perm================\n\n");
+#endif
+
+    isComplex = matrix_info->isComplex;
+
+    nrow = matrix_info->nrow;
+    nzmax = matrix_info->nzmax;
+
+    Cp = matrix_info->Cp;
+    Ci = matrix_info->Ci;
+    Cx = matrix_info->Cx;
+    Cy = matrix_info->Cy;
+
+    Lp = calloc ( nrow + 1, sizeof(Long) );
+    Li = malloc ( nzmax * sizeof(Long) );
+    Lx = malloc ( nzmax * sizeof(Float) );
+    if ( isComplex )
+    {
+        Ly = malloc ( nzmax * sizeof(Float) );
+    }
+    else
+        Ly = NULL;
+
+    matrix_info->Lp = Lp;
+    matrix_info->Li = Li;
+    matrix_info->Lx = Lx;
+    matrix_info->Ly = Ly;
+
+    Head = matrix_info->Head;
+    Next = matrix_info->Next;
+    Perm = matrix_info->Perm;
+    Pinv = matrix_info->Pinv;
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        Pinv[j] = -1;
+    }
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        jold = Perm[j];
+        if ( jold >= 0 )
+        Pinv[ jold ] = j;
+    }
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        jold = Perm[j];
+        if ( jold >= 0 )
+        {
+            for ( pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
+            {
+                iold = Ci[pold];
+                i = Pinv[iold];
+                Lp [ MIN (i, j) + 1 ] ++;
+            }
+        }
+    }
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        Lp[j+1] += Lp[j];
+    }
+
+    workspace = matrix_info->workspace;
+
+    memcpy ( workspace, Lp, ( nrow + 1 ) * sizeof(Long) );
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        jold = Perm[j];
+        if ( jold >= 0 )
+        {
+            for ( pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
+            {
+                iold = Ci[pold];
+                i = Pinv[iold];
+                p = workspace [ MIN(i, j) ] ++;
+                Li[p] = MAX(i, j);
+                Lx[p] = Cx[pold];
+                if ( isComplex )
+                    Ly[p] = Cy[pold];
+            }
+        }
+    }
+
+    return 0;
+}
+
 int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 {
     Long nrow;
@@ -558,6 +667,10 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     Long *workspace;
     Long *Parent, *Post, *First, *Level;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_etree================\n\n");
+#endif
 
     nrow = matrix_info->nrow;
 
@@ -591,10 +704,13 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
     matrix_info->Head = malloc ( matrix_info->nrow * sizeof(Long) );
     matrix_info->Next = malloc ( matrix_info->nrow * sizeof(Long) );
     matrix_info->Perm = malloc ( matrix_info->nrow * sizeof(Long) );
+    matrix_info->Pinv = malloc ( matrix_info->nrow * sizeof(Long) );
 
     SparseFrame_amd ( matrix_info );
 
     SparseFrame_metis ( matrix_info );
+
+    SparseFrame_perm ( matrix_info );
 
     SparseFrame_etree ( matrix_info );
 
@@ -617,11 +733,16 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Cp != NULL ) free ( matrix_info->Cp );
     if ( matrix_info->Ci != NULL ) free ( matrix_info->Ci );
     if ( matrix_info->Cx != NULL ) free ( matrix_info->Cx );
-    if ( matrix_info->Cy != NULL ) free ( matrix_info->Cy );
+
+    if ( matrix_info->Lp != NULL ) free ( matrix_info->Lp );
+    if ( matrix_info->Li != NULL ) free ( matrix_info->Li );
+    if ( matrix_info->Lx != NULL ) free ( matrix_info->Lx );
+    if ( matrix_info->Ly != NULL ) free ( matrix_info->Ly );
 
     if ( matrix_info->Head != NULL ) free ( matrix_info->Head );
     if ( matrix_info->Next != NULL ) free ( matrix_info->Next );
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
+    if ( matrix_info->Pinv != NULL ) free ( matrix_info->Pinv );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
@@ -637,10 +758,15 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Ci = NULL;
     matrix_info->Cx = NULL;
     matrix_info->Cy = NULL;
+    matrix_info->Lp = NULL;
+    matrix_info->Li = NULL;
+    matrix_info->Lx = NULL;
+    matrix_info->Ly = NULL;
 
     matrix_info->Head = NULL;
     matrix_info->Next = NULL;
     matrix_info->Perm = NULL;
+    matrix_info->Pinv = NULL;
     matrix_info->ColCount = NULL;
 
     matrix_info->workspace = NULL;
@@ -679,16 +805,6 @@ int SparseFrame ( int argc, char **argv )
         // Analyze
 
         SparseFrame_analyze ( matrix_info + matrixIndex );
-
-        {
-            Long k;
-            for (k = 0; k < (matrix_info+matrixIndex)->ncol; k++)
-            {
-                printf ("Head[%8ld] = %8ld Next[%8ld] = %8ld Perm[%8ld] = %8ld\n", k, (matrix_info+matrixIndex)->Head[k], k, (matrix_info+matrixIndex)->Next[k], k, (matrix_info+matrixIndex)->Perm[k]);
-                //if (k != -1 && (matrix_info+matrixIndex)->Next[k] != -1 && (matrix_info+matrixIndex)->Perm[(matrix_info+matrixIndex)->Next[k]] != k)
-                //    printf ("exception k = %ld\n", k);
-            }
-        }
 
         // Factorize
 
