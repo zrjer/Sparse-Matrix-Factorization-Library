@@ -48,6 +48,11 @@ struct matrix_info_struct
     Float *Lx;
     Float *Ly;
 
+    Long *Up;
+    Long *Ui;
+    Float *Ux;
+    Float *Uy;
+
     enum PermMethod permMethod;
 
     Long *Head;
@@ -55,6 +60,7 @@ struct matrix_info_struct
     Long *Perm;
     Long *Pinv;
 
+    Long *Parent;
     Long *ColCount;
 
     void *workspace;
