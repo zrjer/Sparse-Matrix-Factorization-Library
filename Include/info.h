@@ -15,6 +15,8 @@ struct gpu_info_struct
     size_t devMemSize;
     void *hostMem;
     size_t hostMemSize;
+
+    size_t sharedMemSize;
 };
 
 struct matrix_info_struct
@@ -61,6 +63,7 @@ struct matrix_info_struct
     Long *Pinv;
 
     Long *Parent;
+    Long *Post;
     Long *ColCount;
 
     void *workspace;

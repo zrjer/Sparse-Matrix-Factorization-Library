@@ -38,6 +38,7 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
         struct cudaDeviceProp prop;
         size_t devMemSize;
         size_t hostMemSize;
+        size_t sharedMemSize;
 
         cudaError_t cudaStatus;
 
@@ -48,6 +49,7 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
         devMemSize = ( size_t ) ( ( double ) devMemSize * 0.9 );
         devMemSize = devMemSize - devMemSize % ( 0x400 * 0x400 ); // align to 1 MB
         cudaStatus = cudaMalloc ( &( (*gpu_info_ptr)[gpu_index].devMem ), devMemSize );
+        sharedMemSize = prop.sharedMemPerBlock;
 
         if ( cudaStatus == cudaSuccess )
         {
@@ -59,8 +61,10 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
                 (*gpu_info_ptr)[gpu_index].busy = 0;
                 (*gpu_info_ptr)[gpu_index].devMemSize = devMemSize;
                 (*gpu_info_ptr)[gpu_index].hostMemSize = hostMemSize;
+                (*gpu_info_ptr)[gpu_index].sharedMemSize = sharedMemSize;
 #ifdef PRINT_INFO
-                printf ( "GPU %d device memory size = %lf GiB host memory size = %lf GiB\n", gpu_index, ( double ) devMemSize / ( 0x400 * 0x400 * 0x400 ), ( double ) hostMemSize / ( 0x400 * 0x400 * 0x400 ) );
+                printf ( "GPU %d device memory size = %lf GiB host memory size = %lf GiB shared memory size per block = %ld KiB\n",
+                        gpu_index, ( double ) devMemSize / ( 0x400 * 0x400 * 0x400 ), ( double ) hostMemSize / ( 0x400 * 0x400 * 0x400 ), sharedMemSize / 1024 );
 #endif
             }
             else
@@ -70,6 +74,7 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
                 (*gpu_info_ptr)[gpu_index].devMemSize = 0;
                 (*gpu_info_ptr)[gpu_index].hostMem = NULL;
                 (*gpu_info_ptr)[gpu_index].hostMemSize = 0;
+                (*gpu_info_ptr)[gpu_index].sharedMemSize = 0;
 #ifdef PRINT_INFO
                 printf ( "GPU %d cudaMalloc fail\n", gpu_index );
 #endif
@@ -310,13 +315,14 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     matrix_info->Cx = Cx;
     matrix_info->Cy = Cy;
 
+    workspace = matrix_info->workspace;
+
     for ( nz = 0; nz < nzmax; nz++ )
         Cp[ Tj[nz] + 1 ] ++;
 
     for ( j = 0; j < ncol; j++ )
         Cp[j+1] += Cp[j];
 
-    workspace = matrix_info->workspace;
     memcpy ( workspace, Cp, sizeof(Long) * ( ncol + 1 ) );
 
     for ( nz = 0; nz < nzmax; nz++ )
@@ -621,6 +627,9 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Perm = matrix_info->Perm;
     Pinv = matrix_info->Pinv;
 
+    Lworkspace = matrix_info->workspace;
+    Uworkspace = matrix_info->workspace + ( nrow + 1 ) * sizeof(Long);
+
     for ( j = 0; j < nrow; j++ )
     {
         Pinv[j] = -1;
@@ -653,9 +662,6 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
         Lp[j+1] += Lp[j];
         Up[j+1] += Up[j];
     }
-
-    Lworkspace = matrix_info->workspace;
-    Uworkspace = matrix_info->workspace + ( nrow + 1 ) * sizeof(Long);
 
     memcpy ( Lworkspace, Lp, ( nrow + 1 ) * sizeof(Long) );
     memcpy ( Uworkspace, Up, ( nrow + 1 ) * sizeof(Long) );
@@ -765,12 +771,37 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
             }
         }
     }
+#ifdef PRINT_DEBUG
     for ( j = 0; j < nrow; j++ )
     {
         printf ("%8ld %8ld %8ld\n", j, Parent[j], Ancestor[j]);
     }
+#endif
 
     return 0;
+}
+
+int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
+{
+    Long j, i, p, nrow;
+    Long *Head, *Next;
+    Long *Post;
+
+    Long *workspace;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_postorder================\n\n");
+#endif
+
+    nrow = matrix_info->nrow;
+
+    Head = matrix_info->Head;
+    Next = matrix_info->Next;
+
+    Post = malloc ( nrow * sizeof(Long) );
+    matrix_info->Post = Post;
+
+    workspace = matrix_info->workspace;
 }
 
 int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
@@ -788,7 +819,7 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
     matrix_info->Perm = malloc ( matrix_info->nrow * sizeof(Long) );
     matrix_info->Pinv = malloc ( matrix_info->nrow * sizeof(Long) );
 
-    SparseFrame_amd ( matrix_info );
+    //SparseFrame_amd ( matrix_info );
 
     SparseFrame_metis ( matrix_info );
 
@@ -831,6 +862,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
     if ( matrix_info->Pinv != NULL ) free ( matrix_info->Pinv );
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
+    if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
@@ -860,6 +892,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Perm = NULL;
     matrix_info->Pinv = NULL;
     matrix_info->Parent = NULL;
+    matrix_info->Post = NULL;
     matrix_info->ColCount = NULL;
 
     matrix_info->workspace = NULL;
