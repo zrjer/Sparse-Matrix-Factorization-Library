@@ -473,7 +473,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 {
     Long j, i, p, ncol, nrow;
     Long *Cp, *Ci;
-    Long *Head, *Next, *Perm;
+    Long *Perm;
 
     idx_t *Mworkspace;
     Long mnz;
@@ -489,8 +489,6 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     Cp = matrix_info->Cp;
     Ci = matrix_info->Ci;
 
-    Head = matrix_info->Head;
-    Next = matrix_info->Next;
     Perm = matrix_info->Perm;
 
     Mworkspace = matrix_info->workspace;
@@ -574,7 +572,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Float *Lx, *Ly;
     Long *Up, *Ui;
     Float *Ux, *Uy;
-    Long *Head, *Next, *Perm, *Pinv;
+    Long *Perm, *Pinv;
 
     Long *Lworkspace, *Uworkspace;
 
@@ -622,8 +620,6 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     matrix_info->Ux = Ux;
     matrix_info->Uy = Uy;
 
-    Head = matrix_info->Head;
-    Next = matrix_info->Next;
     Perm = matrix_info->Perm;
     Pinv = matrix_info->Pinv;
 
@@ -697,15 +693,12 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
 int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 {
     Long j, i, p, nrow;
-    Long *Lp, *Li;
-    Float *Lx, *Ly;
     Long *Up, *Ui;
-    Float *Ux, *Uy;
-    Long *Head, *Next, *Parent, *Perm, *ColCount;
+    Long *Parent;
 
     Long ancestor;
     Long *workspace;
-    Long *Ancestor, *Post, *First, *Level;
+    Long *Ancestor;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_etree================\n\n");
@@ -713,31 +706,15 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     nrow = matrix_info->nrow;
 
-    Lp = matrix_info->Lp;
-    Li = matrix_info->Li;
-    Lx = matrix_info->Lx;
-    Ly = matrix_info->Ly;
-
     Up = matrix_info->Up;
     Ui = matrix_info->Ui;
-    Ux = matrix_info->Ux;
-    Uy = matrix_info->Uy;
-
-    Head = matrix_info->Head;
-    Next = matrix_info->Next;
-    Perm = matrix_info->Perm;
 
     Parent = malloc ( nrow * sizeof(Long) );
-    ColCount = malloc ( nrow * sizeof(Long) );
     matrix_info->Parent = Parent;
-    matrix_info->ColCount = ColCount;
 
     workspace = matrix_info->workspace;
 
     Ancestor = workspace + 0 * nrow;
-    Post   = workspace + 1 * nrow;
-    First  = workspace + 2 * nrow;
-    Level  = workspace + 3 * nrow;
 
     for ( j = 0; j < nrow; j++ )
     {
@@ -783,12 +760,12 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, p, nrow;
+    Long j, p, nrow;
     Long *Head, *Next;
     Long *Parent, *Post;
 
     Long *workspace;
-    Long root, node, child, next, idx;
+    Long root, node, child, idx;
     Long stack_top;
     Long *stack;
 
@@ -853,6 +830,21 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 //        printf ("%ld %ld\n", Parent[j], Post[j]);
 //    }
 //#endif
+
+    return 0;
+}
+
+int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
+{
+    Long nrow;
+    Long *Head, *Next, *Parent, *ColCount;
+
+    nrow = matrix_info->nrow;
+
+    ColCount = malloc ( nrow * sizeof(Long) );
+    matrix_info->ColCount = ColCount;
+
+    return 0;
 }
 
 int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
@@ -879,6 +871,8 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
     SparseFrame_etree ( matrix_info );
 
     SparseFrame_postorder ( matrix_info );
+
+    SparseFrame_colcount ( matrix_info );
 
     matrix_info->analyzeTime = SparseFrame_time () - timestamp;
 
