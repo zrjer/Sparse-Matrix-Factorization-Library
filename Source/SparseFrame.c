@@ -771,12 +771,12 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
             }
         }
     }
-#ifdef PRINT_DEBUG
-    for ( j = 0; j < nrow; j++ )
-    {
-        printf ("%8ld %8ld %8ld\n", j, Parent[j], Ancestor[j]);
-    }
-#endif
+//#ifdef PRINT_DEBUG
+//    for ( j = 0; j < nrow; j++ )
+//    {
+//        printf ("%8ld %8ld %8ld\n", j, Parent[j], Ancestor[j]);
+//    }
+//#endif
 
     return 0;
 }
@@ -785,9 +785,12 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 {
     Long j, i, p, nrow;
     Long *Head, *Next;
-    Long *Post;
+    Long *Parent, *Post;
 
     Long *workspace;
+    Long root, node, child, next, idx;
+    Long stack_top;
+    Long *stack;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_postorder================\n\n");
@@ -797,11 +800,59 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 
     Head = matrix_info->Head;
     Next = matrix_info->Next;
+    Parent = matrix_info->Parent;
 
     Post = malloc ( nrow * sizeof(Long) );
     matrix_info->Post = Post;
 
     workspace = matrix_info->workspace;
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        Head[j] = -1;
+        Next[j] = -1;
+    }
+
+    for ( j = nrow - 1; j >= 0; j-- )
+    {
+        p = Parent[j];
+        if ( p >= 0 && p < nrow )
+        {
+            Next[j] = Head[p];
+            Head[p] = j;
+        }
+        else
+            root = j;
+    }
+
+    stack = workspace;
+    stack[0] = root;
+    stack_top = 0;
+    idx = 0;
+
+    while ( stack_top >= 0 )
+    {
+        node = stack[stack_top];
+        child = Head[node];
+        if ( child >= 0 && child < nrow )
+        {
+            stack_top++;
+            stack[stack_top] = child;
+            Head[node] = Next[child];
+        }
+        else
+        {
+            stack_top--;
+            Post[idx] = node;
+            idx++;
+        }
+    }
+//#ifdef PRINT_DEBUG
+//    for ( j = 0; j < nrow; j++ )
+//    {
+//        printf ("%ld %ld\n", Parent[j], Post[j]);
+//    }
+//#endif
 }
 
 int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
@@ -826,6 +877,8 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
     SparseFrame_perm ( matrix_info );
 
     SparseFrame_etree ( matrix_info );
+
+    SparseFrame_postorder ( matrix_info );
 
     matrix_info->analyzeTime = SparseFrame_time () - timestamp;
 
