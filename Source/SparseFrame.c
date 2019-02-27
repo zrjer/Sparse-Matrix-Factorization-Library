@@ -413,7 +413,7 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 
     workspace = matrix_info->workspace;
 
-    Len    = workspace + 0 * nrow;
+    Len    = workspace;
     Nv     = workspace + 1 * nrow;
     Elen   = workspace + 2 * nrow;
     Degree = workspace + 3 * nrow;
@@ -496,7 +496,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     if ( sizeof(idx_t) == sizeof(Long) )
         Mperm = Perm;
     else
-        Mperm  = Mworkspace + 0 * nrow;
+        Mperm  = Mworkspace;
     Miperm = Mworkspace + 1 * nrow;
     Mp     = Mworkspace + 2 * nrow;
     Mi     = Mworkspace + 3 * nrow + 1;
@@ -714,7 +714,7 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     workspace = matrix_info->workspace;
 
-    Ancestor = workspace + 0 * nrow;
+    Ancestor = workspace;
 
     for ( j = 0; j < nrow; j++ )
     {
@@ -748,24 +748,18 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
             }
         }
     }
-//#ifdef PRINT_DEBUG
-//    for ( j = 0; j < nrow; j++ )
-//    {
-//        printf ("%8ld %8ld %8ld\n", j, Parent[j], Ancestor[j]);
-//    }
-//#endif
 
     return 0;
 }
 
 int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 {
-    Long j, p, nrow;
+    Long j, k, p, nrow;
     Long *Head, *Next;
     Long *Parent, *Post;
 
     Long *workspace;
-    Long root, node, child, idx;
+    Long root, child;
     Long stack_top;
     Long *stack;
 
@@ -805,44 +799,59 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
     stack = workspace;
     stack[0] = root;
     stack_top = 0;
-    idx = 0;
+    k = 0;
 
     while ( stack_top >= 0 )
     {
-        node = stack[stack_top];
-        child = Head[node];
+        j = stack[stack_top];
+        child = Head[j];
         if ( child >= 0 && child < nrow )
         {
             stack_top++;
             stack[stack_top] = child;
-            Head[node] = Next[child];
+            Head[j] = Next[child];
         }
         else
         {
             stack_top--;
-            Post[idx] = node;
-            idx++;
+            Post[k] = j;
+            k++;
         }
     }
-//#ifdef PRINT_DEBUG
-//    for ( j = 0; j < nrow; j++ )
-//    {
-//        printf ("%ld %ld\n", Parent[j], Post[j]);
-//    }
-//#endif
 
     return 0;
 }
 
 int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 {
-    Long nrow;
-    Long *Head, *Next, *Parent, *ColCount;
+    Long j, k, p, nrow;
+    Long *Post, *Parent, *ColCount;
+
+    Long *workspace;
+    Long *First, *Level;
 
     nrow = matrix_info->nrow;
 
+    Post = matrix_info->Post;
+    Parent = matrix_info->Parent;
+
     ColCount = malloc ( nrow * sizeof(Long) );
     matrix_info->ColCount = ColCount;
+
+    workspace = matrix_info->workspace;
+
+    First = workspace;
+    Level = workspace + nrow;
+
+    for ( k = nrow - 1; k >= 0; k-- )
+    {
+        j = Post[k];
+        p = Parent[j];
+        if ( p < 0 )
+            Level[j] = 0;
+        else
+            Level[j] = Level[p] + 1;
+    }
 
     return 0;
 }
