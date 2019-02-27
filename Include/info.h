@@ -65,6 +65,7 @@ struct matrix_info_struct
     Long *Parent;
     Long *Post;
     Long *ColCount;
+    Long *RowCount;
 
     void *workspace;
     size_t workSize;

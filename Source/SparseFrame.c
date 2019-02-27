@@ -825,7 +825,7 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 {
     Long j, k, p, nrow;
-    Long *Post, *Parent, *ColCount;
+    Long *Post, *Parent, *ColCount, *RowCount;
 
     Long *workspace;
     Long *First, *Level;
@@ -838,10 +838,27 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     ColCount = malloc ( nrow * sizeof(Long) );
     matrix_info->ColCount = ColCount;
 
+    RowCount = malloc ( nrow * sizeof(Long) );
+    matrix_info->RowCount = RowCount;
+
     workspace = matrix_info->workspace;
 
     First = workspace;
     Level = workspace + nrow;
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        First[j] = -1;
+    }
+
+    for ( k = 0; k < nrow; k++ )
+    {
+        j = Post[k];
+        for ( p = j; p >= 0 && First[p] < 0; p = Parent[p] )
+        {
+            First[p] = k;
+        }
+    }
 
     for ( k = nrow - 1; k >= 0; k-- )
     {
@@ -851,6 +868,13 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
             Level[j] = 0;
         else
             Level[j] = Level[p] + 1;
+    }
+    {   
+        Int j;
+        for (j = 0; j < nrow; j++)
+        {
+            printf ("%ld %ld\n", First[j], Level[j]);
+        }   
     }
 
     return 0;
@@ -920,6 +944,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
+    if ( matrix_info->RowCount != NULL ) free ( matrix_info->RowCount );
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
 
@@ -950,6 +975,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Parent = NULL;
     matrix_info->Post = NULL;
     matrix_info->ColCount = NULL;
+    matrix_info->RowCount = NULL;
 
     matrix_info->workspace = NULL;
 
