@@ -833,7 +833,7 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
     Long *workspace;
     Long prevleaf;
-    Long s, sparent;
+    Long s;
     Long *Level, *First, *SetParent, *PrevLeaf, *PrevNbr;
 
 #ifdef PRINT_CALLS
@@ -889,23 +889,21 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     for ( k = 0; k < nrow; k++ )
     {
         j = Post[k];
-        ColCount[j] = ( First[j] == k ) ? 1 : 0;
+        ColCount[j] = 0;
         RowCount[j] = 1;
     }
 
-    for ( j = 0; j < nrow; j++ )
+    for ( k = 0; k < nrow; k++ )
     {
+        j = Post[k];
         SetParent[j] = j;
-        PrevLeaf[j] = -1;
+        PrevLeaf[j] = j;
         PrevNbr[j] = -1;
     }
 
     for ( k = 0; k < nrow; k++ )
     {
         j = Post[k];
-        p = Parent[j];
-        if ( p >= 0 )
-            ColCount[p]--;
         PrevNbr[j] = k;
         for ( p = Lp[j]; p < Lp[j+1]; p++ )
         {
@@ -914,22 +912,14 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
             {
                 if ( First[j] > PrevNbr[i] )
                 {
-                    ColCount[j]++;
                     prevleaf = PrevLeaf[i];
-                    if ( prevleaf < 0 )
+                    for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
+                    for ( s = prevleaf; s != q; s = SetParent[s] )
                     {
-                        q = i;
+                        SetParent[s] = q;
                     }
-                    else
-                    {
-                        for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
-                        for ( s = prevleaf; s != q; s = sparent )
-                        {
-                            sparent = SetParent[s];
-                            SetParent[s] = q;
-                        }
-                        ColCount[q]--;
-                    }
+                    ColCount[j]++;
+                    ColCount[q]--;
                     RowCount[i] += ( Level[j] - Level[q] );
                     PrevLeaf[i] = j;
                 }
@@ -947,13 +937,10 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
             ColCount[p] += ColCount[j];
     }
 
+    for ( k = 0; k < nrow; k++ )
     {
-        Int j, k;
-        for (k = 0; k < nrow; k++)
-        {
-            j = Post[k];
-            printf ("%ld %ld %ld %ld\n", Level[j], First[j], ColCount[j], RowCount[j]);
-        }
+        j = Post[k];
+        ColCount[j]++;
     }
 
     return 0;
