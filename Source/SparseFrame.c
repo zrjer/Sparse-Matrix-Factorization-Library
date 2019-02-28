@@ -635,7 +635,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     {
         jold = Perm[j];
         if ( jold >= 0 )
-        Pinv[ jold ] = j;
+            Pinv[ jold ] = j;
     }
 
     for ( j = 0; j < nrow; j++ )
@@ -759,8 +759,8 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
     Long *Parent, *Post;
 
     Long *workspace;
-    Long root, child;
-    Long stack_top;
+    Long child;
+    Long top;
     Long *stack;
 
 #ifdef PRINT_CALLS
@@ -784,6 +784,9 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
         Next[j] = -1;
     }
 
+    stack = workspace;
+    top = -1;
+
     for ( j = nrow - 1; j >= 0; j-- )
     {
         p = Parent[j];
@@ -793,27 +796,27 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
             Head[p] = j;
         }
         else
-            root = j;
+        {
+            top++;
+            stack[top] = j;
+        }
     }
 
-    stack = workspace;
-    stack[0] = root;
-    stack_top = 0;
     k = 0;
 
-    while ( stack_top >= 0 )
+    while ( top >= 0 )
     {
-        j = stack[stack_top];
+        j = stack[top];
         child = Head[j];
         if ( child >= 0 && child < nrow )
         {
-            stack_top++;
-            stack[stack_top] = child;
+            top++;
+            stack[top] = child;
             Head[j] = Next[child];
         }
         else
         {
-            stack_top--;
+            top--;
             Post[k] = j;
             k++;
         }
@@ -824,13 +827,23 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 {
-    Long j, k, p, nrow;
+    Long j, i, k, p, q, nrow;
+    Long *Lp, *Li;
     Long *Post, *Parent, *ColCount, *RowCount;
 
     Long *workspace;
-    Long *First, *Level;
+    Long prevleaf;
+    Long s, sparent;
+    Long *Level, *First, *SetParent, *PrevLeaf, *PrevNbr;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_colcount================\n\n");
+#endif
 
     nrow = matrix_info->nrow;
+
+    Lp = matrix_info->Lp;
+    Li = matrix_info->Li;
 
     Post = matrix_info->Post;
     Parent = matrix_info->Parent;
@@ -843,8 +856,21 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
     workspace = matrix_info->workspace;
 
-    First = workspace;
-    Level = workspace + nrow;
+    Level = workspace;
+    First = workspace + 1 * nrow;
+    SetParent = workspace + 2 * nrow;
+    PrevLeaf = workspace + 3 * nrow;
+    PrevNbr = workspace + 4 * nrow;
+
+    for ( k = nrow - 1; k >= 0; k-- )
+    {
+        j = Post[k];
+        p = Parent[j];
+        if ( p < 0 )
+            Level[j] = 0;
+        else
+            Level[j] = Level[p] + 1;
+    }
 
     for ( j = 0; j < nrow; j++ )
     {
@@ -860,21 +886,74 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    for ( k = nrow - 1; k >= 0; k-- )
+    for ( k = 0; k < nrow; k++ )
+    {
+        j = Post[k];
+        ColCount[j] = ( First[j] == k ) ? 1 : 0;
+        RowCount[j] = 1;
+    }
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        SetParent[j] = j;
+        PrevLeaf[j] = -1;
+        PrevNbr[j] = -1;
+    }
+
+    for ( k = 0; k < nrow; k++ )
     {
         j = Post[k];
         p = Parent[j];
-        if ( p < 0 )
-            Level[j] = 0;
-        else
-            Level[j] = Level[p] + 1;
-    }
-    {   
-        Int j;
-        for (j = 0; j < nrow; j++)
+        if ( p >= 0 )
+            ColCount[p]--;
+        PrevNbr[j] = k;
+        for ( p = Lp[j]; p < Lp[j+1]; p++ )
         {
-            printf ("%ld %ld\n", First[j], Level[j]);
-        }   
+            i = Li[p];
+            if ( i > j )
+            {
+                if ( First[j] > PrevNbr[i] )
+                {
+                    ColCount[j]++;
+                    prevleaf = PrevLeaf[i];
+                    if ( prevleaf < 0 )
+                    {
+                        q = i;
+                    }
+                    else
+                    {
+                        for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
+                        for ( s = prevleaf; s != q; s = sparent )
+                        {
+                            sparent = SetParent[s];
+                            SetParent[s] = q;
+                        }
+                        ColCount[q]--;
+                    }
+                    RowCount[i] += ( Level[j] - Level[q] );
+                    PrevLeaf[i] = j;
+                }
+                PrevNbr[i] = k;
+            }
+        }
+        SetParent[j] = Parent[j];
+    }
+
+    for ( k = 0; k < nrow; k++ )
+    {
+        j = Post[k];
+        p = Parent[j];
+        if ( p >= 0 )
+            ColCount[p] += ColCount[j];
+    }
+
+    {
+        Int j, k;
+        for (k = 0; k < nrow; k++)
+        {
+            j = Post[k];
+            printf ("%ld %ld %ld %ld\n", Level[j], First[j], ColCount[j], RowCount[j]);
+        }
     }
 
     return 0;
