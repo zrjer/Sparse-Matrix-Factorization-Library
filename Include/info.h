@@ -67,6 +67,10 @@ struct matrix_info_struct
     Long *ColCount;
     Long *RowCount;
 
+    Long *Lperm;
+    Long *Lparent;
+    Long *Lcolcount;
+
     void *workspace;
     size_t workSize;
 
