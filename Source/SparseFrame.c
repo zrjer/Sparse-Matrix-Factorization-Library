@@ -1048,28 +1048,6 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     memcpy ( Parent, Bparent, nrow * sizeof(Long) );
     memcpy ( ColCount, Bcolcount, nrow * sizeof(Long) );
 
-    {
-        Long j, i, p;
-        Long *Lp, *Li;
-        double *Lx;
-        Lp = matrix_info->Lp;
-        Li = matrix_info->Li;
-        Lx = matrix_info->Lx;
-        printf ("nzmax = %ld\n", matrix_info->nzmax);
-        //for ( j = 0; j < nrow; j++ )
-        //{
-        //    printf ("%ld %ld %ld\n", Perm[j], Parent[j], ColCount[j]);
-        //}
-        //    for (j = 0; j < nrow; j++)
-        //    {
-        //        for (p = Lp[j]; p < Lp[j+1]; p++)
-        //        {
-        //            i = Li[p];
-        //            if (i >= j)
-        //                printf ("%ld %ld %lf\n", j, i, Lx[p]);
-        //        }
-        //    }
-    }
     SparseFrame_perm ( matrix_info );
 
     return 0;
