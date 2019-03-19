@@ -6,6 +6,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <omp.h>
+
 #include <cuda_runtime.h>
 
 #include "amd.h"

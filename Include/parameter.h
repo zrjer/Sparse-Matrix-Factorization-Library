@@ -5,6 +5,8 @@
 #define PRINT_DEBUG
 #define PRINT_INFO
 
+#define MAX_NUM_GPU (-1)
+
 #define MEM_LIMITS
 
 #ifdef MEM_LIMITS

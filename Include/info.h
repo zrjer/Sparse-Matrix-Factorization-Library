@@ -4,7 +4,11 @@
 struct common_info_struct
 {
     int numGPU;
+    int numThreads;
     int numSparseMatrix;
+
+    double allocateTime;
+    double freeTime;
 };
 
 struct gpu_info_struct
@@ -66,6 +70,9 @@ struct matrix_info_struct
     Long *Post;
     Long *ColCount;
     Long *RowCount;
+
+    Long *SuperMap;
+    Long *Sparent;
 
     void *workspace;
     size_t workSize;

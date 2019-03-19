@@ -21,9 +21,9 @@ NVCC = nvcc
 
 CFPTHREADS = -pthread
 
-CFLAGS = -O0 -fPIC -Wall $(CFOPENMP)
+CFLAGS = -O3 -fPIC -Wall $(CFOPENMP)
 CXXFLAGS = $(CFLAGS)
-NVCCFLAGS = -O0 \
+NVCCFLAGS = -O3 \
 			-Xcompiler -fPIC \
 			-gencode arch=compute_30,code=sm_30 \
 			-gencode arch=compute_35,code=sm_35 \

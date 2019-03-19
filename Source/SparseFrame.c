@@ -23,6 +23,9 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
 #endif
 
     cudaGetDeviceCount ( &numGPU );
+#if ( defined ( MAX_NUM_GPU ) && ( MAX_NUM_GPU >= 0 ) )
+    numGPU = MIN ( numGPU, MAX_NUM_GPU );
+#endif
     common_info->numGPU = numGPU;
 
 #ifdef PRINT_INFO
@@ -382,6 +385,9 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->ColCount = NULL;
     matrix_info->RowCount = NULL;
 
+    matrix_info->SuperMap = NULL;
+    matrix_info->Sparent = NULL;
+
     matrix_info->workspace = NULL;
 
     return 0;
@@ -389,9 +395,9 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info )
 {
-    char *buf;
-
     double timestamp;
+
+    char *buf;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_read_matrix================\n\n");
@@ -1006,10 +1012,15 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Long j, i, k, p, ncol, nrow;
 
     Long *Perm, *Post, *Parent, *ColCount;
-    Long *Bperm, *Bparent, *Bcolcount;
 
     Long *workspace;
+
     Long *InvPost;
+    Long *Bperm, *Bparent, *Bcolcount;
+
+    Long s, parent, nfsuper;
+    Long *SuperMap, *Sparent;
+    Long *Nchild, *Super;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
@@ -1022,6 +1033,9 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Post = matrix_info->Post;
     Parent = matrix_info->Parent;
     ColCount = matrix_info->ColCount;
+
+    SuperMap = matrix_info->SuperMap;
+    Sparent = matrix_info->Sparent;
 
     workspace = matrix_info->workspace;
 
@@ -1049,6 +1063,41 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     memcpy ( ColCount, Bcolcount, nrow * sizeof(Long) );
 
     SparseFrame_perm ( matrix_info );
+
+    Nchild = workspace;
+    Super = workspace + 1 * nrow;
+
+    memset ( Nchild, 0, nrow * sizeof(Long) );
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        parent = Parent[j];
+        if ( parent >= 0 && parent < nrow )
+            Nchild[parent]++;
+    }
+
+    nfsuper = ( nrow > 0 ) ? 1 : 0;
+    Super[0] = 0;
+
+    for ( j = 1; j < nrow; j++ )
+    {
+        if ( Parent[j-1] != j || ColCount[j-1] != ColCount[j] + 1 || Nchild[j] > 1 )
+            Super[nfsuper++] = j;
+    }
+    Super[nfsuper] = nrow;
+
+    for ( s = 0; s < nfsuper; s++ )
+    {
+        for ( j = Super[s]; j < Super[s+1]; j++ )
+            SuperMap[j] = s;
+    }
+
+    for ( s = 0; s < nfsuper; s++ )
+    {
+        j = Super[s+1] - 1;
+        parent = Parent[j];
+        Sparent[s] = ( parent < 0 ) ? -1 : SuperMap[parent];
+    }
 
     return 0;
 }
@@ -1116,6 +1165,9 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 
     SparseFrame_postorder ( matrix_info );
 
+    matrix_info->SuperMap = malloc ( nrow * sizeof(Long) );
+    matrix_info->Sparent = malloc ( nrow * sizeof(Long) );
+
     SparseFrame_analyze_supernodal ( matrix_info );
 
     matrix_info->analyzeTime = SparseFrame_time () - timestamp;
@@ -1157,6 +1209,9 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
     if ( matrix_info->RowCount != NULL ) free ( matrix_info->RowCount );
 
+    if ( matrix_info->SuperMap != NULL ) free ( matrix_info->SuperMap );
+    if ( matrix_info->Sparent != NULL ) free ( matrix_info->Sparent );
+
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
 
     matrix_info->ncol = 0;
@@ -1188,6 +1243,9 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->ColCount = NULL;
     matrix_info->RowCount = NULL;
 
+    matrix_info->SuperMap = NULL;
+    matrix_info->Sparent = NULL;
+
     matrix_info->workspace = NULL;
 
     return 0;
@@ -1195,7 +1253,9 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame ( int argc, char **argv )
 {
-    int numSparseMatrix, matrixIndex;
+    double timestamp;
+
+    int numThreads, numSparseMatrix, matrixIndex;
 
     struct common_info_struct common_info_object;
     struct common_info_struct *common_info = &common_info_object;
@@ -1208,12 +1268,28 @@ int SparseFrame ( int argc, char **argv )
 
     // Allocate resources
 
+    timestamp = SparseFrame_time();
+
     SparseFrame_allocate_gpu (&gpu_info, common_info);
 
     numSparseMatrix = argc - 1;
     common_info->numSparseMatrix = numSparseMatrix;
 
+    numThreads = omp_get_max_threads();
+    common_info->numThreads = numThreads;
+
+#ifdef PRINT_INFO
+        printf ("Max threads = %d\n", numThreads);
+        printf ("Num of matrices = %d\n", numSparseMatrix);
+#endif
+
     SparseFrame_allocate_matrix ( &matrix_info, common_info );
+
+    common_info->allocateTime = SparseFrame_time () - timestamp;
+
+#ifdef PRINT_INFO
+        printf ("Allocate time:  %lf\n", common_info->allocateTime);
+#endif
 
     for ( matrixIndex = 0; matrixIndex < numSparseMatrix; matrixIndex++ )
     {
@@ -1248,9 +1324,17 @@ int SparseFrame ( int argc, char **argv )
 
     // Free resources
 
+    timestamp = SparseFrame_time();
+
     SparseFrame_free_gpu (&gpu_info, common_info);
 
     SparseFrame_free_matrix ( &matrix_info, common_info );
+
+    common_info->freeTime = SparseFrame_time () - timestamp;
+
+#ifdef PRINT_INFO
+        printf ("Free time:      %lf\n", common_info->freeTime);
+#endif
 
     return 0;
 }
