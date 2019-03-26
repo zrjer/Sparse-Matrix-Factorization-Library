@@ -239,11 +239,10 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 
     matrix_info->Tj = malloc ( nzmax * sizeof(Long) );
     matrix_info->Ti = malloc ( nzmax * sizeof(Long) );
-    matrix_info->Tx = malloc ( nzmax * sizeof(Float) );
-    if ( isComplex )
-        matrix_info->Ty = malloc ( nzmax * sizeof(Float) );
+    if ( !isComplex )
+        matrix_info->Tx = malloc ( nzmax * sizeof(Float) );
     else
-        matrix_info->Ty = NULL;
+        matrix_info->Tx = malloc ( nzmax * sizeof(Complex) );
 
     nz = 0;
 
@@ -264,9 +263,13 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
             }
             matrix_info->Tj[nz] = Tj - 1;
             matrix_info->Ti[nz] = Ti - 1;
-            matrix_info->Tx[nz] = Tx;
-            if ( isComplex )
-                matrix_info->Ty[nz] = Ty;
+            if ( !isComplex )
+                matrix_info->Tx[nz] = Tx;
+            else
+            {
+                ( (Complex*) (matrix_info->Tx) )[nz].x = Tx;
+                ( (Complex*) (matrix_info->Tx) )[nz].y = Ty;
+            }
             nz++;
         }
     }
@@ -286,7 +289,7 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     Long nz, nzmax;
     Long p;
     Long *Tj, *Ti, *Cp, *Ci;
-    Float *Tx, *Ty, *Cx, *Cy;
+    Float *Tx, *Cx;
 
     Long *workspace;
 
@@ -301,22 +304,17 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     Tj = matrix_info->Tj;
     Ti = matrix_info->Ti;
     Tx = matrix_info->Tx;
-    Ty = matrix_info->Ty;
 
     Cp = calloc ( ( ncol + 1 ), sizeof(Long) );
     Ci = malloc ( nzmax * sizeof(Long) );
-    Cx = malloc ( nzmax * sizeof(Float) );
-    if ( isComplex )
-    {
-        Cy = malloc ( nzmax * sizeof(Float) );
-    }
+    if ( !isComplex )
+        Cx = malloc ( nzmax * sizeof(Float) );
     else
-        Cy = NULL;
+        Cx = malloc ( nzmax * sizeof(Complex) );
 
     matrix_info->Cp = Cp;
     matrix_info->Ci = Ci;
     matrix_info->Cx = Cx;
-    matrix_info->Cy = Cy;
 
     workspace = matrix_info->workspace;
 
@@ -332,20 +330,19 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     {
         p = workspace [ Tj [ nz ] ] ++;
         Ci [p] = Ti[nz];
-        Cx [p] = Tx[nz];
-        if ( isComplex )
-            Cy [p] = Ty[nz];
+        if ( !isComplex )
+            Cx [p] = Tx[nz];
+        else
+            ( (Complex*) Cx ) [p] = ( (Complex*) Tx ) [nz];
     }
 
     if ( Tj != NULL ) free ( Tj );
     if ( Ti != NULL ) free ( Ti );
     if ( Tx != NULL ) free ( Tx );
-    if ( Ty != NULL ) free ( Ty );
 
     Tj = matrix_info->Tj = NULL;
     Ti = matrix_info->Ti = NULL;
     Tx = matrix_info->Tx = NULL;
-    Ty = matrix_info->Ty = NULL;
 
     return 0;
 }
@@ -362,19 +359,15 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Tj = NULL;
     matrix_info->Ti = NULL;
     matrix_info->Tx = NULL;
-    matrix_info->Ty = NULL;
     matrix_info->Cp = NULL;
     matrix_info->Ci = NULL;
     matrix_info->Cx = NULL;
-    matrix_info->Cy = NULL;
     matrix_info->Lp = NULL;
     matrix_info->Li = NULL;
     matrix_info->Lx = NULL;
-    matrix_info->Ly = NULL;
     matrix_info->Up = NULL;
     matrix_info->Ui = NULL;
     matrix_info->Ux = NULL;
-    matrix_info->Uy = NULL;
 
     matrix_info->Head = NULL;
     matrix_info->Next = NULL;
@@ -614,11 +607,11 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Long j, i, lp, up, nrow;
     Long jold, iold, pold;
     Long *Cp, *Ci;
-    Float *Cx, *Cy;
+    Float *Cx;
     Long *Lp, *Li;
-    Float *Lx, *Ly;
+    Float *Lx;
     Long *Up, *Ui;
-    Float *Ux, *Uy;
+    Float *Ux;
     Long *Perm, *Pinv;
 
     Long *Lworkspace, *Uworkspace;
@@ -634,17 +627,14 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Cp = matrix_info->Cp;
     Ci = matrix_info->Ci;
     Cx = matrix_info->Cx;
-    Cy = matrix_info->Cy;
 
     Lp = matrix_info->Lp;
     Li = matrix_info->Li;
     Lx = matrix_info->Lx;
-    Ly = matrix_info->Ly;
 
     Up = matrix_info->Up;
     Ui = matrix_info->Ui;
     Ux = matrix_info->Ux;
-    Uy = matrix_info->Uy;
 
     Perm = matrix_info->Perm;
     Pinv = matrix_info->Pinv;
@@ -703,16 +693,18 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
 
                 lp = Lworkspace [ MIN(i, j) ] ++;
                 Li[lp] = MAX(i, j);
-                Lx[lp] = Cx[pold];
-                if ( isComplex )
-                    Ly[lp] = Cy[pold];
+                if ( !isComplex )
+                    Lx[lp] = Cx[pold];
+                else
+                    ( (Complex*) Lx ) [lp] = ( (Complex*) Cx ) [pold];
 
                 Li[lp] = MAX(i, j);
                 up = Uworkspace [ MAX(i, j) ] ++;
                 Ui[up] = MIN(i, j);
-                Ux[up] = Cx[pold];
-                if ( isComplex )
-                    Uy[up] = Cy[pold];
+                if ( !isComplex )
+                    Ux[up] = Cx[pold];
+                else
+                    ( (Complex*) Ux ) [up] = ( (Complex*) Cx ) [pold];
             }
         }
     }
@@ -1010,7 +1002,7 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, k, p, ncol, nrow;
+    Long j, k, p, nrow;
 
     Long *Perm, *Post, *Parent, *ColCount;
 
@@ -1035,7 +1027,6 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
 #endif
 
-    ncol = matrix_info->ncol;
     nrow = matrix_info->nrow;
 
     Perm = matrix_info->Perm;
@@ -1245,23 +1236,17 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 
     matrix_info->Lp = malloc ( ( nrow + 1 ) * sizeof(Long) );
     matrix_info->Li = malloc ( nzmax * sizeof(Long) );
-    matrix_info->Lx = malloc ( nzmax * sizeof(Float) );
-    if ( isComplex )
-    {
-        matrix_info->Ly = malloc ( nzmax * sizeof(Float) );
-    }
+    if ( !isComplex )
+        matrix_info->Lx = malloc ( nzmax * sizeof(Float) );
     else
-        matrix_info->Ly = NULL;
+        matrix_info->Lx = malloc ( nzmax * sizeof(Complex) );
 
     matrix_info->Up = malloc ( ( nrow + 1 ) * sizeof(Long) );
     matrix_info->Ui = malloc ( nzmax * sizeof(Long) );
-    matrix_info->Ux = malloc ( nzmax * sizeof(Float) );
-    if ( isComplex )
-    {
-        matrix_info->Uy = malloc ( nzmax * sizeof(Float) );
-    }
+    if ( !isComplex )
+        matrix_info->Ux = malloc ( nzmax * sizeof(Float) );
     else
-        matrix_info->Uy = NULL;
+        matrix_info->Ux = malloc ( nzmax * sizeof(Complex) );
 
     SparseFrame_perm ( matrix_info );
 
@@ -1299,7 +1284,6 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Tj != NULL ) free ( matrix_info->Tj );
     if ( matrix_info->Ti != NULL ) free ( matrix_info->Ti );
     if ( matrix_info->Tx != NULL ) free ( matrix_info->Tx );
-    if ( matrix_info->Ty != NULL ) free ( matrix_info->Ty );
 
     if ( matrix_info->Cp != NULL ) free ( matrix_info->Cp );
     if ( matrix_info->Ci != NULL ) free ( matrix_info->Ci );
@@ -1308,12 +1292,10 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Lp != NULL ) free ( matrix_info->Lp );
     if ( matrix_info->Li != NULL ) free ( matrix_info->Li );
     if ( matrix_info->Lx != NULL ) free ( matrix_info->Lx );
-    if ( matrix_info->Ly != NULL ) free ( matrix_info->Ly );
 
     if ( matrix_info->Up != NULL ) free ( matrix_info->Up );
     if ( matrix_info->Ui != NULL ) free ( matrix_info->Ui );
     if ( matrix_info->Ux != NULL ) free ( matrix_info->Ux );
-    if ( matrix_info->Uy != NULL ) free ( matrix_info->Uy );
 
     if ( matrix_info->Head != NULL ) free ( matrix_info->Head );
     if ( matrix_info->Next != NULL ) free ( matrix_info->Next );
@@ -1335,19 +1317,15 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Tj = NULL;
     matrix_info->Ti = NULL;
     matrix_info->Tx = NULL;
-    matrix_info->Ty = NULL;
     matrix_info->Cp = NULL;
     matrix_info->Ci = NULL;
     matrix_info->Cx = NULL;
-    matrix_info->Cy = NULL;
     matrix_info->Lp = NULL;
     matrix_info->Li = NULL;
     matrix_info->Lx = NULL;
-    matrix_info->Ly = NULL;
     matrix_info->Up = NULL;
     matrix_info->Ui = NULL;
     matrix_info->Ux = NULL;
-    matrix_info->Uy = NULL;
 
     matrix_info->Head = NULL;
     matrix_info->Next = NULL;

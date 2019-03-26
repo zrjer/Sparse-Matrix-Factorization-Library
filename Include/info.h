@@ -42,22 +42,18 @@ struct matrix_info_struct
     Long *Tj;
     Long *Ti;
     Float *Tx;
-    Float *Ty;
 
     Long *Cp;
     Long *Ci;
     Float *Cx;
-    Float *Cy;
 
     Long *Lp;
     Long *Li;
     Float *Lx;
-    Float *Ly;
 
     Long *Up;
     Long *Ui;
     Float *Ux;
-    Float *Uy;
 
     enum PermMethod permMethod;
 
@@ -74,6 +70,10 @@ struct matrix_info_struct
     Long nsuper;
     Long *SuperMap;
     Long *Sparent;
+
+    Long *Lsp;
+    Long *Lsi;
+    Float *Lsx;
 
     void *workspace;
     size_t workSize;
