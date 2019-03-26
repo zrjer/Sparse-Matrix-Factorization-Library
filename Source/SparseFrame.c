@@ -385,6 +385,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->ColCount = NULL;
     matrix_info->RowCount = NULL;
 
+    matrix_info->nsuper = 0;
     matrix_info->SuperMap = NULL;
     matrix_info->Sparent = NULL;
 
@@ -1018,9 +1019,17 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Long *InvPost;
     Long *Bperm, *Bparent, *Bcolcount;
 
-    Long s, parent, nfsuper;
+    Long s, parent, sparent, nfsuper, nsuper;
     Long *SuperMap, *Sparent;
     Long *Nchild, *Super;
+#ifdef RELAX_RATE
+    Long smerge;
+    Long *Nschild, *Merge;
+    Long *Nscol, *Scolcount, *Nsz;
+    Long s_ncol, s_colcount, s_zero;
+    Long p_ncol, p_colcount, p_zero;
+    Long new_zero, total_zero;
+#endif
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
@@ -1065,7 +1074,14 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     SparseFrame_perm ( matrix_info );
 
     Nchild = workspace;
-    Super = workspace + 1 * nrow;
+    Super = workspace + 1 * nrow; // Size (nrow+1), be careful of overwriting
+#ifdef RELAX_RATE
+    Nschild = workspace;
+    Merge = workspace + 2 * nrow + 1;
+    Nscol = workspace + 3 * nrow + 1;
+    Scolcount = workspace + 4 * nrow + 1;
+    Nsz = workspace + 5 * nrow + 1;
+#endif
 
     memset ( Nchild, 0, nrow * sizeof(Long) );
 
@@ -1082,9 +1098,17 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     for ( j = 1; j < nrow; j++ )
     {
         if ( Parent[j-1] != j || ColCount[j-1] != ColCount[j] + 1 || Nchild[j] > 1 )
-            Super[nfsuper++] = j;
+        {
+            Super[nfsuper] = j;
+            nfsuper++;
+        }
     }
     Super[nfsuper] = nrow;
+
+    for ( s = 0; s < nfsuper; s++ )
+    {
+        Scolcount[s] = ColCount [ Super [ s ] ];
+    }
 
     for ( s = 0; s < nfsuper; s++ )
     {
@@ -1099,6 +1123,97 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
         Sparent[s] = ( parent < 0 ) ? -1 : SuperMap[parent];
     }
 
+#ifdef RELAX_RATE
+    if ( RELAX_RATE > 0 )
+    {
+        memset ( Nschild, 0, nfsuper * sizeof(Long) );
+
+        for ( s = 0; s < nfsuper; s++ )
+        {
+            sparent = Sparent[s];
+            if ( sparent >= 0 && sparent < nfsuper )
+                Nschild[sparent]++;
+        }
+
+        for ( s = 0; s < nfsuper; s++ )
+        {
+            Merge[s] = s;
+        }
+
+        if ( RELAX_RATE < 1 )
+        {
+            for ( s = 0; s < nfsuper; s++ )
+            {
+                Nscol[s] = Super[s+1] - Super[s];
+                Nsz[s] = 0;
+            }
+        }
+
+        for ( s = 0; s < nfsuper; s++ )
+        {
+            sparent = Sparent[s];
+            if ( sparent >= 0 && sparent < nfsuper && Nschild[sparent] == 1 && sparent == s+1 )
+            {
+                smerge = Merge[s];
+
+                if ( RELAX_RATE < 1 )
+                {
+                    s_ncol = Nscol[smerge];
+                    p_ncol = Nscol[sparent];
+                    s_colcount = Scolcount[smerge];
+                    p_colcount = Scolcount[sparent];
+                    s_zero = Nsz[smerge];
+                    p_zero = Nsz[sparent];
+                    new_zero = s_ncol * ( s_ncol + p_colcount - s_colcount );
+                    total_zero = s_zero + p_zero + new_zero;
+                    if ( (double)total_zero / ( ( s_ncol + p_ncol ) * ( s_ncol + p_ncol + 1 ) / 2 + ( s_ncol + p_ncol ) * ( p_colcount - p_ncol ) ) < RELAX_RATE )
+                    {
+                        Nscol[smerge] = s_ncol + p_ncol;
+                        Scolcount[smerge] = s_ncol + p_colcount;
+                        Nsz[smerge] = total_zero;
+                        Merge[sparent] = smerge;
+                    }
+                }
+                else
+                    Merge[sparent] = smerge;
+            }
+        }
+    }
+
+    nsuper = 0;
+
+    for ( s = 0; s < nfsuper; s++ )
+    {
+        if ( Merge[s] == s )
+        {
+            Super[nsuper] = Super[s];
+            Scolcount[nsuper] = Scolcount[s];
+            nsuper++;
+        }
+    }
+    Super[nsuper] = nrow;
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        for ( j = Super[s]; j < Super[s+1]; j++ )
+            SuperMap[j] = s;
+    }
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        j = Super[s+1] - 1;
+        parent = Parent[j];
+        Sparent[s] = ( parent < 0 ) ? -1 : SuperMap[parent];
+    }
+#else
+    nsuper = nfsuper;
+#endif
+
+    matrix_info->nsuper = nsuper;
+
+    printf ("nrow = %ld nfsuper = %ld nsuper = %ld\n", nrow, nfsuper, nsuper);
+    for ( s = 0; s < nfsuper; s++ )
+        printf ("%ld\n", Merge[s]);
     return 0;
 }
 
@@ -1243,6 +1358,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->ColCount = NULL;
     matrix_info->RowCount = NULL;
 
+    matrix_info->nsuper = 0;
     matrix_info->SuperMap = NULL;
     matrix_info->Sparent = NULL;
 

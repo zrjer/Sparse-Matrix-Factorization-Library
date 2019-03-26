@@ -71,6 +71,7 @@ struct matrix_info_struct
     Long *ColCount;
     Long *RowCount;
 
+    Long nsuper;
     Long *SuperMap;
     Long *Sparent;
 
