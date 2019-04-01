@@ -379,6 +379,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->RowCount = NULL;
 
     matrix_info->nsuper = 0;
+    matrix_info->Super = NULL;
     matrix_info->SuperMap = NULL;
     matrix_info->Sparent = NULL;
 
@@ -389,7 +390,10 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Lsi = NULL;
     matrix_info->Lsx = NULL;
 
+    matrix_info->workSize = 0;
     matrix_info->workspace = NULL;
+
+    matrix_info->residual = 0;
 
     return 0;
 }
@@ -1023,8 +1027,8 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Long *Bperm, *Bparent, *Bcolcount;
 
     Long parent, s, sparent, sdescendant, nfsuper, nsuper;
-    Long *SuperMap, *Sparent;
-    Long *Super, *Nchild, *Nscol, *Scolcount;
+    Long *Super, *SuperMap, *Sparent;
+    Long *Nchild, *Nscol, *Scolcount;
 #ifdef RELAX_RATE
     Long smerge;
     Long *Nschild, *Nsz, *Merge;
@@ -1054,6 +1058,7 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Parent = matrix_info->Parent;
     ColCount = matrix_info->ColCount;
 
+    Super = matrix_info->Super;
     SuperMap = matrix_info->SuperMap;
     Sparent = matrix_info->Sparent;
 
@@ -1084,14 +1089,13 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 
     SparseFrame_perm ( matrix_info );
 
-    Super = workspace; // Size (nrow+1), be careful of overwriting
-    Nchild = workspace + 1 * nrow + 1;
-    Nscol = workspace + 2 * nrow + 1;
-    Scolcount = workspace + 3 * nrow + 1;
+    Nchild = workspace;
+    Nscol = workspace + 1 * nrow;
+    Scolcount = workspace + 2 * nrow;
 #ifdef RELAX_RATE
     Nschild = Nchild; // use Nchild
-    Nsz = workspace + 4 * nrow + 1;
-    Merge = workspace + 5 * nrow + 1;
+    Nsz = workspace + 3 * nrow;
+    Merge = workspace + 4 * nrow;
 #endif
 
     memset ( Nchild, 0, nrow * sizeof(Long) );
@@ -1223,6 +1227,8 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 
     matrix_info->nsuper = nsuper;
 
+    printf ("nrow = %ld nfsuper = %ld nsuper = %ld\n", nrow, nfsuper, nsuper);
+
     isize = 0;
     xsize = 0;
 
@@ -1346,6 +1352,7 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 
     SparseFrame_postorder ( matrix_info );
 
+    matrix_info->Super = malloc ( ( nrow + 1 ) * sizeof(Long) );
     matrix_info->SuperMap = malloc ( nrow * sizeof(Long) );
     matrix_info->Sparent = malloc ( nrow * sizeof(Long) );
 
@@ -1355,6 +1362,160 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 
     return 0;
 }
+
+int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
+{
+    int isComplex;
+    Long nrow, nzmax;
+    Long j, i, k, p;
+    Long *Lp, *Li;
+    Float *Lx;
+
+    Long nsuper;
+    Long s, sj, si, sparent;
+    Long nscol, nsrow;
+    Long sip, dip;
+    Long *Super, *SuperMap;
+
+    Long isize, xsize;
+    Long *Lsip, *Lsxp, *Lsi;
+    Float *Lsx;
+
+    Long *Head, *Next;
+
+    Long *Map, *RelativeMap, *Lpos;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_factorize_supernodal================\n\n");
+#endif
+
+    isComplex = matrix_info->isComplex;
+    nrow = matrix_info->nrow;
+    nzmax = matrix_info->nzmax;
+
+    Lp = matrix_info->Lp;
+    Li = matrix_info->Li;
+    Lx = matrix_info->Lx;
+
+    nsuper = matrix_info->nsuper;
+    Super = matrix_info->Super;
+    SuperMap = matrix_info->SuperMap;
+
+    isize = matrix_info->isize;
+    xsize = matrix_info->xsize;
+    Lsip = matrix_info->Lsip;
+    Lsxp = matrix_info->Lsxp;
+    Lsi = matrix_info->Lsi;
+    Lsx = matrix_info->Lsx;
+
+    Head = matrix_info->Head;
+    Next = matrix_info->Next;
+
+    Map = malloc ( nrow * sizeof(Long) );
+    RelativeMap = malloc ( nrow * sizeof(Long) );
+    Lpos = malloc ( nsuper * sizeof(Long) );
+
+    if ( !isComplex )
+        memset ( Lsx, 0, xsize * sizeof(Float) );
+    else
+        memset ( Lsx, 0, xsize * sizeof(Complex) );
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Head[s] = -1;
+        Next[s] = -1;
+    }
+
+    for ( s = 0; s < nsuper; s++ )
+        Lpos[s] = Super[s+1] - Super[s];
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        for ( sip = Lsip[s]; sip < Lsip[s+1]; sip++ )
+        {
+            Map [ Lsi[sip] ] = sip - Lsip[s];
+        }
+
+        for ( j = Super[s]; j < Super[s+1]; j++ )
+        {
+            sj = j - Super[s];
+            for ( p = Lp[j]; p < Lp[j+1]; p++ )
+            {
+                i = Li[p];
+                si = Map[i];
+                if ( !isComplex )
+                    Lsx [ Lsxp[s] + sj * nsrow + si ] = Lx[p];
+                else
+                {
+                    ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                    ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
+                }
+            }
+        }
+
+        while ( Head[s] >= 0 )
+        {
+            Long d, dj, di;
+            Long ndcol, ndrow;
+            Long dancestor, lpos_next;
+
+            d = Head[s];
+
+            ndcol = Super[d+1] - Super[d];
+            ndrow = Lsip[d+1] - Lsip[d];
+
+            for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
+
+            for ( dip = Lpos[d]; dip < ndrow; dip++ )
+            {
+                RelativeMap[dip] = Map [ Lsi[dip] ];
+            }
+
+            Lpos[d] = lpos_next;
+            Head[s] = Next[d];
+            if ( lpos_next < ndrow )
+            {
+                dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
+                Next[d] = Head[dancestor];
+                Head[dancestor] = d;
+            }
+        }
+
+        if ( nscol < nsrow )
+        {
+            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+            Next[s] = Head[sparent];
+            Head[sparent] = s;
+        }
+    }
+
+    free ( Map );
+    free ( RelativeMap );
+    free ( Lpos );
+
+    return 0;
+}
+
+int SparseFrame_factorize ( struct matrix_info_struct *matrix_info )
+{
+    double timestamp;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_factorize================\n\n");
+#endif
+
+    timestamp = SparseFrame_time ();
+
+    SparseFrame_factorize_supernodal ( matrix_info );
+
+    matrix_info->factorizeTime = SparseFrame_time () - timestamp;
+
+    return 0;
+}
+
 
 int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
 {
@@ -1387,6 +1548,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
     if ( matrix_info->RowCount != NULL ) free ( matrix_info->RowCount );
 
+    if ( matrix_info->Super != NULL ) free ( matrix_info->Super );
     if ( matrix_info->SuperMap != NULL ) free ( matrix_info->SuperMap );
     if ( matrix_info->Sparent != NULL ) free ( matrix_info->Sparent );
 
@@ -1397,43 +1559,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
 
-    matrix_info->ncol = 0;
-    matrix_info->nrow = 0;
-    matrix_info->nzmax = 0;
-    matrix_info->Tj = NULL;
-    matrix_info->Ti = NULL;
-    matrix_info->Tx = NULL;
-    matrix_info->Cp = NULL;
-    matrix_info->Ci = NULL;
-    matrix_info->Cx = NULL;
-    matrix_info->Lp = NULL;
-    matrix_info->Li = NULL;
-    matrix_info->Lx = NULL;
-    matrix_info->Up = NULL;
-    matrix_info->Ui = NULL;
-    matrix_info->Ux = NULL;
-
-    matrix_info->Head = NULL;
-    matrix_info->Next = NULL;
-    matrix_info->Perm = NULL;
-    matrix_info->Pinv = NULL;
-    matrix_info->Post = NULL;
-    matrix_info->Parent = NULL;
-    matrix_info->ColCount = NULL;
-    matrix_info->RowCount = NULL;
-
-    matrix_info->nsuper = 0;
-    matrix_info->SuperMap = NULL;
-    matrix_info->Sparent = NULL;
-
-    matrix_info->isize = 0;
-    matrix_info->xsize = 0;
-    matrix_info->Lsip = NULL;
-    matrix_info->Lsxp = NULL;
-    matrix_info->Lsi = NULL;
-    matrix_info->Lsx = NULL;
-
-    matrix_info->workspace = NULL;
+    SparseFrame_initialize_matrix ( matrix_info );
 
     return 0;
 }
@@ -1492,6 +1618,8 @@ int SparseFrame ( int argc, char **argv )
         SparseFrame_analyze ( matrix_info + matrixIndex );
 
         // Factorize
+
+        SparseFrame_factorize ( matrix_info + matrixIndex );
 
         // Solve
 

@@ -68,6 +68,7 @@ struct matrix_info_struct
     Long *RowCount;
 
     Long nsuper;
+    Long *Super;
     Long *SuperMap;
     Long *Sparent;
 
@@ -80,6 +81,8 @@ struct matrix_info_struct
 
     void *workspace;
     size_t workSize;
+
+    double residual;
 
     double readTime;
     double analyzeTime;

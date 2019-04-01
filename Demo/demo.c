@@ -12,6 +12,7 @@ int main (int argc, char **argv)
     printf ("Size of Long = %ld\n", sizeof(Long));
     printf ("Size of uLong = %ld\n", sizeof(uLong));
     printf ("Size of Float = %ld\n", sizeof(Float));
+    printf ("Size of Complex = %ld\n", sizeof(Complex));
     printf ("Size of idx_t = %ld\n", sizeof(idx_t));
     printf ("\n");
 #endif
