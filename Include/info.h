@@ -71,7 +71,10 @@ struct matrix_info_struct
     Long *SuperMap;
     Long *Sparent;
 
-    Long *Lsp;
+    Long isize;
+    Long xsize;
+    Long *Lsip;
+    Long *Lsxp;
     Long *Lsi;
     Float *Lsx;
 

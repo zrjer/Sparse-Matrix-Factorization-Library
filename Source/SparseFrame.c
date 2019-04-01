@@ -382,6 +382,13 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->SuperMap = NULL;
     matrix_info->Sparent = NULL;
 
+    matrix_info->isize = 0;
+    matrix_info->xsize = 0;
+    matrix_info->Lsip = NULL;
+    matrix_info->Lsxp = NULL;
+    matrix_info->Lsi = NULL;
+    matrix_info->Lsx = NULL;
+
     matrix_info->workspace = NULL;
 
     return 0;
@@ -1002,7 +1009,11 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 {
-    Long j, k, p, nrow;
+    int isComplex;
+
+    Long j, i, k, p, nrow;
+
+    Long *Up, *Ui;
 
     Long *Perm, *Post, *Parent, *ColCount;
 
@@ -1011,23 +1022,32 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Long *InvPost;
     Long *Bperm, *Bparent, *Bcolcount;
 
-    Long s, parent, sparent, nfsuper, nsuper;
+    Long parent, s, sparent, sdescendant, nfsuper, nsuper;
     Long *SuperMap, *Sparent;
-    Long *Nchild, *Super;
+    Long *Super, *Nchild, *Nscol, *Scolcount;
 #ifdef RELAX_RATE
     Long smerge;
-    Long *Nschild, *Merge;
-    Long *Nscol, *Scolcount, *Nsz;
+    Long *Nschild, *Nsz, *Merge;
     Long s_ncol, s_colcount, s_zero;
     Long p_ncol, p_colcount, p_zero;
     Long new_zero, total_zero;
 #endif
+    Long *Lsip_copy, *Marker;
+
+    Long isize, xsize;
+    Long *Lsip, *Lsxp, *Lsi;
+    Float *Lsx;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
 #endif
 
+    isComplex = matrix_info->isComplex;
+
     nrow = matrix_info->nrow;
+
+    Up = matrix_info->Up;
+    Ui = matrix_info->Ui;
 
     Perm = matrix_info->Perm;
     Post = matrix_info->Post;
@@ -1053,8 +1073,8 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     for (k = 0; k < nrow; k++)
     {
         Bperm[k] = Perm [ Post [ k ] ];
-        p = Parent [ Post [ k ] ];
-        Bparent[k] = ( p < 0 ) ? -1 : InvPost[p];
+        parent = Parent [ Post [ k ] ];
+        Bparent[k] = ( parent < 0 ) ? -1 : InvPost[parent];
         Bcolcount[k] = ColCount [ Post [ k ] ];
     }
 
@@ -1064,14 +1084,14 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 
     SparseFrame_perm ( matrix_info );
 
-    Nchild = workspace;
-    Super = workspace + 1 * nrow; // Size (nrow+1), be careful of overwriting
+    Super = workspace; // Size (nrow+1), be careful of overwriting
+    Nchild = workspace + 1 * nrow + 1;
+    Nscol = workspace + 2 * nrow + 1;
+    Scolcount = workspace + 3 * nrow + 1;
 #ifdef RELAX_RATE
-    Nschild = workspace;
-    Merge = workspace + 2 * nrow + 1;
-    Nscol = workspace + 3 * nrow + 1;
-    Scolcount = workspace + 4 * nrow + 1;
-    Nsz = workspace + 5 * nrow + 1;
+    Nschild = Nchild; // use Nchild
+    Nsz = workspace + 4 * nrow + 1;
+    Merge = workspace + 5 * nrow + 1;
 #endif
 
     memset ( Nchild, 0, nrow * sizeof(Long) );
@@ -1098,6 +1118,7 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 
     for ( s = 0; s < nfsuper; s++ )
     {
+        Nscol[s] = Super[s+1] - Super[s];
         Scolcount[s] = ColCount [ Super [ s ] ];
     }
 
@@ -1135,7 +1156,6 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
         {
             for ( s = 0; s < nfsuper; s++ )
             {
-                Nscol[s] = Super[s+1] - Super[s];
                 Nsz[s] = 0;
             }
         }
@@ -1182,6 +1202,7 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
             nsuper++;
         }
     }
+
     Super[nsuper] = nrow;
 
     for ( s = 0; s < nsuper; s++ )
@@ -1202,9 +1223,69 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 
     matrix_info->nsuper = nsuper;
 
-    printf ("nrow = %ld nfsuper = %ld nsuper = %ld\n", nrow, nfsuper, nsuper);
-    for ( s = 0; s < nfsuper; s++ )
-        printf ("%ld\n", Merge[s]);
+    isize = 0;
+    xsize = 0;
+
+    Lsip = malloc ( ( nsuper + 1 ) * sizeof(Long) );
+    Lsxp = malloc ( ( nsuper + 1 ) * sizeof(Long) );
+
+    Lsip[0] = 0;
+    Lsxp[0] = 0;
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Lsip[s+1] = Lsip[s] + Scolcount[s];
+        Lsxp[s+1] = Lsxp[s] + Nscol[s] * Scolcount[s];
+    }
+
+    isize = Lsip[nsuper];
+    xsize = Lsxp[nsuper];
+
+    Lsi = malloc ( isize * sizeof(Long) );
+    if ( !isComplex )
+        Lsx = malloc ( xsize * sizeof(Long) );
+    else
+        Lsx = malloc ( xsize * sizeof(Complex) );
+
+    matrix_info->Lsip = Lsip;
+    matrix_info->Lsxp = Lsxp;
+    matrix_info->Lsi = Lsi;
+    matrix_info->Lsx = Lsx;
+
+    Lsip_copy = workspace + 1 * nrow + 1; // don't overwrite Super
+    Marker = workspace + 2 * nrow + 1;
+
+    memcpy ( Lsip_copy, Lsip, ( nsuper + 1 ) * sizeof(Long) );
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Marker[s] = Super[s+1];
+    }
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        for ( k = Super[s]; k < Super[s+1]; k++ )
+        {
+            Lsi [ Lsip_copy[s]++ ] = k;
+        }
+    }
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        for ( j = Super[s]; j < Super[s+1]; j++ )
+        {
+            for ( p = Up[j]; p < Up[j+1]; p++ )
+            {
+                i = Ui[p];
+                for ( sdescendant = SuperMap[i]; sdescendant >= 0 && Marker[sdescendant] <= j; sdescendant = Sparent[sdescendant] )
+                {
+                    Lsi [ Lsip_copy[sdescendant]++ ] = j;
+                    Marker[sdescendant] = j+1;
+                }
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -1309,6 +1390,11 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->SuperMap != NULL ) free ( matrix_info->SuperMap );
     if ( matrix_info->Sparent != NULL ) free ( matrix_info->Sparent );
 
+    if ( matrix_info->Lsip != NULL ) free ( matrix_info->Lsip );
+    if ( matrix_info->Lsxp != NULL ) free ( matrix_info->Lsxp );
+    if ( matrix_info->Lsi != NULL ) free ( matrix_info->Lsi );
+    if ( matrix_info->Lsx != NULL ) free ( matrix_info->Lsx );
+
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
 
     matrix_info->ncol = 0;
@@ -1339,6 +1425,13 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->nsuper = 0;
     matrix_info->SuperMap = NULL;
     matrix_info->Sparent = NULL;
+
+    matrix_info->isize = 0;
+    matrix_info->xsize = 0;
+    matrix_info->Lsip = NULL;
+    matrix_info->Lsxp = NULL;
+    matrix_info->Lsi = NULL;
+    matrix_info->Lsx = NULL;
 
     matrix_info->workspace = NULL;
 
