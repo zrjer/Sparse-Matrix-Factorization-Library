@@ -1367,14 +1367,10 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
 {
     int isComplex;
     Long nrow, nzmax;
-    Long j, i, k, p;
     Long *Lp, *Li;
     Float *Lx;
 
-    Long nsuper;
-    Long s, sj, si, sparent;
-    Long nscol, nsrow;
-    Long sip, dip;
+    Long nsuper, s;
     Long *Super, *SuperMap;
 
     Long isize, xsize;
@@ -1384,6 +1380,9 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
     Long *Head, *Next;
 
     Long *Map, *RelativeMap, *Lpos;
+
+    Long csize;
+    Float *C;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_factorize_supernodal================\n\n");
@@ -1408,17 +1407,17 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
     Lsi = matrix_info->Lsi;
     Lsx = matrix_info->Lsx;
 
+    if ( !isComplex )
+        memset ( Lsx, 0, xsize * sizeof(Float) );
+    else
+        memset ( Lsx, 0, xsize * sizeof(Complex) );
+
     Head = matrix_info->Head;
     Next = matrix_info->Next;
 
     Map = malloc ( nrow * sizeof(Long) );
     RelativeMap = malloc ( nrow * sizeof(Long) );
     Lpos = malloc ( nsuper * sizeof(Long) );
-
-    if ( !isComplex )
-        memset ( Lsx, 0, xsize * sizeof(Float) );
-    else
-        memset ( Lsx, 0, xsize * sizeof(Complex) );
 
     for ( s = 0; s < nsuper; s++ )
     {
@@ -1429,15 +1428,52 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
     for ( s = 0; s < nsuper; s++ )
         Lpos[s] = Super[s+1] - Super[s];
 
+    csize = 0;
     for ( s = 0; s < nsuper; s++ )
     {
+        Long sparent, sparent_last;
+        Long nscol, nsrow;
+        Long sip, sip_last;
+
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        if ( nscol < nsrow )
+        {
+            sip_last = nscol;
+            sparent_last = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+            for ( sip = nscol; sip < nsrow; sip++ )
+            {
+                sparent = SuperMap [ Lsi [ Lsip[s] + sip ] ];
+                if ( sparent != sparent_last )
+                {
+                    csize = MAX ( csize, ( sip - sip_last ) * ( nsrow - sip_last ) );
+                    sip_last = sip;
+                    sparent_last = sparent;
+                }
+            }
+            csize = MAX ( csize, ( nsrow - sip_last ) * ( nsrow - sip_last ) );
+        }
+    }
+    if (!isComplex)
+        C = malloc ( csize * sizeof(Float) );
+    else
+        C = malloc ( csize * sizeof(Complex) );
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Long j, i, k, p;
+
+        Long sparent;
+        Long nscol, nsrow;
+        Long sj, si;
+        Long sip;
+
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
         for ( sip = Lsip[s]; sip < Lsip[s+1]; sip++ )
-        {
             Map [ Lsi[sip] ] = sip - Lsip[s];
-        }
 
         for ( j = Super[s]; j < Super[s+1]; j++ )
         {
@@ -1458,9 +1494,10 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
 
         while ( Head[s] >= 0 )
         {
-            Long d, dj, di;
+            Long d, dj, di, dancestor;
             Long ndcol, ndrow;
-            Long dancestor, lpos_next;
+            Long dip;
+            Long lpos_next;
 
             d = Head[s];
 
@@ -1495,6 +1532,7 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
     free ( Map );
     free ( RelativeMap );
     free ( Lpos );
+    free ( C );
 
     return 0;
 }
