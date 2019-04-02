@@ -393,6 +393,10 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->workSize = 0;
     matrix_info->workspace = NULL;
 
+    matrix_info->Bx = NULL;
+    matrix_info->Xx = NULL;
+    matrix_info->Rx = NULL;
+
     matrix_info->residual = 0;
 
     return 0;
@@ -1617,6 +1621,69 @@ int SparseFrame_factorize ( struct common_info_struct *common_info, struct matri
     return 0;
 }
 
+int SparseFrame_solve ( struct matrix_info_struct *matrix_info )
+{
+    double timestamp;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_solve================\n\n");
+#endif
+
+    timestamp = SparseFrame_time ();
+
+    matrix_info->solveTime = SparseFrame_time () - timestamp;
+
+    return 0;
+}
+
+int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
+{
+    int isComplex;
+    Long i, nrow;
+    Float *Bx, *Xx, *Rx;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_validate================\n\n");
+#endif
+
+    isComplex = matrix_info->isComplex;
+
+    nrow = matrix_info->nrow;
+
+    if ( !isComplex )
+    {
+        Bx = malloc ( nrow * sizeof(Float) );
+        Xx = malloc ( nrow * sizeof(Float) );
+        Rx = malloc ( nrow * sizeof(Float) );
+    }
+    else
+    {
+        Bx = malloc ( nrow * sizeof(Complex) );
+        Xx = malloc ( nrow * sizeof(Complex) );
+        Rx = malloc ( nrow * sizeof(Complex) );
+    }
+
+    matrix_info->Bx = Bx;
+    matrix_info->Xx = Xx;
+    matrix_info->Rx = Rx;
+
+    for ( i = 0; i < nrow; i++ )
+    {
+        if ( !isComplex )
+        {
+            Bx[i] = 1 + (Float)i / nrow;
+        }
+        else
+        {
+            ( (Complex*) Bx ) [i].x = 1 + i / (Float)nrow;
+            ( (Complex*) Bx ) [i].y = ( (Float)nrow / 2 - i ) / ( 3 * nrow );
+        }
+    }
+
+    SparseFrame_solve ( matrix_info );
+
+    return 0;
+}
 
 int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
 {
@@ -1659,6 +1726,10 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Lsx != NULL ) free ( matrix_info->Lsx );
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
+
+    if ( matrix_info->Bx != NULL ) free ( matrix_info->Bx );
+    if ( matrix_info->Xx != NULL ) free ( matrix_info->Xx );
+    if ( matrix_info->Rx != NULL ) free ( matrix_info->Rx );
 
     SparseFrame_initialize_matrix ( matrix_info );
 
@@ -1722,7 +1793,9 @@ int SparseFrame ( int argc, char **argv )
 
         SparseFrame_factorize ( common_info, matrix_info + matrixIndex );
 
-        // Solve
+        // Validate
+
+        SparseFrame_validate ( matrix_info + matrixIndex );
 
         // Cleanup
 

@@ -55,6 +55,10 @@ struct matrix_info_struct
     Long *Ui;
     Float *Ux;
 
+    Float *Bx;
+    Float *Xx;
+    Float *Rx;
+
     enum PermMethod permMethod;
 
     Long *Head;
