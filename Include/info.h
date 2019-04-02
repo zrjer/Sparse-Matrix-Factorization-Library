@@ -82,7 +82,7 @@ struct matrix_info_struct
     void *workspace;
     size_t workSize;
 
-    double residual;
+    Float residual;
 
     double readTime;
     double analyzeTime;

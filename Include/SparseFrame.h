@@ -15,6 +15,7 @@
 
 #include "arch.h"
 #include "type.h"
+#include "constant.h"
 #include "parameter.h"
 #include "macro.h"
 #include "info.h"

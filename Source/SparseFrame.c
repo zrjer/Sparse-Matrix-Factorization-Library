@@ -1202,6 +1202,7 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
         if ( Merge[s] == s )
         {
             Super[nsuper] = Super[s];
+            Nscol[nsuper] = Nscol[s];
             Scolcount[nsuper] = Scolcount[s];
             nsuper++;
         }
@@ -1227,8 +1228,6 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 
     matrix_info->nsuper = nsuper;
 
-    printf ("nrow = %ld nfsuper = %ld nsuper = %ld\n", nrow, nfsuper, nsuper);
-
     isize = 0;
     xsize = 0;
 
@@ -1249,10 +1248,12 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 
     Lsi = malloc ( isize * sizeof(Long) );
     if ( !isComplex )
-        Lsx = malloc ( xsize * sizeof(Long) );
+        Lsx = malloc ( xsize * sizeof(Float) );
     else
         Lsx = malloc ( xsize * sizeof(Complex) );
 
+    matrix_info->isize = isize;
+    matrix_info->xsize = xsize;
     matrix_info->Lsip = Lsip;
     matrix_info->Lsxp = Lsxp;
     matrix_info->Lsi = Lsi;
@@ -1363,7 +1364,7 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
-int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
+int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
     int isComplex;
     Long nrow, nzmax;
@@ -1469,6 +1470,9 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
         Long sj, si;
         Long sip;
 
+        Long sn, sm, sk, slda;
+        int info;
+
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
@@ -1494,10 +1498,13 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
 
         while ( Head[s] >= 0 )
         {
-            Long d, dj, di, dancestor;
+            Long d, di, dancestor;
             Long ndcol, ndrow;
-            Long dip;
             Long lpos_next;
+
+            Long dn, dm, dk, dlda, dldc;
+
+            Long cj, ci;
 
             d = Head[s];
 
@@ -1506,9 +1513,42 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
 
             for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
 
-            for ( dip = Lpos[d]; dip < ndrow; dip++ )
+            dn = lpos_next - Lpos[d];
+            dm = ndrow - Lpos[d] - dn;
+            dk = ndcol;
+            dlda = ndrow;
+            dldc = ndrow - Lpos[d];
+
+            if (!isComplex)
+                dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
+            else
+                zherk_ ( "L", "N", &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C, &dldc );
+
+            if ( dm > 0 )
             {
-                RelativeMap[dip] = Map [ Lsi[dip] ];
+                if (!isComplex)
+                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, Lsx + Lsxp[d] + lpos_next, &dlda, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C + dn, &dldc );
+                else
+                    zgemm_ ( "N", "C", &dm, &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C + dn, &dldc );
+            }
+
+            for ( di = Lpos[d]; di < ndrow; di++ )
+            {
+                RelativeMap [ di - Lpos[d] ] = Map [ Lsi[ Lsip[d] + di ] ];
+            }
+
+            for ( cj = 0; cj < dn; cj++ )
+            {
+                for ( ci = cj; ci < dn + dm; ci++ )
+                {
+                    if (!isComplex)
+                        Lsx [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= C [ cj * dldc + ci ];
+                    else
+                    {
+                        ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
+                        ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
+                    }
+                }
             }
 
             Lpos[d] = lpos_next;
@@ -1519,6 +1559,23 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
                 Next[d] = Head[dancestor];
                 Head[dancestor] = d;
             }
+        }
+
+        sn = nscol;
+        sm = nsrow - nscol;
+        slda = nsrow;
+
+        if (!isComplex)
+            dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
+        else
+            zpotrf_ ( "L", &sn, (Complex*)Lsx + Lsxp[s], &slda, &info );
+
+        if ( nscol < nsrow )
+        {
+            if (!isComplex)
+                dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, Lsx + Lsxp[s], &slda, Lsx + Lsxp[s] + nscol, &slda );
+            else
+                ztrsm_ ( "R", "L", "C", "N", &sm, &sn, one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
         }
 
         if ( nscol < nsrow )
@@ -1537,9 +1594,11 @@ int SparseFrame_factorize_supernodal ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
-int SparseFrame_factorize ( struct matrix_info_struct *matrix_info )
+int SparseFrame_factorize ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
     double timestamp;
+
+    int numThreads;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_factorize================\n\n");
@@ -1547,7 +1606,11 @@ int SparseFrame_factorize ( struct matrix_info_struct *matrix_info )
 
     timestamp = SparseFrame_time ();
 
-    SparseFrame_factorize_supernodal ( matrix_info );
+    numThreads = common_info->numThreads;
+
+    openblas_set_num_threads ( numThreads );
+
+    SparseFrame_factorize_supernodal ( common_info, matrix_info );
 
     matrix_info->factorizeTime = SparseFrame_time () - timestamp;
 
@@ -1630,8 +1693,8 @@ int SparseFrame ( int argc, char **argv )
     common_info->numThreads = numThreads;
 
 #ifdef PRINT_INFO
-        printf ("Max threads = %d\n", numThreads);
-        printf ("Num of matrices = %d\n", numSparseMatrix);
+    printf ("Max threads = %d\n", numThreads);
+    printf ("Num of matrices = %d\n", numSparseMatrix);
 #endif
 
     SparseFrame_allocate_matrix ( &matrix_info, common_info );
@@ -1639,7 +1702,7 @@ int SparseFrame ( int argc, char **argv )
     common_info->allocateTime = SparseFrame_time () - timestamp;
 
 #ifdef PRINT_INFO
-        printf ("Allocate time:  %lf\n", common_info->allocateTime);
+    printf ("Allocate time:  %lf\n", common_info->allocateTime);
 #endif
 
     for ( matrixIndex = 0; matrixIndex < numSparseMatrix; matrixIndex++ )
@@ -1657,7 +1720,7 @@ int SparseFrame ( int argc, char **argv )
 
         // Factorize
 
-        SparseFrame_factorize ( matrix_info + matrixIndex );
+        SparseFrame_factorize ( common_info, matrix_info + matrixIndex );
 
         // Solve
 
@@ -1686,7 +1749,7 @@ int SparseFrame ( int argc, char **argv )
     common_info->freeTime = SparseFrame_time () - timestamp;
 
 #ifdef PRINT_INFO
-        printf ("Free time:      %lf\n", common_info->freeTime);
+    printf ("Free time:      %lf\n", common_info->freeTime);
 #endif
 
     return 0;
