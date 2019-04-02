@@ -1371,14 +1371,14 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
     int isComplex;
-    Long nrow, nzmax;
+    Long nrow;
     Long *Lp, *Li;
     Float *Lx;
 
     Long nsuper, s;
     Long *Super, *SuperMap;
 
-    Long isize, xsize;
+    Long xsize;
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
 
@@ -1395,7 +1395,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
-    nzmax = matrix_info->nzmax;
 
     Lp = matrix_info->Lp;
     Li = matrix_info->Li;
@@ -1405,7 +1404,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Super = matrix_info->Super;
     SuperMap = matrix_info->SuperMap;
 
-    isize = matrix_info->isize;
     xsize = matrix_info->xsize;
     Lsip = matrix_info->Lsip;
     Lsxp = matrix_info->Lsxp;
@@ -1467,13 +1465,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     for ( s = 0; s < nsuper; s++ )
     {
-        Long j, i, k, p;
+        Long j, i, p;
 
         Long sparent;
         Long nscol, nsrow;
         Long sj, si;
 
-        Long sn, sm, sk, slda;
+        Long sn, sm, slda;
         int info;
 
         nscol = Super[s+1] - Super[s];
@@ -1632,7 +1630,7 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
 
-    Float *Bx, *Xx, *Rx;
+    Float *Bx, *Xx;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_solve_supernodal================\n\n");
@@ -1653,7 +1651,6 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
 
     Bx = matrix_info->Bx;
     Xx = matrix_info->Xx;
-    Rx = matrix_info->Rx;
 
     if ( !isComplex )
         memcpy ( Xx, Bx, nrow * sizeof(Float) );
