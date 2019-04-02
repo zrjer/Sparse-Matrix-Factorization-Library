@@ -426,7 +426,7 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
 
     free ( buf );
 
-    matrix_info->workSize = MAX ( ( 6 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(Long), ( 3 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(idx_t) );
+    matrix_info->workSize = MAX ( MAX ( ( 6 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(Long), ( 3 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(idx_t) ), ( matrix_info->nrow ) * sizeof(Float) );
     matrix_info->workspace = malloc ( matrix_info->workSize );
 
     SparseFrame_compress ( matrix_info );
@@ -1438,26 +1438,26 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     {
         Long sparent, sparent_last;
         Long nscol, nsrow;
-        Long sip, sip_last;
+        Long si, si_last;
 
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
         if ( nscol < nsrow )
         {
-            sip_last = nscol;
+            si_last = nscol;
             sparent_last = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-            for ( sip = nscol; sip < nsrow; sip++ )
+            for ( si = nscol; si < nsrow; si++ )
             {
-                sparent = SuperMap [ Lsi [ Lsip[s] + sip ] ];
+                sparent = SuperMap [ Lsi [ Lsip[s] + si ] ];
                 if ( sparent != sparent_last )
                 {
-                    csize = MAX ( csize, ( sip - sip_last ) * ( nsrow - sip_last ) );
-                    sip_last = sip;
+                    csize = MAX ( csize, ( si - si_last ) * ( nsrow - si_last ) );
+                    si_last = si;
                     sparent_last = sparent;
                 }
             }
-            csize = MAX ( csize, ( nsrow - sip_last ) * ( nsrow - sip_last ) );
+            csize = MAX ( csize, ( nsrow - si_last ) * ( nsrow - si_last ) );
         }
     }
     if (!isComplex)
@@ -1472,7 +1472,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         Long sparent;
         Long nscol, nsrow;
         Long sj, si;
-        Long sip;
 
         Long sn, sm, sk, slda;
         int info;
@@ -1480,8 +1479,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
-        for ( sip = Lsip[s]; sip < Lsip[s+1]; sip++ )
-            Map [ Lsi[sip] ] = sip - Lsip[s];
+        for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
+            Map [ Lsi [ Lsip[s] + si ] ] = si;
 
         for ( j = Super[s]; j < Super[s+1]; j++ )
         {
@@ -1621,15 +1620,115 @@ int SparseFrame_factorize ( struct common_info_struct *common_info, struct matri
     return 0;
 }
 
-int SparseFrame_solve ( struct matrix_info_struct *matrix_info )
+int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
 {
     double timestamp;
 
+    int isComplex;
+    Long nrow;
+
+    Long s, nsuper;
+    Long *Super;
+    Long *Lsip, *Lsxp, *Lsi;
+    Float *Lsx;
+
+    Float *Bx, *Xx, *Rx;
+
 #ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_solve================\n\n");
+    printf ("\n================SparseFrame_solve_supernodal================\n\n");
 #endif
 
     timestamp = SparseFrame_time ();
+
+    isComplex = matrix_info->isComplex;
+    nrow = matrix_info->nrow;
+
+    nsuper = matrix_info->nsuper;
+
+    Super = matrix_info->Super;
+    Lsip = matrix_info->Lsip;
+    Lsxp = matrix_info->Lsxp;
+    Lsi = matrix_info->Lsi;
+    Lsx = matrix_info->Lsx;
+
+    Bx = matrix_info->Bx;
+    Xx = matrix_info->Xx;
+    Rx = matrix_info->Rx;
+
+    if ( !isComplex )
+        memcpy ( Xx, Bx, nrow * sizeof(Float) );
+    else
+        memcpy ( Xx, Bx, nrow * sizeof(Complex) );
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Long j, i;
+
+        Long nscol, nsrow;
+        Long sj, si;
+
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        for ( sj = 0; sj < nscol; sj++ )
+        {
+            j = Lsi [ Lsip[s] + sj ];
+
+            if ( !isComplex )
+                Xx[j] /= Lsx [ Lsxp[s] + sj * nsrow + sj ];
+            else
+            {
+                // TODO
+            }
+
+            for ( si = sj + 1; si < nsrow; si++ )
+            {
+                i = Lsi [ Lsip[s] + si ];
+
+                if ( !isComplex )
+                    Xx[i] -= ( Lsx [ Lsxp[s] + sj * nsrow + si ] * Xx[j] );
+                else
+                {
+                    // TODO
+                }
+            }
+        }
+    }
+
+    for ( s = nsuper - 1; s >= 0; s-- )
+    {
+        Long j, i;
+
+        Long nscol, nsrow;
+        Long sj, si;
+
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        for ( sj = nscol - 1; sj >= 0; sj-- )
+        {
+            j = Lsi [ Lsip[s] + sj ];
+
+            for ( si = sj + 1; si < nsrow; si++ )
+            {
+                i = Lsi [ Lsip[s] + si ];
+
+                if ( !isComplex )
+                    Xx[j] -= ( Lsx [ Lsxp[s] + sj * nsrow + si ] * Xx[i] );
+                else
+                {
+                    // TODO
+                }
+            }
+
+            if ( !isComplex )
+                Xx[j] /= Lsx [ Lsxp[s] + sj * nsrow + sj ];
+            else
+            {
+                // TODO
+            }
+        }
+    }
 
     matrix_info->solveTime = SparseFrame_time () - timestamp;
 
@@ -1639,8 +1738,14 @@ int SparseFrame_solve ( struct matrix_info_struct *matrix_info )
 int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
 {
     int isComplex;
-    Long i, nrow;
+    Long j, i, p, nrow;
+    Long *Lp, *Li;
+    Float *Lx;
     Float *Bx, *Xx, *Rx;
+    Float anorm, bnorm, xnorm, rnorm;
+    Float residual;
+
+    Float *workspace;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_validate================\n\n");
@@ -1649,6 +1754,10 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
     isComplex = matrix_info->isComplex;
 
     nrow = matrix_info->nrow;
+
+    Lp = matrix_info->Lp;
+    Li = matrix_info->Li;
+    Lx = matrix_info->Lx;
 
     if ( !isComplex )
     {
@@ -1680,7 +1789,79 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    SparseFrame_solve ( matrix_info );
+    SparseFrame_solve_supernodal ( matrix_info );
+
+    for ( i = 0; i < nrow; i++ )
+    {
+        if ( !isComplex )
+            Rx[i] = -Bx[i];
+        else
+        {
+            ( (Complex*) Rx ) [i].x = - ( (Complex*) Bx) [i].x;
+            ( (Complex*) Rx ) [i].y = - ( (Complex*) Bx) [i].y;
+        }
+    }
+
+    for ( j = 0; j < nrow; j++ )
+    {
+        for ( p = Lp[j]; p < Lp[j+1]; p++ )
+        {
+            i = Li[p];
+            Rx[i] += ( Lx[p] * Xx[j] );
+            if ( i != j )
+                Rx[j] += ( Lx[p] * Xx[i] );
+        }
+    }
+
+    workspace = matrix_info->workspace;
+    memset ( workspace, 0, nrow * sizeof(Float) );
+
+    anorm = 0;
+    for ( j = 0; j < nrow; j++ )
+    {
+        for ( p = Lp[j]; p < Lp[j+1]; p++ )
+        {
+            i = Li[p];
+            if ( !isComplex )
+            {
+                workspace[j] += abs ( Lx[p] );
+                if ( i != j )
+                    workspace[i] += abs ( Lx[p] );
+            }
+            else
+            {
+                // TODO
+            }
+        }
+    }
+    for ( j = 0; j < nrow; j++ )
+        if ( workspace[j] > anorm )
+            anorm = workspace[j];
+
+    bnorm = 0;
+    xnorm = 0;
+    rnorm = 0;
+    for ( i = 0; i < nrow; i++ )
+    {
+        if ( !isComplex )
+        {
+            bnorm += ( Bx[i] * Bx[i] );
+            xnorm += ( Xx[i] * Xx[i] );
+            rnorm += ( Rx[i] * Rx[i] );
+        }
+        else
+        {
+            // TODO
+        }
+    }
+    bnorm = sqrt ( bnorm );
+    xnorm = sqrt ( xnorm );
+    rnorm = sqrt ( rnorm );
+
+    residual = rnorm / ( anorm * xnorm + bnorm );
+    matrix_info->residual = residual;
+
+    printf ("anorm = %lf bnorm = %lf xnorm = %lf rnorm = %lf residual = %lf\n", anorm, bnorm, xnorm, rnorm, residual);
 
     return 0;
 }
@@ -1808,6 +1989,7 @@ int SparseFrame ( int argc, char **argv )
         printf ("Analyze time:   %lf\n", (matrix_info+matrixIndex)->analyzeTime);
         printf ("Factorize time: %lf\n", (matrix_info+matrixIndex)->factorizeTime);
         printf ("Solve time:     %lf\n", (matrix_info+matrixIndex)->solveTime);
+        printf ("residual:       %le\n", (matrix_info+matrixIndex)->residual);
 #endif
     }
 
