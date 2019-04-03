@@ -8,6 +8,7 @@ struct common_info_struct
     int numSparseMatrix;
 
     double allocateTime;
+    double computeTime;
     double freeTime;
 };
 
@@ -25,6 +26,8 @@ struct gpu_info_struct
 
 struct matrix_info_struct
 {
+    const char *path;
+
     FILE *file;
 
     enum FactorizeType factorizeType;
@@ -75,6 +78,9 @@ struct matrix_info_struct
     Long *Super;
     Long *SuperMap;
     Long *Sparent;
+
+    Long nsleaf;
+    Long *Leaf;
 
     Long isize;
     Long xsize;

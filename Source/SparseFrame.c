@@ -95,6 +95,9 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
 #endif
         }
     }
+#ifdef PRINT_INFO
+    printf ("\n");
+#endif
 
     return 0;
 }
@@ -227,14 +230,15 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     }
 
 #ifdef PRINT_INFO
+    printf ( "matrix %s is ", basename(matrix_info->path) );
     if ( isComplex == 0 && isSymmetric != 0)
-        printf ("matrix is real symmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
+        printf ("real symmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
     else if ( isComplex != 0 && isSymmetric != 0)
-        printf ("matrix is complex symmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
+        printf ("complex symmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
     else if ( isComplex == 0 && isSymmetric == 0)
-        printf ("matrix is real unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
+        printf ("real unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
     else
-        printf ("matrix is complex unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n", ncol, nrow, nzmax);
+        printf ("complex unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
 #endif
 
     matrix_info->Tj = malloc ( nzmax * sizeof(Long) );
@@ -383,6 +387,9 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->SuperMap = NULL;
     matrix_info->Sparent = NULL;
 
+    matrix_info->nsleaf = 0;
+    matrix_info->Leaf = NULL;
+
     matrix_info->isize = 0;
     matrix_info->xsize = 0;
     matrix_info->Lsip = NULL;
@@ -400,9 +407,11 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
-int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info )
+int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
 {
     double timestamp;
+
+    const char *path;
 
     char *buf;
 
@@ -412,6 +421,7 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
 
     timestamp = SparseFrame_time ();
 
+    path = matrix_info->path;
     matrix_info->file = fopen ( path, "r" );
 
     if ( matrix_info->file == NULL ) return 1;
@@ -430,10 +440,6 @@ int SparseFrame_read_matrix ( char *path, struct matrix_info_struct *matrix_info
     SparseFrame_compress ( matrix_info );
 
     matrix_info->readTime = SparseFrame_time () - timestamp;
-
-#ifdef PRINT_INFO
-    printf ( "Matrix read time: %lf seconds\n", matrix_info->readTime );
-#endif
 
     return 0;
 }
@@ -1044,6 +1050,9 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
 
+    Long nsleaf;
+    Long *Leaf;
+
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
 #endif
@@ -1210,6 +1219,9 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
         }
     }
 
+    for ( s = nsuper; s < nfsuper; s++ )
+        Super[s] = -1;
+
     Super[nsuper] = nrow;
 
     for ( s = 0; s < nsuper; s++ )
@@ -1294,6 +1306,28 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
             }
         }
     }
+
+    Leaf = calloc ( nsuper, sizeof(Long) );
+    for ( j = 0; j < nrow; j++ )
+    {
+        if ( Parent[j] >= 0 )
+            Leaf [ SuperMap [ Parent[j] ] ] = 1;
+    }
+
+    nsleaf = 0;
+    for ( s = 0; s < nsuper; s++ )
+    {
+        if ( Leaf[s] == 0 )
+        {
+            Leaf[nsleaf++] = s;
+        }
+    }
+
+    for ( s = nsleaf; s < nsuper; s++ )
+        Leaf[s] = -1;
+
+    matrix_info->nsleaf = nsleaf;
+    matrix_info->Leaf = Leaf;
 
     return 0;
 }
@@ -1893,6 +1927,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Super != NULL ) free ( matrix_info->Super );
     if ( matrix_info->SuperMap != NULL ) free ( matrix_info->SuperMap );
     if ( matrix_info->Sparent != NULL ) free ( matrix_info->Sparent );
+    if ( matrix_info->Leaf != NULL ) free ( matrix_info->Leaf );
 
     if ( matrix_info->Lsip != NULL ) free ( matrix_info->Lsip );
     if ( matrix_info->Lsxp != NULL ) free ( matrix_info->Lsxp );
@@ -1914,7 +1949,8 @@ int SparseFrame ( int argc, char **argv )
 {
     double timestamp;
 
-    int numThreads, numSparseMatrix, matrixIndex;
+    int numThreads, numSparseMatrix, nextMatrixIndex;
+    int matrixQueueSize, matrixQueueIndex;
 
     struct common_info_struct common_info_object;
     struct common_info_struct *common_info = &common_info_object;
@@ -1937,9 +1973,11 @@ int SparseFrame ( int argc, char **argv )
     numThreads = omp_get_max_threads();
     common_info->numThreads = numThreads;
 
+    matrixQueueSize = MIN ( MATRIX_QUEUE_SIZE, numSparseMatrix );
+
 #ifdef PRINT_INFO
     printf ("Max threads = %d\n", numThreads);
-    printf ("Num of matrices = %d\n", numSparseMatrix);
+    printf ("Num of matrices = %d\n\n", numSparseMatrix);
 #endif
 
     SparseFrame_allocate_matrix ( &matrix_info, common_info );
@@ -1947,47 +1985,74 @@ int SparseFrame ( int argc, char **argv )
     common_info->allocateTime = SparseFrame_time () - timestamp;
 
 #ifdef PRINT_INFO
-    printf ("Allocate time:  %lf\n", common_info->allocateTime);
+    printf ("Allocate time:        %lf\n\n", common_info->allocateTime);
 #endif
+
+    timestamp = SparseFrame_time();
 
     omp_set_nested ( TRUE );
 
-#pragma omp parallel for num_threads( MIN ( numSparseMatrix, numThreads ) ) schedule(static)
-    for ( matrixIndex = 0; matrixIndex < numSparseMatrix; matrixIndex++ )
+    nextMatrixIndex = 0;
+
+#pragma omp parallel for num_threads(matrixQueueSize) schedule(static)
+    for ( matrixQueueIndex = 0; matrixQueueIndex < matrixQueueSize; matrixQueueIndex++ )
     {
-        // Initialize
-        SparseFrame_initialize_matrix ( matrix_info + matrixIndex );
+        int matrixIndex;
 
-        // Read matrices
+        const char *path;
 
-        SparseFrame_read_matrix ( argv [ 1 + matrixIndex ], matrix_info + matrixIndex );
+#pragma omp critical ( nextMatrixIndex )
+        matrixIndex = nextMatrixIndex++;
 
-        // Analyze
+        while ( matrixIndex < numSparseMatrix )
+        {
+            // Initialize
+            SparseFrame_initialize_matrix ( matrix_info + matrixQueueIndex );
 
-        SparseFrame_analyze ( matrix_info + matrixIndex );
+            // Read matrices
 
-        // Factorize
+            path = argv [ 1 + matrixIndex ];
+            ( matrix_info + matrixQueueIndex )->path = path;
 
-        SparseFrame_factorize ( common_info, matrix_info + matrixIndex );
+            SparseFrame_read_matrix ( matrix_info + matrixQueueIndex );
 
-        // Validate
+            // Analyze
 
-        SparseFrame_validate ( matrix_info + matrixIndex );
+            SparseFrame_analyze ( matrix_info + matrixQueueIndex );
 
-        // Cleanup
+            // Factorize
 
-        SparseFrame_cleanup_matrix ( matrix_info + matrixIndex );
+            SparseFrame_factorize ( common_info, matrix_info + matrixQueueIndex );
 
-        // Output
+            // Validate
+
+            SparseFrame_validate ( matrix_info + matrixQueueIndex );
+
+            // Cleanup
+
+            SparseFrame_cleanup_matrix ( matrix_info + matrixQueueIndex );
+
+            // Output
 
 #ifdef PRINT_INFO
-        printf ("Read time:      %lf\n", (matrix_info+matrixIndex)->readTime);
-        printf ("Analyze time:   %lf\n", (matrix_info+matrixIndex)->analyzeTime);
-        printf ("Factorize time: %lf\n", (matrix_info+matrixIndex)->factorizeTime);
-        printf ("Solve time:     %lf\n", (matrix_info+matrixIndex)->solveTime);
-        printf ("residual (|Ax-b|)/(|A||x|+|b|): %le\n", (matrix_info+matrixIndex)->residual);
+            printf ( "Matrix name:    %s\n", basename (path) );
+            printf ( "Read time:      %lf\n", (matrix_info+matrixQueueIndex)->readTime );
+            printf ( "Analyze time:   %lf\n", (matrix_info+matrixQueueIndex)->analyzeTime );
+            printf ( "Factorize time: %lf\n", (matrix_info+matrixQueueIndex)->factorizeTime );
+            printf ( "Solve time:     %lf\n", (matrix_info+matrixQueueIndex)->solveTime );
+            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info+matrixQueueIndex)->residual );
 #endif
+
+#pragma omp critical ( nextMatrixIndex )
+            matrixIndex = nextMatrixIndex++;
+        }
     }
+
+    common_info->computeTime = SparseFrame_time () - timestamp;
+
+#ifdef PRINT_INFO
+    printf ("Total computing time: %lf\n\n", common_info->computeTime);
+#endif
 
     // Free resources
 
@@ -2000,7 +2065,7 @@ int SparseFrame ( int argc, char **argv )
     common_info->freeTime = SparseFrame_time () - timestamp;
 
 #ifdef PRINT_INFO
-    printf ("Free time:      %lf\n", common_info->freeTime);
+    printf ("Free time:            %lf\n\n", common_info->freeTime);
 #endif
 
     return 0;
