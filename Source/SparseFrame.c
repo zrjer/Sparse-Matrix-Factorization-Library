@@ -397,8 +397,6 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Xx = NULL;
     matrix_info->Rx = NULL;
 
-    matrix_info->residual = 0;
-
     return 0;
 }
 
@@ -1858,8 +1856,6 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
     residual = rnorm / ( anorm * xnorm + bnorm );
     matrix_info->residual = residual;
 
-    printf ("anorm = %lf bnorm = %lf xnorm = %lf rnorm = %lf residual = %lf\n", anorm, bnorm, xnorm, rnorm, residual);
-
     return 0;
 }
 
@@ -1954,6 +1950,9 @@ int SparseFrame ( int argc, char **argv )
     printf ("Allocate time:  %lf\n", common_info->allocateTime);
 #endif
 
+    omp_set_nested ( TRUE );
+
+#pragma omp parallel for num_threads( MIN ( numSparseMatrix, numThreads ) ) schedule(static)
     for ( matrixIndex = 0; matrixIndex < numSparseMatrix; matrixIndex++ )
     {
         // Initialize
@@ -1986,7 +1985,7 @@ int SparseFrame ( int argc, char **argv )
         printf ("Analyze time:   %lf\n", (matrix_info+matrixIndex)->analyzeTime);
         printf ("Factorize time: %lf\n", (matrix_info+matrixIndex)->factorizeTime);
         printf ("Solve time:     %lf\n", (matrix_info+matrixIndex)->solveTime);
-        printf ("residual:       %le\n", (matrix_info+matrixIndex)->residual);
+        printf ("residual (|Ax-b|)/(|A||x|+|b|): %le\n", (matrix_info+matrixIndex)->residual);
 #endif
     }
 

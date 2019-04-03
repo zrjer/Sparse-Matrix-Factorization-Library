@@ -15,10 +15,10 @@
 #include "metis.h"
 
 #include "arch.h"
+#include "macro.h"
 #include "type.h"
 #include "constant.h"
 #include "parameter.h"
-#include "macro.h"
 #include "info.h"
 
 #ifdef __cplusplus
