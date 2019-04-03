@@ -1,6 +1,8 @@
 #ifndef INCLUDE_INFO_H
 #define INCLUDE_INFO_H
 
+#include <omp.h>
+
 struct common_info_struct
 {
     int numGPU;
@@ -14,7 +16,7 @@ struct common_info_struct
 
 struct gpu_info_struct
 {
-    int busy;
+    omp_lock_t gpu_lock;
 
     void *devMem;
     size_t devMemSize;
@@ -80,7 +82,7 @@ struct matrix_info_struct
     Long *Sparent;
 
     Long nsleaf;
-    Long *Leaf;
+    Long *LeafQueue;
 
     Long isize;
     Long xsize;

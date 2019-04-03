@@ -18,7 +18,7 @@
 
 #undef MEM_LIMITS
 
-#define MATRIX_QUEUE_SIZE 2
+#define MATRIX_THREAD_NUM 2
 
 #define MAXMMLINE 1024
 size_t max_mm_line_size = MAXMMLINE + 1;

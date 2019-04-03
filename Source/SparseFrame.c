@@ -61,7 +61,7 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
 
             if ( cudaStatus == cudaSuccess )
             {
-                (*gpu_info_ptr)[gpu_index].busy = 0;
+                omp_init_lock ( &( (*gpu_info_ptr)[gpu_index].gpu_lock ) );
                 (*gpu_info_ptr)[gpu_index].devMemSize = devMemSize;
                 (*gpu_info_ptr)[gpu_index].hostMemSize = hostMemSize;
                 (*gpu_info_ptr)[gpu_index].sharedMemSize = sharedMemSize;
@@ -72,7 +72,6 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
             }
             else
             {
-                (*gpu_info_ptr)[gpu_index].busy = 1;
                 (*gpu_info_ptr)[gpu_index].devMem = NULL;
                 (*gpu_info_ptr)[gpu_index].devMemSize = 0;
                 (*gpu_info_ptr)[gpu_index].hostMem = NULL;
@@ -85,7 +84,6 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_ptr, struct com
         }
         else
         {
-            (*gpu_info_ptr)[gpu_index].busy = 1;
             (*gpu_info_ptr)[gpu_index].devMem = NULL;
             (*gpu_info_ptr)[gpu_index].devMemSize = 0;
             (*gpu_info_ptr)[gpu_index].hostMem = NULL;
@@ -124,7 +122,7 @@ int SparseFrame_free_gpu ( struct gpu_info_struct **gpu_info_ptr, struct common_
         if ( (*gpu_info_ptr)[gpu_index].hostMem != NULL )
             cudaFreeHost ( (*gpu_info_ptr)[gpu_index].hostMem );
 
-        (*gpu_info_ptr)[gpu_index].busy = 1;
+        omp_destroy_lock ( &( (*gpu_info_ptr)[gpu_index].gpu_lock ) );
         (*gpu_info_ptr)[gpu_index].devMem = NULL;
         (*gpu_info_ptr)[gpu_index].devMemSize = 0;
         (*gpu_info_ptr)[gpu_index].hostMem = NULL;
@@ -388,7 +386,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Sparent = NULL;
 
     matrix_info->nsleaf = 0;
-    matrix_info->Leaf = NULL;
+    matrix_info->LeafQueue = NULL;
 
     matrix_info->isize = 0;
     matrix_info->xsize = 0;
@@ -1051,7 +1049,7 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Float *Lsx;
 
     Long nsleaf;
-    Long *Leaf;
+    Long *LeafQueue;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
@@ -1307,27 +1305,35 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    Leaf = calloc ( nsuper, sizeof(Long) );
-    for ( j = 0; j < nrow; j++ )
+    LeafQueue = calloc ( nsuper, sizeof(Long) );
+    for ( s = 0; s < nsuper; s++ )
     {
-        if ( Parent[j] >= 0 )
-            Leaf [ SuperMap [ Parent[j] ] ] = 1;
+        Long nscol, nsrow;
+
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        if ( nscol < nsrow )
+        {
+            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+            LeafQueue[sparent] = 1;
+        }
     }
 
     nsleaf = 0;
     for ( s = 0; s < nsuper; s++ )
     {
-        if ( Leaf[s] == 0 )
+        if ( LeafQueue[s] == 0 )
         {
-            Leaf[nsleaf++] = s;
+            LeafQueue[nsleaf++] = s;
         }
     }
 
     for ( s = nsleaf; s < nsuper; s++ )
-        Leaf[s] = -1;
+        LeafQueue[s] = -1;
 
     matrix_info->nsleaf = nsleaf;
-    matrix_info->Leaf = Leaf;
+    matrix_info->LeafQueue = LeafQueue;
 
     return 0;
 }
@@ -1416,10 +1422,18 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     Long *Head, *Next;
 
-    Long *Map, *RelativeMap, *Lpos;
+    Long *Lpos;
 
     Long csize;
-    Float *C;
+
+    Long nsleaf;
+    Long *LeafQueue;
+    Long leafQueueHead, leafQueueTail;
+
+    Long *workspace;
+    Long *Nschild;
+
+    int numGPU, nodeThreadIndex;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_factorize_supernodal================\n\n");
@@ -1442,6 +1456,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Lsi = matrix_info->Lsi;
     Lsx = matrix_info->Lsx;
 
+    nsleaf = matrix_info->nsleaf;
+    LeafQueue = matrix_info->LeafQueue;
+
+    numGPU = common_info->numGPU;
+
     if ( !isComplex )
         memset ( Lsx, 0, xsize * sizeof(Float) );
     else
@@ -1450,14 +1469,32 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Head = matrix_info->Head;
     Next = matrix_info->Next;
 
-    Map = malloc ( nrow * sizeof(Long) );
-    RelativeMap = malloc ( nrow * sizeof(Long) );
+    workspace = matrix_info->workspace;
+
     Lpos = malloc ( nsuper * sizeof(Long) );
+
+    Nschild = workspace;
 
     for ( s = 0; s < nsuper; s++ )
     {
         Head[s] = -1;
         Next[s] = -1;
+    }
+
+    memset ( Nschild, 0, nsuper * sizeof(Long) );
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Long nscol, nsrow, sparent;
+
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        if ( nscol < nsrow )
+        {
+            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+            Nschild[sparent]++;
+        }
     }
 
     for ( s = 0; s < nsuper; s++ )
@@ -1490,139 +1527,187 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             csize = MAX ( csize, ( nsrow - si_last ) * ( nsrow - si_last ) );
         }
     }
-    if (!isComplex)
-        C = malloc ( csize * sizeof(Float) );
-    else
-        C = malloc ( csize * sizeof(Complex) );
 
-    for ( s = 0; s < nsuper; s++ )
+    leafQueueHead = 0;
+    leafQueueTail = nsleaf;
+
+#pragma omp parallel for schedule(static) num_threads(numGPU)
+    for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
     {
-        Long j, i, p;
+        Long leafQueueIndex;
 
-        Long sparent;
-        Long nscol, nsrow;
-        Long sj, si;
+        Long *Map, *RelativeMap;
+        Float *C;
 
-        Long sn, sm, slda;
-        int info;
+        Map = malloc ( nrow * sizeof(Long) );
+        RelativeMap = malloc ( nrow * sizeof(Long) );
 
-        nscol = Super[s+1] - Super[s];
-        nsrow = Lsip[s+1] - Lsip[s];
+        if (!isComplex)
+            C = malloc ( csize * sizeof(Float) );
+        else
+            C = malloc ( csize * sizeof(Complex) );
 
-        for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
-            Map [ Lsi [ Lsip[s] + si ] ] = si;
-
-        for ( j = Super[s]; j < Super[s+1]; j++ )
+#pragma omp critical (leafQueueHead)
         {
-            sj = j - Super[s];
-            for ( p = Lp[j]; p < Lp[j+1]; p++ )
-            {
-                i = Li[p];
-                si = Map[i];
-                if ( !isComplex )
-                    Lsx [ Lsxp[s] + sj * nsrow + si ] = Lx[p];
-                else
-                {
-                    ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
-                    ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
-                }
-            }
+            if ( leafQueueHead >= leafQueueTail )
+                leafQueueIndex = nsuper;
+            else
+                leafQueueIndex = leafQueueHead++;
         }
 
-        while ( Head[s] >= 0 )
+        while ( leafQueueIndex < nsuper )
         {
-            Long d, di, dancestor;
-            Long ndcol, ndrow;
-            Long lpos_next;
+            Long j, i, p;
 
-            Long dn, dm, dk, dlda, dldc;
+            Long s;
+            Long sparent;
+            Long nscol, nsrow;
+            Long sj, si;
 
-            Long cj, ci;
+            Long sn, sm, slda;
+            int info;
 
-            d = Head[s];
+            s = LeafQueue[leafQueueIndex];
 
-            ndcol = Super[d+1] - Super[d];
-            ndrow = Lsip[d+1] - Lsip[d];
+            nscol = Super[s+1] - Super[s];
+            nsrow = Lsip[s+1] - Lsip[s];
 
-            for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
+            for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
+                Map [ Lsi [ Lsip[s] + si ] ] = si;
 
-            dn = lpos_next - Lpos[d];
-            dm = ndrow - Lpos[d] - dn;
-            dk = ndcol;
-            dlda = ndrow;
-            dldc = ndrow - Lpos[d];
-
-            if (!isComplex)
-                dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
-            else
-                zherk_ ( "L", "N", &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C, &dldc );
-
-            if ( dm > 0 )
+            for ( j = Super[s]; j < Super[s+1]; j++ )
             {
-                if (!isComplex)
-                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, Lsx + Lsxp[d] + lpos_next, &dlda, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C + dn, &dldc );
-                else
-                    zgemm_ ( "N", "C", &dm, &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C + dn, &dldc );
-            }
-
-            for ( di = Lpos[d]; di < ndrow; di++ )
-            {
-                RelativeMap [ di - Lpos[d] ] = Map [ Lsi[ Lsip[d] + di ] ];
-            }
-
-            for ( cj = 0; cj < dn; cj++ )
-            {
-                for ( ci = cj; ci < dn + dm; ci++ )
+                sj = j - Super[s];
+                for ( p = Lp[j]; p < Lp[j+1]; p++ )
                 {
-                    if (!isComplex)
-                        Lsx [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= C [ cj * dldc + ci ];
+                    i = Li[p];
+                    si = Map[i];
+                    if ( !isComplex )
+                        Lsx [ Lsxp[s] + sj * nsrow + si ] = Lx[p];
                     else
                     {
-                        ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
-                        ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
+                        ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                        ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
                     }
                 }
             }
 
-            Lpos[d] = lpos_next;
-            Head[s] = Next[d];
-            if ( lpos_next < ndrow )
+            while ( Head[s] >= 0 )
             {
-                dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
-                Next[d] = Head[dancestor];
-                Head[dancestor] = d;
+                Long d, di, dancestor;
+                Long ndcol, ndrow;
+                Long lpos_next;
+
+                Long dn, dm, dk, dlda, dldc;
+
+                Long cj, ci;
+
+                d = Head[s];
+
+                ndcol = Super[d+1] - Super[d];
+                ndrow = Lsip[d+1] - Lsip[d];
+
+                for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
+
+                dn = lpos_next - Lpos[d];
+                dm = ndrow - Lpos[d] - dn;
+                dk = ndcol;
+                dlda = ndrow;
+                dldc = ndrow - Lpos[d];
+
+                if (!isComplex)
+                    dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
+                else
+                    zherk_ ( "L", "N", &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C, &dldc );
+
+                if ( dm > 0 )
+                {
+                    if (!isComplex)
+                        dgemm_ ( "N", "C", &dm, &dn, &dk, one, Lsx + Lsxp[d] + lpos_next, &dlda, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C + dn, &dldc );
+                    else
+                        zgemm_ ( "N", "C", &dm, &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C + dn, &dldc );
+                }
+
+                for ( di = Lpos[d]; di < ndrow; di++ )
+                {
+                    RelativeMap [ di - Lpos[d] ] = Map [ Lsi[ Lsip[d] + di ] ];
+                }
+
+                for ( cj = 0; cj < dn; cj++ )
+                {
+                    for ( ci = cj; ci < dn + dm; ci++ )
+                    {
+                        if (!isComplex)
+                            Lsx [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= C [ cj * dldc + ci ];
+                        else
+                        {
+                            ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
+                            ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
+                        }
+                    }
+                }
+
+                Lpos[d] = lpos_next;
+                Head[s] = Next[d];
+                if ( lpos_next < ndrow )
+                {
+                    dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
+#pragma omp critical (HeadNext)
+                    {
+                        Next[d] = Head[dancestor];
+                        Head[dancestor] = d;
+                    }
+                }
+            }
+
+            sn = nscol;
+            sm = nsrow - nscol;
+            slda = nsrow;
+
+            if (!isComplex)
+                dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
+            else
+                zpotrf_ ( "L", &sn, (Complex*)Lsx + Lsxp[s], &slda, &info );
+
+            if ( nscol < nsrow )
+            {
+                if (!isComplex)
+                    dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, Lsx + Lsxp[s], &slda, Lsx + Lsxp[s] + nscol, &slda );
+                else
+                    ztrsm_ ( "R", "L", "C", "N", &sm, &sn, one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
+            }
+
+            if ( nscol < nsrow )
+            {
+                sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+#pragma omp critical (HeadNext)
+                {
+                    Next[s] = Head[sparent];
+                    Head[sparent] = s;
+                }
+#pragma omp critical (leafQueueTail)
+                {
+                    Nschild[sparent]--;
+                    if ( Nschild[sparent] <= 0 )
+                        LeafQueue[leafQueueTail++] = sparent;
+                }
+            }
+
+#pragma omp critical (leafQueueHead)
+            {
+                if ( leafQueueHead >= leafQueueTail )
+                    leafQueueIndex = nsuper;
+                else
+                    leafQueueIndex = leafQueueHead++;
             }
         }
 
-        sn = nscol;
-        sm = nsrow - nscol;
-        slda = nsrow;
-
-        if (!isComplex)
-            dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
-        else
-            zpotrf_ ( "L", &sn, (Complex*)Lsx + Lsxp[s], &slda, &info );
-
-        if ( nscol < nsrow )
-        {
-            if (!isComplex)
-                dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, Lsx + Lsxp[s], &slda, Lsx + Lsxp[s] + nscol, &slda );
-            else
-                ztrsm_ ( "R", "L", "C", "N", &sm, &sn, one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
-        }
-
-        if ( nscol < nsrow )
-        {
-            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-            Next[s] = Head[sparent];
-            Head[sparent] = s;
-        }
+        free ( Map );
+        free ( RelativeMap );
+        free ( C );
     }
 
-    free ( Map );
-    free ( RelativeMap );
     free ( Lpos );
-    free ( C );
 
     return 0;
 }
@@ -1927,7 +2012,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Super != NULL ) free ( matrix_info->Super );
     if ( matrix_info->SuperMap != NULL ) free ( matrix_info->SuperMap );
     if ( matrix_info->Sparent != NULL ) free ( matrix_info->Sparent );
-    if ( matrix_info->Leaf != NULL ) free ( matrix_info->Leaf );
+    if ( matrix_info->LeafQueue != NULL ) free ( matrix_info->LeafQueue );
 
     if ( matrix_info->Lsip != NULL ) free ( matrix_info->Lsip );
     if ( matrix_info->Lsxp != NULL ) free ( matrix_info->Lsxp );
@@ -1950,7 +2035,7 @@ int SparseFrame ( int argc, char **argv )
     double timestamp;
 
     int numThreads, numSparseMatrix, nextMatrixIndex;
-    int matrixQueueSize, matrixQueueIndex;
+    int matrixThreadNum, matrixThreadIndex;
 
     struct common_info_struct common_info_object;
     struct common_info_struct *common_info = &common_info_object;
@@ -1973,7 +2058,7 @@ int SparseFrame ( int argc, char **argv )
     numThreads = omp_get_max_threads();
     common_info->numThreads = numThreads;
 
-    matrixQueueSize = MIN ( MATRIX_QUEUE_SIZE, numSparseMatrix );
+    matrixThreadNum = MIN ( MATRIX_THREAD_NUM, numSparseMatrix );
 
 #ifdef PRINT_INFO
     printf ("Max threads = %d\n", numThreads);
@@ -1994,57 +2079,67 @@ int SparseFrame ( int argc, char **argv )
 
     nextMatrixIndex = 0;
 
-#pragma omp parallel for num_threads(matrixQueueSize) schedule(static)
-    for ( matrixQueueIndex = 0; matrixQueueIndex < matrixQueueSize; matrixQueueIndex++ )
+#pragma omp parallel for schedule(static) num_threads(matrixThreadNum)
+    for ( matrixThreadIndex = 0; matrixThreadIndex < matrixThreadNum; matrixThreadIndex++ )
     {
         int matrixIndex;
 
         const char *path;
 
 #pragma omp critical ( nextMatrixIndex )
-        matrixIndex = nextMatrixIndex++;
+        {
+            if ( nextMatrixIndex >= numSparseMatrix )
+                matrixIndex = numSparseMatrix;
+            else
+                matrixIndex = nextMatrixIndex++;
+        }
 
         while ( matrixIndex < numSparseMatrix )
         {
             // Initialize
-            SparseFrame_initialize_matrix ( matrix_info + matrixQueueIndex );
+            SparseFrame_initialize_matrix ( matrix_info + matrixThreadIndex );
 
             // Read matrices
 
             path = argv [ 1 + matrixIndex ];
-            ( matrix_info + matrixQueueIndex )->path = path;
+            ( matrix_info + matrixThreadIndex )->path = path;
 
-            SparseFrame_read_matrix ( matrix_info + matrixQueueIndex );
+            SparseFrame_read_matrix ( matrix_info + matrixThreadIndex );
 
             // Analyze
 
-            SparseFrame_analyze ( matrix_info + matrixQueueIndex );
+            SparseFrame_analyze ( matrix_info + matrixThreadIndex );
 
             // Factorize
 
-            SparseFrame_factorize ( common_info, matrix_info + matrixQueueIndex );
+            SparseFrame_factorize ( common_info, matrix_info + matrixThreadIndex );
 
             // Validate
 
-            SparseFrame_validate ( matrix_info + matrixQueueIndex );
+            SparseFrame_validate ( matrix_info + matrixThreadIndex );
 
             // Cleanup
 
-            SparseFrame_cleanup_matrix ( matrix_info + matrixQueueIndex );
+            SparseFrame_cleanup_matrix ( matrix_info + matrixThreadIndex );
 
             // Output
 
 #ifdef PRINT_INFO
             printf ( "Matrix name:    %s\n", basename (path) );
-            printf ( "Read time:      %lf\n", (matrix_info+matrixQueueIndex)->readTime );
-            printf ( "Analyze time:   %lf\n", (matrix_info+matrixQueueIndex)->analyzeTime );
-            printf ( "Factorize time: %lf\n", (matrix_info+matrixQueueIndex)->factorizeTime );
-            printf ( "Solve time:     %lf\n", (matrix_info+matrixQueueIndex)->solveTime );
-            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info+matrixQueueIndex)->residual );
+            printf ( "Read time:      %lf\n", (matrix_info+matrixThreadIndex)->readTime );
+            printf ( "Analyze time:   %lf\n", (matrix_info+matrixThreadIndex)->analyzeTime );
+            printf ( "Factorize time: %lf\n", (matrix_info+matrixThreadIndex)->factorizeTime );
+            printf ( "Solve time:     %lf\n", (matrix_info+matrixThreadIndex)->solveTime );
+            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info+matrixThreadIndex)->residual );
 #endif
 
 #pragma omp critical ( nextMatrixIndex )
-            matrixIndex = nextMatrixIndex++;
+            {
+                if ( nextMatrixIndex >= numSparseMatrix )
+                    matrixIndex = numSparseMatrix;
+                else
+                    matrixIndex = nextMatrixIndex++;
+            }
         }
     }
 
