@@ -16,7 +16,9 @@ struct common_info_struct
 
 struct gpu_info_struct
 {
-    omp_lock_t gpu_lock;
+    int gpuIndex_physical;
+
+    omp_lock_t gpuLock;
 
     void *devMem;
     size_t devMemSize;
@@ -90,6 +92,10 @@ struct matrix_info_struct
     Long *Lsxp;
     Long *Lsi;
     Float *Lsx;
+
+    Long asize;
+    Long bsize;
+    Long csize;
 
     void *workspace;
     size_t workSize;
