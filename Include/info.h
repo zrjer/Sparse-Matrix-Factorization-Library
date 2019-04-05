@@ -9,6 +9,8 @@ struct common_info_struct
     int numThreads;
     int numSparseMatrix;
 
+    size_t minGPUMemSize;
+
     double allocateTime;
     double computeTime;
     double freeTime;

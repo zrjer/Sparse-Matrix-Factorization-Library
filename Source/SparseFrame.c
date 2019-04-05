@@ -13,10 +13,12 @@ double SparseFrame_time ()
     return ( tp.tv_sec + ( double ) ( tp.tv_nsec ) / 1.0e9 );
 }
 
-int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_list_ptr, struct common_info_struct *common_info )
+int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gpu_info_struct **gpu_info_list_ptr )
 {
     int numGPU, numGPU_physical, numSplit;
     int gpuIndex_physical;
+
+    size_t minGPUMemSize;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_allocate_gpu================\n\n");
@@ -44,6 +46,8 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_list_ptr, struc
     *gpu_info_list_ptr = malloc ( numGPU * sizeof ( struct gpu_info_struct ) );
 
     if ( *gpu_info_list_ptr == NULL ) return 1;
+
+    minGPUMemSize = SIZE_MAX;
 
     for ( gpuIndex_physical = 0; gpuIndex_physical < numGPU_physical; gpuIndex_physical++ )
     {
@@ -82,6 +86,10 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_list_ptr, struc
                     (*gpu_info_list_ptr)[gpuIndex].devMemSize = devMemSize;
                     (*gpu_info_list_ptr)[gpuIndex].hostMemSize = hostMemSize;
                     (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = sharedMemSize;
+
+                    if ( minGPUMemSize > devMemSize )
+                        minGPUMemSize = devMemSize;
+
 #ifdef PRINT_INFO
                     printf ( "GPU %d device handler %d device memory size = %lf GiB host memory size = %lf GiB shared memory size per block = %ld KiB\n",
                             gpuIndex_physical, gpuIndex, ( double ) devMemSize / ( 0x400 * 0x400 * 0x400 ), ( double ) hostMemSize / ( 0x400 * 0x400 * 0x400 ), sharedMemSize / 1024 );
@@ -111,6 +119,10 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_list_ptr, struc
             }
         }
     }
+
+    common_info->minGPUMemSize = minGPUMemSize;
+    printf ( "Minimum device memory size = %lf GiB\n", ( double ) minGPUMemSize / ( 0x400 * 0x400 * 0x400 ) );
+
 #ifdef PRINT_INFO
     printf ("\n");
 #endif
@@ -118,7 +130,7 @@ int SparseFrame_allocate_gpu ( struct gpu_info_struct **gpu_info_list_ptr, struc
     return 0;
 }
 
-int SparseFrame_free_gpu ( struct gpu_info_struct **gpu_info_list_ptr, struct common_info_struct *common_info )
+int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_info_struct **gpu_info_list_ptr )
 {
     int numGPU;
     int gpuIndex;
@@ -159,7 +171,7 @@ int SparseFrame_free_gpu ( struct gpu_info_struct **gpu_info_list_ptr, struct co
     return 0;
 }
 
-int SparseFrame_allocate_matrix ( struct matrix_info_struct **matrix_info_list_ptr, struct common_info_struct *common_info )
+int SparseFrame_allocate_matrix ( struct common_info_struct *common_info, struct matrix_info_struct **matrix_info_list_ptr )
 {
     int numSparseMatrix;
 
@@ -176,7 +188,7 @@ int SparseFrame_allocate_matrix ( struct matrix_info_struct **matrix_info_list_p
     return 0;
 }
 
-int SparseFrame_free_matrix ( struct matrix_info_struct **matrix_info_list_ptr, struct common_info_struct *common_info )
+int SparseFrame_free_matrix ( struct common_info_struct *common_info, struct matrix_info_struct **matrix_info_list_ptr )
 {
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_free_matrix================\n\n");
@@ -2091,7 +2103,7 @@ int SparseFrame ( int argc, char **argv )
 
     timestamp = SparseFrame_time();
 
-    SparseFrame_allocate_gpu (&gpu_info_list, common_info);
+    SparseFrame_allocate_gpu (common_info, &gpu_info_list);
 
     numSparseMatrix = argc - 1;
     common_info->numSparseMatrix = numSparseMatrix;
@@ -2106,7 +2118,7 @@ int SparseFrame ( int argc, char **argv )
     printf ("Num of matrices = %d\n\n", numSparseMatrix);
 #endif
 
-    SparseFrame_allocate_matrix ( &matrix_info_list, common_info );
+    SparseFrame_allocate_matrix ( common_info, &matrix_info_list );
 
     common_info->allocateTime = SparseFrame_time () - timestamp;
 
@@ -2194,9 +2206,9 @@ int SparseFrame ( int argc, char **argv )
 
     timestamp = SparseFrame_time();
 
-    SparseFrame_free_gpu (&gpu_info_list, common_info);
+    SparseFrame_free_gpu (common_info, &gpu_info_list);
 
-    SparseFrame_free_matrix ( &matrix_info_list, common_info );
+    SparseFrame_free_matrix ( common_info, &matrix_info_list );
 
     common_info->freeTime = SparseFrame_time () - timestamp;
 
