@@ -10,6 +10,7 @@ struct common_info_struct
     int numSparseMatrix;
 
     size_t minGPUMemSize;
+    size_t GPUSlotSize;
 
     double allocateTime;
     double computeTime;
@@ -28,6 +29,15 @@ struct gpu_info_struct
     size_t hostMemSize;
 
     size_t sharedMemSize;
+
+    cudaStream_t s_cudaStream;
+    cudaStream_t d_cudaStream[4];
+
+    cublasHandle_t s_cublasHandle;
+    cublasHandle_t d_cublasHandle[4];
+
+    cublasHandle_t s_cusolverDnHandle;
+    cublasHandle_t d_cusolverDnHandle[4];
 };
 
 struct matrix_info_struct

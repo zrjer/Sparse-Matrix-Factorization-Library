@@ -11,6 +11,7 @@
 #include <omp.h>
 
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 #include "amd.h"
 #include "metis.h"

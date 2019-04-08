@@ -18,7 +18,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     int numGPU, numGPU_physical, numSplit;
     int gpuIndex_physical;
 
-    size_t minGPUMemSize;
+    size_t minGPUMemSize, GPUSlotSize;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_allocate_gpu================\n\n");
@@ -82,10 +82,26 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
                 if ( cudaStatus == cudaSuccess )
                 {
+                    int k;
+
                     omp_init_lock ( &( (*gpu_info_list_ptr)[gpuIndex].gpuLock ) );
                     (*gpu_info_list_ptr)[gpuIndex].devMemSize = devMemSize;
                     (*gpu_info_list_ptr)[gpuIndex].hostMemSize = hostMemSize;
                     (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = sharedMemSize;
+
+                    cudaStreamCreate ( &( (*gpu_info_list_ptr)[gpuIndex].s_cudaStream ) );
+                    cublasCreate ( &( (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle ) );
+                    cublasSetStream ( (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle, (*gpu_info_list_ptr)[gpuIndex].s_cudaStream );
+                    cusolverDnCreate ( &( (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle ) );
+                    cusolverDnSetStream ( (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle, (*gpu_info_list_ptr)[gpuIndex].s_cudaStream );
+                    for ( k = 0; k < 4; k++ )
+                    {
+                        cudaStreamCreate ( &( (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] ) );
+                        cublasCreate ( &( (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] ) );
+                        cublasSetStream ( (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k], (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] );
+                        cusolverDnCreate ( &( (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] ) );
+                        cusolverDnSetStream ( (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k], (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] );
+                    }
 
                     if ( minGPUMemSize > devMemSize )
                         minGPUMemSize = devMemSize;
@@ -97,11 +113,22 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                 }
                 else
                 {
+                    int k;
+
                     (*gpu_info_list_ptr)[gpuIndex].devMem = NULL;
                     (*gpu_info_list_ptr)[gpuIndex].devMemSize = 0;
                     (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
                     (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
                     (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
+                    (*gpu_info_list_ptr)[gpuIndex].s_cudaStream = 0;
+                    (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle = 0;
+                    (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle = 0;
+                    for ( k = 0; k < 4; k++ )
+                    {
+                        (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] = 0;
+                        (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] = 0;
+                        (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] = 0;
+                    }
 #ifdef PRINT_INFO
                     printf ( "GPU %d device handler %d cudaMallocHost fail\n", gpuIndex_physical, gpuIndex );
 #endif
@@ -109,10 +136,22 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
             }
             else
             {
+                int k;
+
                 (*gpu_info_list_ptr)[gpuIndex].devMem = NULL;
                 (*gpu_info_list_ptr)[gpuIndex].devMemSize = 0;
                 (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
                 (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
+                (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
+                (*gpu_info_list_ptr)[gpuIndex].s_cudaStream = 0;
+                (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle = 0;
+                (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle = 0;
+                for ( k = 0; k < 4; k++ )
+                {
+                    (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] = 0;
+                    (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] = 0;
+                    (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] = 0;
+                }
 #ifdef PRINT_INFO
                 printf ( "GPU %d device handler %d cudaMalloc fail\n", gpuIndex_physical, gpuIndex );
 #endif
@@ -120,7 +159,11 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
         }
     }
 
+    GPUSlotSize = minGPUMemSize / 5;
+    GPUSlotSize = GPUSlotSize - GPUSlotSize % sizeof(Long);
+
     common_info->minGPUMemSize = minGPUMemSize;
+    common_info->GPUSlotSize = GPUSlotSize;
     printf ( "Minimum device memory size = %lf GiB\n", ( double ) minGPUMemSize / ( 0x400 * 0x400 * 0x400 ) );
 
 #ifdef PRINT_INFO
@@ -145,6 +188,7 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
 
     for ( gpuIndex = 0; gpuIndex < numGPU; gpuIndex++ )
     {
+        int k;
         int gpuIndex_physical;
 
         gpuIndex_physical = (*gpu_info_list_ptr)[gpuIndex].gpuIndex_physical;
@@ -155,12 +199,36 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
             cudaFree ( (*gpu_info_list_ptr)[gpuIndex].devMem );
         if ( (*gpu_info_list_ptr)[gpuIndex].hostMem != NULL )
             cudaFreeHost ( (*gpu_info_list_ptr)[gpuIndex].hostMem );
+        if ( (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle != 0 )
+            cusolverDnDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle );
+        if ( (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle != 0 )
+            cublasDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle );
+        if ( (*gpu_info_list_ptr)[gpuIndex].s_cudaStream != 0 )
+            cudaStreamDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cudaStream );
+        for ( k = 0; k < 4; k++ )
+        {
+            if ( (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] != 0 )
+                cusolverDnDestroy ( (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] );
+            if ( (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] != 0 )
+                cublasDestroy ( (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] );
+            if ( (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] != 0 )
+                cudaStreamDestroy ( (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] );
+        }
 
         omp_destroy_lock ( &( (*gpu_info_list_ptr)[gpuIndex].gpuLock ) );
         (*gpu_info_list_ptr)[gpuIndex].devMem = NULL;
         (*gpu_info_list_ptr)[gpuIndex].devMemSize = 0;
         (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
         (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cudaStream = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle = 0;
+        for ( k = 0; k < 4; k++ )
+        {
+            (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] = 0;
+            (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] = 0;
+            (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] = 0;
+        }
     }
 
     free ( *gpu_info_list_ptr );
@@ -1055,7 +1123,7 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
-int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
+int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
     int isComplex;
 
@@ -1070,7 +1138,7 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Long *InvPost;
     Long *Bperm, *Bparent, *Bcolcount;
 
-    Long parent, s, sparent, sdescendant, nfsuper, nsuper;
+    Long parent, s, sdescendant, nfsuper, nsuper;
     Long *Super, *SuperMap, *Sparent;
     Long *Nchild, *Nscol, *Scolcount;
 #ifdef RELAX_RATE
@@ -1086,12 +1154,19 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
 
+    Long *asize, *bsize, *csize;
+    Long *asize_next, *bsize_next;
+
+    size_t GPUSlotSize;
+
     Long nsleaf;
     Long *LeafQueue;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
 #endif
+
+    GPUSlotSize = common_info->GPUSlotSize;
 
     isComplex = matrix_info->isComplex;
 
@@ -1161,8 +1236,29 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     {
         if ( Parent[j-1] != j || ColCount[j-1] != ColCount[j] + 1 || Nchild[j] > 1 )
         {
-            Super[nfsuper] = j;
-            nfsuper++;
+            if (
+                    (
+                     !isComplex &&
+                     (
+                      ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Float)
+                      + nrow * sizeof(Long)
+                      <= GPUSlotSize
+                     )
+                    )
+                    ||
+                    (
+                     isComplex &&
+                     (
+                      ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Complex)
+                      + nrow * sizeof(Long)
+                      <= GPUSlotSize
+                     )
+                    )
+               )
+            {
+                Super[nfsuper] = j;
+                nfsuper++;
+            }
         }
     }
     Super[nfsuper] = nrow;
@@ -1189,6 +1285,8 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
 #ifdef RELAX_RATE
     if ( RELAX_RATE > 0 )
     {
+        Long sparent;
+
         memset ( Nschild, 0, nfsuper * sizeof(Long) );
 
         for ( s = 0; s < nfsuper; s++ )
@@ -1217,27 +1315,47 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
             if ( sparent >= 0 && sparent < nfsuper && Nschild[sparent] == 1 && sparent == s+1 )
             {
                 smerge = Merge[s];
-
-                if ( RELAX_RATE < 1 )
+                s_ncol = Nscol[smerge];
+                p_ncol = Nscol[sparent];
+                s_colcount = Scolcount[smerge];
+                p_colcount = Scolcount[sparent];
+                if (
+                        (
+                         !isComplex &&
+                         (
+                          ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Float)
+                          + nrow * sizeof(Long)
+                          <= GPUSlotSize
+                         )
+                        )
+                        ||
+                        (
+                         isComplex &&
+                         (
+                          ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Complex)
+                          + nrow * sizeof(Long)
+                          <= GPUSlotSize
+                         )
+                        )
+                   )
                 {
-                    s_ncol = Nscol[smerge];
-                    p_ncol = Nscol[sparent];
-                    s_colcount = Scolcount[smerge];
-                    p_colcount = Scolcount[sparent];
-                    s_zero = Nsz[smerge];
-                    p_zero = Nsz[sparent];
-                    new_zero = s_ncol * ( s_ncol + p_colcount - s_colcount );
-                    total_zero = s_zero + p_zero + new_zero;
-                    if ( (double)total_zero / ( ( s_ncol + p_ncol ) * ( s_ncol + p_ncol + 1 ) / 2 + ( s_ncol + p_ncol ) * ( p_colcount - p_ncol ) ) < RELAX_RATE )
+                    if ( RELAX_RATE < 1 )
                     {
-                        Nscol[smerge] = s_ncol + p_ncol;
-                        Scolcount[smerge] = s_ncol + p_colcount;
-                        Nsz[smerge] = total_zero;
-                        Merge[sparent] = smerge;
+                        s_zero = Nsz[smerge];
+                        p_zero = Nsz[sparent];
+                        new_zero = s_ncol * ( s_ncol + p_colcount - s_colcount );
+                        total_zero = s_zero + p_zero + new_zero;
+                        if ( (double)total_zero / ( ( s_ncol + p_ncol ) * ( s_ncol + p_ncol + 1 ) / 2 + ( s_ncol + p_ncol ) * ( p_colcount - p_ncol ) ) < RELAX_RATE )
+                        {
+                            Nscol[smerge] = s_ncol + p_ncol;
+                            Scolcount[smerge] = s_ncol + p_colcount;
+                            Nsz[smerge] = total_zero;
+                            Merge[sparent] = smerge;
+                        }
                     }
+                    else
+                        Merge[sparent] = smerge;
                 }
-                else
-                    Merge[sparent] = smerge;
             }
         }
     }
@@ -1343,9 +1461,39 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
         }
     }
 
+    csize = 0;
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Long sparent, sparent_last;
+        Long nscol, nsrow;
+        Long si, si_last;
+
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        if ( nscol < nsrow )
+        {
+            si_last = nscol;
+            sparent_last = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+            for ( si = nscol; si < nsrow; si++ )
+            {
+                sparent = SuperMap [ Lsi [ Lsip[s] + si ] ];
+                if ( sparent != sparent_last )
+                {
+                    csize = MAX ( csize, ( si - si_last ) * ( nsrow - si_last ) );
+                    si_last = si;
+                    sparent_last = sparent;
+                }
+            }
+            csize = MAX ( csize, ( nsrow - si_last ) * ( nsrow - si_last ) );
+        }
+    }
+    matrix_info->csize = csize;
+
     LeafQueue = calloc ( nsuper, sizeof(Long) );
     for ( s = 0; s < nsuper; s++ )
     {
+        Long sparent;
         Long nscol, nsrow;
 
         nscol = Super[s+1] - Super[s];
@@ -1376,7 +1524,7 @@ int SparseFrame_analyze_supernodal ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
-int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
+int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
     double timestamp;
 
@@ -1437,7 +1585,7 @@ int SparseFrame_analyze ( struct matrix_info_struct *matrix_info )
     matrix_info->SuperMap = malloc ( nrow * sizeof(Long) );
     matrix_info->Sparent = malloc ( nrow * sizeof(Long) );
 
-    SparseFrame_analyze_supernodal ( matrix_info );
+    SparseFrame_analyze_supernodal ( common_info, matrix_info );
 
     matrix_info->analyzeTime = SparseFrame_time () - timestamp;
 
@@ -1494,6 +1642,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Lsi = matrix_info->Lsi;
     Lsx = matrix_info->Lsx;
 
+    csize = matrix_info->csize;
+
     nsleaf = matrix_info->nsleaf;
     LeafQueue = matrix_info->LeafQueue;
 
@@ -1537,34 +1687,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     for ( s = 0; s < nsuper; s++ )
         Lpos[s] = Super[s+1] - Super[s];
-
-    csize = 0;
-    for ( s = 0; s < nsuper; s++ )
-    {
-        Long sparent, sparent_last;
-        Long nscol, nsrow;
-        Long si, si_last;
-
-        nscol = Super[s+1] - Super[s];
-        nsrow = Lsip[s+1] - Lsip[s];
-
-        if ( nscol < nsrow )
-        {
-            si_last = nscol;
-            sparent_last = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-            for ( si = nscol; si < nsrow; si++ )
-            {
-                sparent = SuperMap [ Lsi [ Lsip[s] + si ] ];
-                if ( sparent != sparent_last )
-                {
-                    csize = MAX ( csize, ( si - si_last ) * ( nsrow - si_last ) );
-                    si_last = si;
-                    sparent_last = sparent;
-                }
-            }
-            csize = MAX ( csize, ( nsrow - si_last ) * ( nsrow - si_last ) );
-        }
-    }
 
     leafQueueHead = 0;
     leafQueueTail = nsleaf;
@@ -2161,7 +2283,7 @@ int SparseFrame ( int argc, char **argv )
 
             // Analyze
 
-            SparseFrame_analyze ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_analyze ( common_info, matrix_info_list + matrixThreadIndex );
 
             // Factorize
 
