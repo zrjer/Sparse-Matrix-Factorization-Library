@@ -9,8 +9,8 @@ struct common_info_struct
     int numThreads;
     int numSparseMatrix;
 
-    size_t minGPUMemSize;
-    size_t GPUSlotSize;
+    size_t minDevMemSize;
+    size_t devSlotSize;
 
     double allocateTime;
     double computeTime;
@@ -106,7 +106,6 @@ struct matrix_info_struct
     Float *Lsx;
 
     Long asize;
-    Long bsize;
     Long csize;
 
     void *workspace;

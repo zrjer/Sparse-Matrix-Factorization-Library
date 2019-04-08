@@ -2,11 +2,10 @@ include ../Config/SparseFrame.mk
 
 LIBRARY = libSparseFrame
 
-C = $(CC) $(CFLAGS)
 I = -I../Include
 LIBS = $(LDLIBS)
 
-OBJS = SparseFrame.o
+OBJS = cuda_kernel.o SparseFrame.o
 
 all: library
 
@@ -16,5 +15,8 @@ library: $(OBJS)
 clean:
 	rm -fr *.o *.so
 
+cuda_kernel.o: ../Source/cuda_kernel.cu
+	$(NVCC) $(NVCCFLAGS) $(I) -c $< -o $@
+
 SparseFrame.o: ../Source/SparseFrame.c
-	$(C) $(I) -c $< -o $@
+	$(CC) $(CFLAGS) $(I) -c $< -o $@
