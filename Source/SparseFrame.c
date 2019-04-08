@@ -1596,6 +1596,10 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
 
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct gpu_info_struct *gpu_info_list, struct matrix_info_struct *matrix_info )
 {
+    int numThread, nodeThreadIndex;
+    int useGPU, numGPU;
+    int devSlotSize;
+
     int isComplex;
     Long nrow;
     Long *Lp, *Li;
@@ -1621,14 +1625,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Long *workspace;
     Long *Nschild;
 
-    int numGPU, nodeThreadIndex;
-    int devSlotSize;
-
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_factorize_supernodal================\n\n");
 #endif
 
+    numThread = common_info->numThread;
     numGPU = common_info->numGPU;
+    useGPU = ( numGPU > 0 ) ? TRUE : FALSE;
 
     devSlotSize = common_info->devSlotSize;
 
@@ -1697,56 +1700,61 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     leafQueueHead = 0;
     leafQueueTail = nsleaf;
 
-#pragma omp parallel for schedule(static) num_threads(numGPU)
-    for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
+    if ( useGPU == TRUE )
     {
-        Long leafQueueIndex;
+#pragma omp parallel for schedule(static) num_threads(numGPU)
+        for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
+        {
+            Long leafQueueIndex;
 
-        Long *Map, *RelativeMap;
-        Float *C;
+            Long *Map, *RelativeMap;
+            Float *C;
 
-        Map = malloc ( nrow * sizeof(Long) );
-        RelativeMap = malloc ( nrow * sizeof(Long) );
-
-        if (!isComplex)
-            C = malloc ( csize * sizeof(Float) );
-        else
-            C = malloc ( csize * sizeof(Complex) );
+            Map = NULL;
+            RelativeMap = NULL;
+            C = NULL;
 
 #pragma omp critical (leafQueueHead)
-        {
-            if ( leafQueueHead >= leafQueueTail )
-                leafQueueIndex = nsuper;
-            else
-                leafQueueIndex = leafQueueHead++;
-        }
-
-        while ( leafQueueIndex < nsuper )
-        {
-            Long j, i, p;
-
-            Long s;
-            Long sparent;
-            Long nscol, nsrow;
-            Long sj, si;
-
-            Long sn, sm, slda;
-            int info;
-
-            int useGPU;
-            int gpuIndex;
-            struct gpu_info_struct *gpu_info;
-            size_t devMemSize;
-            int numDevSlot;
-            Long *h_Map, *h_RelativeMap[4];
-            Float *h_A, *h_B[4], *h_C;
-            Long *d_Map, *d_RelativeMap[4];
-            Float *d_A, *d_B[4], *d_C;
-
-            useGPU = ( numGPU > 0 ) ? TRUE : FALSE;
-
-            if ( useGPU == TRUE )
             {
+                if ( leafQueueHead >= leafQueueTail )
+                    leafQueueIndex = nsuper;
+                else
+                    leafQueueIndex = leafQueueHead++;
+            }
+
+            if ( leafQueueIndex < nsuper )
+            {
+                Map = malloc ( nrow * sizeof(Long) );
+                RelativeMap = malloc ( nrow * sizeof(Long) );
+
+                if (!isComplex)
+                    C = malloc ( csize * sizeof(Float) );
+                else
+                    C = malloc ( csize * sizeof(Complex) );
+            }
+
+            while ( leafQueueIndex < nsuper )
+            {
+                Long j, i, p;
+
+                Long s;
+                Long sparent;
+                Long nscol, nsrow;
+                Long sj, si;
+
+                Long sn, sm, slda;
+                int info;
+
+                int useGPU;
+                int gpuIndex;
+                struct gpu_info_struct *gpu_info;
+                size_t devMemSize;
+                int numDevSlot;
+                Long *h_Map, *h_RelativeMap[4];
+                Float *h_A, *h_B[4], *h_C;
+                Long *d_Map, *d_RelativeMap[4];
+                Float *d_A, *d_B[4], *d_C;
+
                 gpuIndex = 0;
                 while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
                     gpuIndex = ( gpuIndex + 1 ) / numGPU;
@@ -1796,133 +1804,182 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     d_RelativeMap[2] = (Complex*) d_B[2] + asize;
                     d_RelativeMap[3] = (Complex*) d_B[3] + asize;
                 }
-            }
 
-            s = LeafQueue[leafQueueIndex];
+                s = LeafQueue[leafQueueIndex];
 
-            nscol = Super[s+1] - Super[s];
-            nsrow = Lsip[s+1] - Lsip[s];
+                nscol = Super[s+1] - Super[s];
+                nsrow = Lsip[s+1] - Lsip[s];
 
-            for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
-                Map [ Lsi [ Lsip[s] + si ] ] = si;
+                for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
+                    Map [ Lsi [ Lsip[s] + si ] ] = si;
 
-            for ( j = Super[s]; j < Super[s+1]; j++ )
-            {
-                sj = j - Super[s];
-                for ( p = Lp[j]; p < Lp[j+1]; p++ )
-                {
-                    i = Li[p];
-                    si = Map[i];
-                    if ( !isComplex )
-                        Lsx [ Lsxp[s] + sj * nsrow + si ] = Lx[p];
-                    else
-                    {
-                        ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
-                        ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
-                    }
-                }
-            }
-
-            while ( Head[s] >= 0 )
-            {
-                Long d, di, dancestor;
-                Long ndcol, ndrow;
-                Long lpos_next;
-
-                Long dn, dm, dk, dlda, dldc;
-
-                Long cj, ci;
-
-                d = Head[s];
-
-                ndcol = Super[d+1] - Super[d];
-                ndrow = Lsip[d+1] - Lsip[d];
-
-                for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
-
-                dn = lpos_next - Lpos[d];
-                dm = ndrow - Lpos[d] - dn;
-                dk = ndcol;
-                dlda = ndrow;
-                dldc = ndrow - Lpos[d];
-
-                if (!isComplex)
-                    dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
+                if ( !isComplex )
+                    memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
                 else
-                    zherk_ ( "L", "N", &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C, &dldc );
+                    memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
 
-                if ( dm > 0 )
+                for ( j = Super[s]; j < Super[s+1]; j++ )
                 {
-                    if (!isComplex)
-                        dgemm_ ( "N", "C", &dm, &dn, &dk, one, Lsx + Lsxp[d] + lpos_next, &dlda, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C + dn, &dldc );
-                    else
-                        zgemm_ ( "N", "C", &dm, &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C + dn, &dldc );
-                }
-
-                for ( di = Lpos[d]; di < ndrow; di++ )
-                {
-                    RelativeMap [ di - Lpos[d] ] = Map [ Lsi[ Lsip[d] + di ] ];
-                }
-
-                for ( cj = 0; cj < dn; cj++ )
-                {
-                    for ( ci = cj; ci < dn + dm; ci++ )
+                    sj = j - Super[s];
+                    for ( p = Lp[j]; p < Lp[j+1]; p++ )
                     {
-                        if (!isComplex)
-                            Lsx [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= C [ cj * dldc + ci ];
+                        i = Li[p];
+                        si = Map[i];
+                        if ( !isComplex )
+                            h_A [ sj * nsrow + si ] = Lx[p];
                         else
                         {
-                            ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
-                            ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
+                            ( (Complex*) h_A ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                            ( (Complex*) h_A ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
                         }
                     }
                 }
 
-                Lpos[d] = lpos_next;
-                Head[s] = Next[d];
-                if ( lpos_next < ndrow )
+                if ( !isComplex )
+                    cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                else
+                    cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+
+                cudaStreamSynchronize ( gpu_info->s_cudaStream );
+                if ( !isComplex )
+                    cudaMemcpy ( Lsx + Lsxp[s], d_A, nscol * nsrow * sizeof(Float), cudaMemcpyDeviceToHost );
+                else
+                    cudaMemcpy ( Lsx + Lsxp[s], d_A, nscol * nsrow * sizeof(Complex), cudaMemcpyDeviceToHost );
+
+                while ( Head[s] >= 0 )
                 {
-                    dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
-#pragma omp critical (HeadNext)
+                    Long d, di, dancestor;
+                    Long ndcol, ndrow;
+                    Long lpos_next;
+
+                    Long dn, dm, dk, dlda, dldc;
+
+                    Long cj, ci;
+
+                    d = Head[s];
+
+                    ndcol = Super[d+1] - Super[d];
+                    ndrow = Lsip[d+1] - Lsip[d];
+
+                    for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
+
+                    dn = lpos_next - Lpos[d];
+                    dm = ndrow - Lpos[d] - dn;
+                    dk = ndcol;
+                    dlda = ndrow;
+                    dldc = ndrow - Lpos[d];
+
+                    if (!isComplex)
+                        dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
+                    else
+                        zherk_ ( "L", "N", &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C, &dldc );
+
+                    if ( dm > 0 )
                     {
-                        Next[d] = Head[dancestor];
-                        Head[dancestor] = d;
+                        if (!isComplex)
+                            dgemm_ ( "N", "C", &dm, &dn, &dk, one, Lsx + Lsxp[d] + lpos_next, &dlda, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C + dn, &dldc );
+                        else
+                            zgemm_ ( "N", "C", &dm, &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C + dn, &dldc );
+                    }
+
+                    for ( di = Lpos[d]; di < ndrow; di++ )
+                    {
+                        RelativeMap [ di - Lpos[d] ] = Map [ Lsi[ Lsip[d] + di ] ];
+                    }
+
+                    for ( cj = 0; cj < dn; cj++ )
+                    {
+                        for ( ci = cj; ci < dn + dm; ci++ )
+                        {
+                            if (!isComplex)
+                                Lsx [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= C [ cj * dldc + ci ];
+                            else
+                            {
+                                ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
+                                ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
+                            }
+                        }
+                    }
+
+                    Lpos[d] = lpos_next;
+                    Head[s] = Next[d];
+                    if ( lpos_next < ndrow )
+                    {
+                        dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
+#pragma omp critical (HeadNext)
+                        {
+                            Next[d] = Head[dancestor];
+                            Head[dancestor] = d;
+                        }
                     }
                 }
-            }
 
-            sn = nscol;
-            sm = nsrow - nscol;
-            slda = nsrow;
+                sn = nscol;
+                sm = nsrow - nscol;
+                slda = nsrow;
 
-            if (!isComplex)
-                dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
-            else
-                zpotrf_ ( "L", &sn, (Complex*)Lsx + Lsxp[s], &slda, &info );
-
-            if ( nscol < nsrow )
-            {
                 if (!isComplex)
-                    dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, Lsx + Lsxp[s], &slda, Lsx + Lsxp[s] + nscol, &slda );
+                    dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
                 else
-                    ztrsm_ ( "R", "L", "C", "N", &sm, &sn, one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
+                    zpotrf_ ( "L", &sn, (Complex*)Lsx + Lsxp[s], &slda, &info );
+
+                if ( nscol < nsrow )
+                {
+                    if (!isComplex)
+                        dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, Lsx + Lsxp[s], &slda, Lsx + Lsxp[s] + nscol, &slda );
+                    else
+                        ztrsm_ ( "R", "L", "C", "N", &sm, &sn, one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
+                }
+
+                if ( nscol < nsrow )
+                {
+                    sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+#pragma omp critical (HeadNext)
+                    {
+                        Next[s] = Head[sparent];
+                        Head[sparent] = s;
+                    }
+#pragma omp critical (leafQueueTail)
+                    {
+                        Nschild[sparent]--;
+                        if ( Nschild[sparent] <= 0 )
+                            LeafQueue[leafQueueTail++] = sparent;
+                    }
+                }
+
+#pragma omp critical (leafQueueHead)
+                {
+                    if ( leafQueueHead >= leafQueueTail )
+                        leafQueueIndex = nsuper;
+                    else
+                        leafQueueIndex = leafQueueHead++;
+                }
+
+                omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
             }
 
-            if ( nscol < nsrow )
-            {
-                sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-#pragma omp critical (HeadNext)
-                {
-                    Next[s] = Head[sparent];
-                    Head[sparent] = s;
-                }
-#pragma omp critical (leafQueueTail)
-                {
-                    Nschild[sparent]--;
-                    if ( Nschild[sparent] <= 0 )
-                        LeafQueue[leafQueueTail++] = sparent;
-                }
-            }
+            if ( Map != NULL ) free ( Map );
+            if ( RelativeMap != NULL ) free ( RelativeMap );
+            if ( C != NULL ) free ( C );
+
+            Map = NULL;
+            RelativeMap = NULL;
+            C = NULL;
+        }
+    }
+    else
+    {
+#pragma omp parallel for schedule(static) num_threads(numThread)
+        for ( nodeThreadIndex = 0; nodeThreadIndex < numThread; nodeThreadIndex++ )
+        {
+            Long leafQueueIndex;
+
+            Long *Map, *RelativeMap;
+            Float *C;
+
+            Map = NULL;
+            RelativeMap = NULL;
+            C = NULL;
 
 #pragma omp critical (leafQueueHead)
             {
@@ -1932,12 +1989,172 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     leafQueueIndex = leafQueueHead++;
             }
 
-            omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
-        }
+            if ( leafQueueIndex < nsuper )
+            {
+                Map = malloc ( nrow * sizeof(Long) );
+                RelativeMap = malloc ( nrow * sizeof(Long) );
 
-        free ( Map );
-        free ( RelativeMap );
-        free ( C );
+                if (!isComplex)
+                    C = malloc ( csize * sizeof(Float) );
+                else
+                    C = malloc ( csize * sizeof(Complex) );
+            }
+
+            while ( leafQueueIndex < nsuper )
+            {
+                Long j, i, p;
+
+                Long s;
+                Long sparent;
+                Long nscol, nsrow;
+                Long sj, si;
+
+                Long sn, sm, slda;
+                int info;
+
+                s = LeafQueue[leafQueueIndex];
+
+                nscol = Super[s+1] - Super[s];
+                nsrow = Lsip[s+1] - Lsip[s];
+
+                for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
+                    Map [ Lsi [ Lsip[s] + si ] ] = si;
+
+                for ( j = Super[s]; j < Super[s+1]; j++ )
+                {
+                    sj = j - Super[s];
+                    for ( p = Lp[j]; p < Lp[j+1]; p++ )
+                    {
+                        i = Li[p];
+                        si = Map[i];
+                        if ( !isComplex )
+                            Lsx [ Lsxp[s] + sj * nsrow + si ] = Lx[p];
+                        else
+                        {
+                            ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                            ( (Complex*) Lsx ) [ Lsxp[s] + sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
+                        }
+                    }
+                }
+
+                while ( Head[s] >= 0 )
+                {
+                    Long d, di, dancestor;
+                    Long ndcol, ndrow;
+                    Long lpos_next;
+
+                    Long dn, dm, dk, dlda, dldc;
+
+                    Long cj, ci;
+
+                    d = Head[s];
+
+                    ndcol = Super[d+1] - Super[d];
+                    ndrow = Lsip[d+1] - Lsip[d];
+
+                    for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
+
+                    dn = lpos_next - Lpos[d];
+                    dm = ndrow - Lpos[d] - dn;
+                    dk = ndcol;
+                    dlda = ndrow;
+                    dldc = ndrow - Lpos[d];
+
+                    if (!isComplex)
+                        dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
+                    else
+                        zherk_ ( "L", "N", &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C, &dldc );
+
+                    if ( dm > 0 )
+                    {
+                        if (!isComplex)
+                            dgemm_ ( "N", "C", &dm, &dn, &dk, one, Lsx + Lsxp[d] + lpos_next, &dlda, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C + dn, &dldc );
+                        else
+                            zgemm_ ( "N", "C", &dm, &dn, &dk, one, (Complex*)Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*)Lsx + Lsxp[d] + Lpos[d], &dlda, zero, (Complex*)C + dn, &dldc );
+                    }
+
+                    for ( di = Lpos[d]; di < ndrow; di++ )
+                    {
+                        RelativeMap [ di - Lpos[d] ] = Map [ Lsi[ Lsip[d] + di ] ];
+                    }
+
+                    for ( cj = 0; cj < dn; cj++ )
+                    {
+                        for ( ci = cj; ci < dn + dm; ci++ )
+                        {
+                            if (!isComplex)
+                                Lsx [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= C [ cj * dldc + ci ];
+                            else
+                            {
+                                ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
+                                ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
+                            }
+                        }
+                    }
+
+                    Lpos[d] = lpos_next;
+                    Head[s] = Next[d];
+                    if ( lpos_next < ndrow )
+                    {
+                        dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
+#pragma omp critical (HeadNext)
+                        {
+                            Next[d] = Head[dancestor];
+                            Head[dancestor] = d;
+                        }
+                    }
+                }
+
+                sn = nscol;
+                sm = nsrow - nscol;
+                slda = nsrow;
+
+                if (!isComplex)
+                    dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
+                else
+                    zpotrf_ ( "L", &sn, (Complex*)Lsx + Lsxp[s], &slda, &info );
+
+                if ( nscol < nsrow )
+                {
+                    if (!isComplex)
+                        dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, Lsx + Lsxp[s], &slda, Lsx + Lsxp[s] + nscol, &slda );
+                    else
+                        ztrsm_ ( "R", "L", "C", "N", &sm, &sn, one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
+                }
+
+                if ( nscol < nsrow )
+                {
+                    sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+#pragma omp critical (HeadNext)
+                    {
+                        Next[s] = Head[sparent];
+                        Head[sparent] = s;
+                    }
+#pragma omp critical (leafQueueTail)
+                    {
+                        Nschild[sparent]--;
+                        if ( Nschild[sparent] <= 0 )
+                            LeafQueue[leafQueueTail++] = sparent;
+                    }
+                }
+
+#pragma omp critical (leafQueueHead)
+                {
+                    if ( leafQueueHead >= leafQueueTail )
+                        leafQueueIndex = nsuper;
+                    else
+                        leafQueueIndex = leafQueueHead++;
+                }
+            }
+
+            if ( Map != NULL ) free ( Map );
+            if ( RelativeMap != NULL ) free ( RelativeMap );
+            if ( C != NULL ) free ( C );
+
+            Map = NULL;
+            RelativeMap = NULL;
+            C = NULL;
+        }
     }
 
     free ( Lpos );
@@ -1949,7 +2166,7 @@ int SparseFrame_factorize ( struct common_info_struct *common_info, struct gpu_i
 {
     double timestamp;
 
-    int numThreads;
+    int numThread;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_factorize================\n\n");
@@ -1957,9 +2174,9 @@ int SparseFrame_factorize ( struct common_info_struct *common_info, struct gpu_i
 
     timestamp = SparseFrame_time ();
 
-    numThreads = common_info->numThreads;
+    numThread = common_info->numThread;
 
-    openblas_set_num_threads ( numThreads );
+    openblas_set_num_threads ( numThread );
 
     SparseFrame_factorize_supernodal ( common_info, gpu_info_list, matrix_info );
 
@@ -2267,7 +2484,7 @@ int SparseFrame ( int argc, char **argv )
 {
     double timestamp;
 
-    int numThreads, numSparseMatrix, nextMatrixIndex;
+    int numThread, numSparseMatrix, nextMatrixIndex;
     int matrixThreadNum, matrixThreadIndex;
 
     struct common_info_struct common_info_object;
@@ -2288,13 +2505,13 @@ int SparseFrame ( int argc, char **argv )
     numSparseMatrix = argc - 1;
     common_info->numSparseMatrix = numSparseMatrix;
 
-    numThreads = omp_get_max_threads();
-    common_info->numThreads = numThreads;
+    numThread = omp_get_max_threads();
+    common_info->numThread = numThread;
 
     matrixThreadNum = MIN ( MATRIX_THREAD_NUM, numSparseMatrix );
 
 #ifdef PRINT_INFO
-    printf ("Max threads = %d\n", numThreads);
+    printf ("Max threads = %d\n", numThread);
     printf ("Num of matrices = %d\n\n", numSparseMatrix);
 #endif
 

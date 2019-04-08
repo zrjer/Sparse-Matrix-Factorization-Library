@@ -6,7 +6,7 @@
 struct common_info_struct
 {
     int numGPU;
-    int numThreads;
+    int numThread;
     int numSparseMatrix;
 
     size_t minDevMemSize;
