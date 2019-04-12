@@ -1,11 +1,11 @@
 #ifndef INCLUDE_PARAMETER_H
 #define INCLUDE_PARAMETER_H
 
-//#define PRINT_CALLS
+#define PRINT_CALLS
 //#define PRINT_DEBUG
 #define PRINT_INFO
 
-#define MAX_NUM_GPU (-1)
+#define MAX_NUM_GPU (1)
 #define MAX_GPU_SPLIT (2)
 
 #define MEM_LIMITS

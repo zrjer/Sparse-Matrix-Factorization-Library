@@ -66,7 +66,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
         sharedMemSize = prop.sharedMemPerBlock;
 
         devMemSize = prop.totalGlobalMem;
-        devMemSize = ( size_t ) ( ( double ) devMemSize * 0.9 );
+        devMemSize = ( size_t ) ( ( ( double ) devMemSize - 64 * ( 0x400 * 0x400 ) ) * 0.9 );
         devMemSize = devMemSize - devMemSize % ( 0x400 * 0x400 ); // align to 1 MB
         devMemSize /= numSplit;
 
@@ -170,7 +170,10 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     common_info->minDevMemSize = minDevMemSize;
     common_info->devSlotSize = devSlotSize;
+
+#ifdef PRINT_INFO
     printf ( "Minimum device memory size = %lf GiB\n", ( double ) minDevMemSize / ( 0x400 * 0x400 * 0x400 ) );
+#endif
 
 #ifdef PRINT_INFO
     printf ("\n");
@@ -391,7 +394,6 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
             nz++;
         }
     }
-    if (nz != nzmax) { printf ("error: nz = %ld nzmax = %ld\n", nz, nzmax); exit(0); }
 
     matrix_info->ncol = ncol;
     matrix_info->nrow = nrow;
@@ -1246,32 +1248,31 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     for ( j = 1; j < nrow; j++ )
     {
-        if ( Parent[j-1] != j || ColCount[j-1] != ColCount[j] + 1 || Nchild[j] > 1 )
-        {
-            if (
-                    (
-                     !isComplex &&
-                     (
-                      ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Float)
-                      + nrow * sizeof(Long)
-                      <= devSlotSize
-                     )
-                    )
-                    ||
-                    (
-                     isComplex &&
-                     (
-                      ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Complex)
-                      + nrow * sizeof(Long)
-                      <= devSlotSize
-                     )
-                    )
-               )
-            {
-                Super[nfsuper] = j;
-                nfsuper++;
-            }
-        }
+        if (
+                ( Parent[j-1] != j || ColCount[j-1] != ColCount[j] + 1 || Nchild[j] > 1 )
+                ||
+                (
+                 !isComplex &&
+                 (
+                  ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Float)
+                  + nrow * sizeof(Long)
+                  > devSlotSize
+                 )
+                )
+                ||
+                (
+                 isComplex &&
+                 (
+                  ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Complex)
+                  + nrow * sizeof(Long)
+                  > devSlotSize
+                 )
+                )
+           )
+           {
+               Super[nfsuper] = j;
+               nfsuper++;
+           }
     }
     Super[nfsuper] = nrow;
 
@@ -1366,7 +1367,11 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                         }
                     }
                     else
+                    {
+                        Nscol[smerge] = s_ncol + p_ncol;
+                        Scolcount[smerge] = s_ncol + p_colcount;
                         Merge[sparent] = smerge;
+                    }
                 }
             }
         }
@@ -1385,10 +1390,10 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
         }
     }
 
-    for ( s = nsuper; s < nfsuper; s++ )
-        Super[s] = -1;
-
     Super[nsuper] = nrow;
+
+    for ( s = nsuper + 1; s < nfsuper; s++ )
+        Super[s] = -1;
 
     for ( s = 0; s < nsuper; s++ )
     {
@@ -1676,11 +1681,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     nsleaf = matrix_info->nsleaf;
     LeafQueue = matrix_info->LeafQueue;
 
-    if ( !isComplex )
-        memset ( Lsx, 0, xsize * sizeof(Float) );
-    else
-        memset ( Lsx, 0, xsize * sizeof(Complex) );
-
     Head = matrix_info->Head;
     Next = matrix_info->Next;
 
@@ -1789,7 +1789,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 nsrow = Lsip[s+1] - Lsip[s];
 
                 for ( si = 0; si < nsrow; si++ )
+                {
                     h_Map [ Lsi [ Lsip[s] + si ] ] = si;
+                }
 
                 cudaMemcpyAsync ( d_Map, h_Map, nsrow * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
 
@@ -2230,6 +2232,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
                     Map [ Lsi [ Lsip[s] + si ] ] = si;
 
+                if ( !isComplex )
+                    memset ( Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Float) );
+                else
+                    memset ( (Complex*) Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Complex) );
+
                 for ( j = Super[s]; j < Super[s+1]; j++ )
                 {
                     sj = j - Super[s];
@@ -2388,7 +2395,11 @@ int SparseFrame_factorize ( struct common_info_struct *common_info, struct gpu_i
 
     openblas_set_num_threads ( numThread );
 
+    cudaProfilerStart();
+
     SparseFrame_factorize_supernodal ( common_info, gpu_info_list, matrix_info );
+
+    cudaProfilerStop();
 
     matrix_info->factorizeTime = SparseFrame_time () - timestamp;
 

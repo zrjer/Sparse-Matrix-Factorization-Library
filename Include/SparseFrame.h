@@ -17,6 +17,8 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 
+#include <cuda_profiler_api.h>
+
 #include <cblas.h>
 
 #include "extern.h"

@@ -7,6 +7,7 @@ int main (int argc, char **argv)
 
 #ifdef PRINT_INFO
     printf ("Type size:\n");
+    printf ("Size of size_t = %ld\n", sizeof(size_t));
     printf ("Size of Int = %ld\n", sizeof(Int));
     printf ("Size of uInt = %ld\n", sizeof(uInt));
     printf ("Size of Long = %ld\n", sizeof(Long));
