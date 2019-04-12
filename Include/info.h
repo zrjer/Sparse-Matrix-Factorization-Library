@@ -3,6 +3,10 @@
 
 #include <omp.h>
 
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
+#include <cusolverDn.h>
+
 struct common_info_struct
 {
     int numGPU;
@@ -30,14 +34,17 @@ struct gpu_info_struct
 
     size_t sharedMemSize;
 
+    cudaEvent_t s_cudaEvent_onDevice;
+    cudaEvent_t d_cudaEvent_updated;
+
     cudaStream_t s_cudaStream;
     cudaStream_t d_cudaStream[4];
 
     cublasHandle_t s_cublasHandle;
     cublasHandle_t d_cublasHandle[4];
 
-    cublasHandle_t s_cusolverDnHandle;
-    cublasHandle_t d_cusolverDnHandle[4];
+    cusolverDnHandle_t s_cusolverDnHandle;
+    cusolverDnHandle_t d_cusolverDnHandle[4];
 };
 
 struct matrix_info_struct

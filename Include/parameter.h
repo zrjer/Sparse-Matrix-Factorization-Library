@@ -22,7 +22,6 @@
 #define MATRIX_THREAD_NUM 2
 
 #define MAXMMLINE 1024
-size_t max_mm_line_size = MAXMMLINE + 1;
 
 const enum PermMethod perm_method = PERM_METIS;
 

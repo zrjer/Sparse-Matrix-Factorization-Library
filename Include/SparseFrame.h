@@ -10,11 +10,16 @@
 
 #include <omp.h>
 
+#include <amd.h>
+#include <metis.h>
+
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+#include <cusolverDn.h>
 
-#include "amd.h"
-#include "metis.h"
+#include <cblas.h>
+
+#include "extern.h"
 
 #include "arch.h"
 #include "macro.h"
@@ -22,6 +27,8 @@
 #include "constant.h"
 #include "parameter.h"
 #include "info.h"
+
+#include "cuda_kernel.cuh"
 
 #ifdef __cplusplus
 extern "C" {

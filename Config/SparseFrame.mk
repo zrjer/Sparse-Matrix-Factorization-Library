@@ -34,5 +34,5 @@ LBLAS = -lopenblas
 LCUDA = -lcudart -lcublas -lcusolver
 LDLIBS += -lgfortran -lm -lrt -lamd -lcamd -lcolamd -lccolamd -lmetis $(LBLAS) $(LCUDA)
 
-SOFLAGS = -shared
+SOFLAGS = -shared -Wl,--no-undefined
 LDFLAGS = $(CFOPENMP)
