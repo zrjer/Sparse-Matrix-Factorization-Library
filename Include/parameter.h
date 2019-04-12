@@ -1,7 +1,7 @@
 #ifndef INCLUDE_PARAMETER_H
 #define INCLUDE_PARAMETER_H
 
-#define PRINT_CALLS
+//#define PRINT_CALLS
 //#define PRINT_DEBUG
 #define PRINT_INFO
 
@@ -28,6 +28,6 @@ const enum PermMethod perm_method = PERM_METIS;
 const double prune_dense = 10.0;
 const double aggressive = 1;
 
-#define RELAX_RATE (0.1)
+#define RELAX_RATE (0.2)
 
 #endif

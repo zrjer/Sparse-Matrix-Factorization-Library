@@ -1392,9 +1392,6 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Super[nsuper] = nrow;
 
-    for ( s = nsuper + 1; s < nfsuper; s++ )
-        Super[s] = -1;
-
     for ( s = 0; s < nsuper; s++ )
     {
         for ( j = Super[s]; j < Super[s+1]; j++ )
