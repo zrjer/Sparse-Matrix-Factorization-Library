@@ -1628,7 +1628,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Long nsuper, s;
     Long *Super, *SuperMap;
 
-    Long xsize;
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
 
@@ -1666,7 +1665,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Super = matrix_info->Super;
     SuperMap = matrix_info->SuperMap;
 
-    xsize = matrix_info->xsize;
     Lsip = matrix_info->Lsip;
     Lsxp = matrix_info->Lsxp;
     Lsi = matrix_info->Lsi;
