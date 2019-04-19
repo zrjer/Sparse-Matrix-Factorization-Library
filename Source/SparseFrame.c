@@ -1322,16 +1322,16 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
             }
         }
 
-        for ( s = 0; s < nfsuper; s++ )
+        for ( s = nfsuper - 2; s >= 0; s-- )
         {
             sparent = Sparent[s];
-            if ( sparent >= 0 && sparent < nfsuper && Nschild[sparent] == 1 && sparent == s+1 )
+            if ( sparent >= 0 && sparent < nfsuper && Merge[s+1] == Merge[sparent] )
             {
-                smerge = Merge[s];
-                s_ncol = Nscol[smerge];
-                p_ncol = Nscol[sparent];
-                s_colcount = Scolcount[smerge];
-                p_colcount = Scolcount[sparent];
+                smerge = Merge[sparent];
+                s_ncol = Nscol[s];
+                p_ncol = Nscol[smerge];
+                s_colcount = Scolcount[s];
+                p_colcount = Scolcount[smerge];
                 if (
                         (
                          !isComplex &&
@@ -1354,8 +1354,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                 {
                     if ( RELAX_RATE < 1 )
                     {
-                        s_zero = Nsz[smerge];
-                        p_zero = Nsz[sparent];
+                        s_zero = Nsz[s];
+                        p_zero = Nsz[smerge];
                         new_zero = s_ncol * ( s_ncol + p_colcount - s_colcount );
                         total_zero = s_zero + p_zero + new_zero;
                         if ( (double)total_zero / ( ( s_ncol + p_ncol ) * ( s_ncol + p_ncol + 1 ) / 2 + ( s_ncol + p_ncol ) * ( p_colcount - p_ncol ) ) < RELAX_RATE )
@@ -1363,14 +1363,14 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                             Nscol[smerge] = s_ncol + p_ncol;
                             Scolcount[smerge] = s_ncol + p_colcount;
                             Nsz[smerge] = total_zero;
-                            Merge[sparent] = smerge;
+                            Merge[s] = smerge;
                         }
                     }
                     else
                     {
                         Nscol[smerge] = s_ncol + p_ncol;
                         Scolcount[smerge] = s_ncol + p_colcount;
-                        Merge[sparent] = smerge;
+                        Merge[s] = smerge;
                     }
                 }
             }
@@ -1379,11 +1379,13 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     nsuper = 0;
 
+    Super[0] = 0;
+
     for ( s = 0; s < nfsuper; s++ )
     {
         if ( Merge[s] == s )
         {
-            Super[nsuper] = Super[s];
+            Super[nsuper+1] = Super[s+1];
             Nscol[nsuper] = Nscol[s];
             Scolcount[nsuper] = Scolcount[s];
             nsuper++;
