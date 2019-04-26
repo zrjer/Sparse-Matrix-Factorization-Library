@@ -2044,7 +2044,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             h_RelativeMap = (void*) ( (Complex*) h_B + ndcol * ( ndrow - lpos ) );
                         }
 
+#pragma omp parallel for private (di) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
                         for ( dj = 0; dj < ndcol; dj++ )
+                        {
                             for ( di = 0; di < ndrow - lpos; di++ )
                             {
                                 if (!isComplex)
@@ -2055,6 +2057,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     ( (Complex*) h_B ) [ dj + di * ndcol ].y = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].y;
                                 }
                             }
+                        }
 
                         for ( di = 0; di < ndrow - lpos; di++ )
                         {
@@ -2144,6 +2147,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                 cudaStreamSynchronize ( gpu_info->s_cudaStream );
 
+#pragma omp parallel for private(si) num_threads(CP_NUM_THREAD) if(nscol>CP_THREAD_THRESHOLD)
                 for ( sj = 0; sj < nscol; sj++ )
                 {
                     for ( si = sj; si < nsrow; si++ )

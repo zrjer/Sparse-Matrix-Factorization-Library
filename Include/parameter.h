@@ -5,6 +5,9 @@
 //#define PRINT_DEBUG
 #define PRINT_INFO
 
+#define CP_NUM_THREAD 8
+#define CP_THREAD_THRESHOLD 64
+
 #define MAX_NUM_GPU (1)
 #define MAX_GPU_SPLIT (2)
 
