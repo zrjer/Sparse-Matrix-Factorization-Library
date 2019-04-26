@@ -515,6 +515,13 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
 
     matrix_info->csize = 0;
 
+    matrix_info->ST_Num = 0;
+    matrix_info->ST_Map = NULL;
+    matrix_info->ST_Pointer = NULL;
+    matrix_info->ST_Index = NULL;
+    matrix_info->ST_Aoffset = NULL;
+    matrix_info->ST_Coffset = NULL;
+
     matrix_info->workSize = 0;
     matrix_info->workspace = NULL;
 
@@ -1139,6 +1146,8 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
+    size_t devSlotSize;
+
     int isComplex;
 
     Long j, i, k, p, nrow;
@@ -1170,10 +1179,11 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Long csize;
 
-    size_t devSlotSize;
-
     Long nsleaf;
     Long *LeafQueue;
+
+    Long ST_Num;
+    Long *ST_Map;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
@@ -1603,6 +1613,12 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
     matrix_info->Super = malloc ( ( nrow + 1 ) * sizeof(Long) );
     matrix_info->SuperMap = malloc ( nrow * sizeof(Long) );
     matrix_info->Sparent = malloc ( nrow * sizeof(Long) );
+
+    matrix_info->ST_Map = malloc ( nrow * sizeof(Long) );
+    matrix_info->ST_Pointer = malloc ( nrow * sizeof(Long) );
+    matrix_info->ST_Index = malloc ( nrow * sizeof(Long) );
+    matrix_info->ST_Aoffset = malloc ( nrow * sizeof(Long) );
+    matrix_info->ST_Coffset = malloc ( nrow * sizeof(Long) );
 
     SparseFrame_analyze_supernodal ( common_info, matrix_info );
 
@@ -2680,6 +2696,12 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Lsxp != NULL ) free ( matrix_info->Lsxp );
     if ( matrix_info->Lsi != NULL ) free ( matrix_info->Lsi );
     if ( matrix_info->Lsx != NULL ) free ( matrix_info->Lsx );
+
+    if ( matrix_info->ST_Map != NULL ) free ( matrix_info->ST_Map );
+    if ( matrix_info->ST_Pointer != NULL ) free ( matrix_info->ST_Pointer );
+    if ( matrix_info->ST_Index != NULL ) free ( matrix_info->ST_Index );
+    if ( matrix_info->ST_Aoffset != NULL ) free ( matrix_info->ST_Aoffset );
+    if ( matrix_info->ST_Coffset != NULL ) free ( matrix_info->ST_Coffset );
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
 
