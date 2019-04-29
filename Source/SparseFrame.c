@@ -444,7 +444,7 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     for ( j = 0; j < ncol; j++ )
         Cp[j+1] += Cp[j];
 
-    memcpy ( workspace, Cp, sizeof(Long) * ( ncol + 1 ) );
+    memcpy ( workspace, Cp, ncol * sizeof(Long) );
 
     for ( nz = 0; nz < nzmax; nz++ )
     {
@@ -560,7 +560,14 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
 
     free ( buf );
 
-    matrix_info->workSize = MAX ( MAX ( ( 6 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(Long), ( 3 * matrix_info->nrow + 2 * matrix_info->nzmax + 1 ) * sizeof(idx_t) ), ( matrix_info->nrow ) * sizeof(Float) );
+    matrix_info->workSize
+        = MAX (
+                MAX (
+                    ( 6 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(Long),
+                    ( 3 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(idx_t)
+                    ),
+                ( matrix_info->nrow ) * sizeof(Float)
+              );
     matrix_info->workspace = malloc ( matrix_info->workSize );
 
     SparseFrame_compress ( matrix_info );
@@ -628,7 +635,7 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 
     anz = Ap[nrow];
 
-    memcpy ( workspace, Ap, ( nrow + 1 ) * sizeof(Long) ); // Be careful of overwriting Ap
+    memcpy ( workspace, Ap, nrow * sizeof(Long) ); // Be careful of overwriting Ap
 
     for ( j = 0; j < ncol; j++ )
     {
@@ -708,7 +715,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 
     mnz = Mp[nrow];
 
-    memcpy ( Mworkspace, Mp, ( nrow + 1 ) * sizeof(idx_t) ); // Be careful of overwriting Mp
+    memcpy ( Mworkspace, Mp, nrow * sizeof(idx_t) ); // Be careful of overwriting Mp
 
     for ( j = 0; j < ncol; j++ )
     {
@@ -785,7 +792,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Pinv = matrix_info->Pinv;
 
     Lworkspace = matrix_info->workspace;
-    Uworkspace = matrix_info->workspace + ( nrow + 1 ) * sizeof(Long);
+    Uworkspace = matrix_info->workspace + nrow * sizeof(Long);
 
     memset ( Lp, 0, ( nrow + 1 ) * sizeof(Long) );
     memset ( Up, 0, ( nrow + 1 ) * sizeof(Long) );
@@ -823,8 +830,8 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
         Up[j+1] += Up[j];
     }
 
-    memcpy ( Lworkspace, Lp, ( nrow + 1 ) * sizeof(Long) );
-    memcpy ( Uworkspace, Up, ( nrow + 1 ) * sizeof(Long) );
+    memcpy ( Lworkspace, Lp, nrow * sizeof(Long) );
+    memcpy ( Uworkspace, Up, nrow * sizeof(Long) );
 
     for ( j = 0; j < nrow; j++ )
     {
@@ -1185,7 +1192,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Long *Head, *Next;
 
-    Long ST_Num;
+    Long st, ST_Num;
     Long *ST_Map, *ST_Pointer, *ST_Index;
     size_t *ST_Aoffset, *ST_Coffset, *ST_Moffset;
 
@@ -1474,7 +1481,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Lsip_copy = workspace + 1 * nrow + 1; // don't overwrite Super
     Marker = workspace + 2 * nrow + 1;
 
-    memcpy ( Lsip_copy, Lsip, ( nsuper + 1 ) * sizeof(Long) );
+    memcpy ( Lsip_copy, Lsip, nsuper * sizeof(Long) );
 
     for ( s = 0; s < nsuper; s++ )
     {
@@ -1586,8 +1593,6 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     for ( s = nsuper - 1; s >= 0; s-- )
     {
-        Long st;
-
         if ( Sparent[s] < 0 )
             st = 0;
         else
@@ -1610,9 +1615,17 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                )
             {
                 ST_Map[s] = st;
-                ST_Aoffset[s] = ST_Asize[st];
-                ST_Coffset[s] = ST_Csize[st];
-                ST_Moffset[s] = ST_Msize[st];
+                if ( !isComplex )
+                {
+                    ST_Aoffset[s] = ST_Asize[st] * sizeof(Float);
+                    ST_Coffset[s] = ST_Csize[st] * sizeof(Float);
+                }
+                else
+                {
+                    ST_Aoffset[s] = ST_Asize[st] * sizeof(Complex);
+                    ST_Coffset[s] = ST_Csize[st] * sizeof(Complex);
+                }
+                ST_Moffset[s] = ST_Msize[st] * sizeof(Long);
                 ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
                 ST_Csize[st] += ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
                 ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
@@ -1640,8 +1653,34 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
         }
     }
 
-    ST_Pointer = malloc ( nrow * sizeof(Long) );
-    ST_Index = malloc ( nrow * sizeof(Long) );
+    for ( s = 0; s < nsuper; s++ )
+    {
+        if ( !isComplex )
+            ST_Moffset[s] += ST_Asize [ ST_Map [s] ] * sizeof(Float);
+        else
+            ST_Moffset[s] += ST_Asize [ ST_Map [s] ] * sizeof(Complex);
+    }
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        ST_Map[s] = ST_Num - 1 - ST_Map[s];
+    }
+
+    ST_Pointer = calloc ( ST_Num + 1, sizeof(Long) );
+    ST_Index = malloc ( nsuper * sizeof(Long) );
+
+    for ( s = 0; s < nsuper; s++ )
+        ST_Pointer [ ST_Map[s] + 1 ] ++;
+
+    for ( st = 0; st < ST_Num; st++ )
+        ST_Pointer[st+1] += ST_Pointer[st];
+
+    memcpy ( workspace, ST_Pointer, ST_Num * sizeof(Long) );
+
+    for ( s = 0; s < nsuper; s++ )
+    {
+        ST_Index[s] = workspace [ ST_Map[s] ] ++;
+    }
 
     matrix_info->ST_Num = ST_Num;
     matrix_info->ST_Map = ST_Map;
