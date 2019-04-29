@@ -1441,10 +1441,6 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     nsuper = nfsuper;
 #endif
 
-#ifdef PRINT_INFO
-    printf ("nrow = %ld nfsuper = %ld nsuper = %ld\n", nrow, nfsuper, nsuper);
-#endif
-
     matrix_info->nsuper = nsuper;
 
     isize = 0;
@@ -1689,6 +1685,10 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     matrix_info->ST_Moffset = ST_Moffset;
     matrix_info->ST_Pointer = ST_Pointer;
     matrix_info->ST_Index = ST_Index;
+
+#ifdef PRINT_INFO
+    printf ("nrow = %ld nfsuper = %ld nsuper = %ld ST_Num = %ld\n", nrow, nfsuper, nsuper, ST_Num);
+#endif
 
     return 0;
 }
