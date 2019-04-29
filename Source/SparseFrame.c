@@ -1183,6 +1183,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Long nsleaf;
     Long *LeafQueue;
 
+    Long *Head, *Next;
+
     Long ST_Num;
     Long *ST_Map, *ST_Pointer, *ST_Index;
     size_t *ST_Aoffset, *ST_Coffset, *ST_Moffset;
@@ -1211,6 +1213,9 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Super = matrix_info->Super;
     SuperMap = matrix_info->SuperMap;
     Sparent = matrix_info->Sparent;
+
+    Head = matrix_info->Head;
+    Next = matrix_info->Next;
 
     workspace = matrix_info->workspace;
 
@@ -1570,7 +1575,9 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     }
 
     ST_Map = malloc ( nsuper * sizeof(Long) );
-    matrix_info->ST_Map = ST_Map;
+    ST_Aoffset = malloc ( nsuper * sizeof(size_t) );
+    ST_Coffset = malloc ( nsuper * sizeof(size_t) );
+    ST_Moffset = malloc ( nsuper * sizeof(size_t) );
 
     ST_Num = 0;
 
@@ -1579,12 +1586,70 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     for ( s = nsuper - 1; s >= 0; s-- )
     {
+        Long st;
+
         if ( Sparent[s] < 0 )
+            st = 0;
+        else
+            st = Head [ ST_Map [ Sparent[s] ] ];
+
+        while ( st >= 0 )
         {
+            if (
+                    (
+                     !isComplex
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) <= devSlotSize
+                    )
+                    ||
+                    (
+                     isComplex
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) <= devSlotSize
+                    )
+               )
+            {
+                ST_Map[s] = st;
+                ST_Aoffset[s] = ST_Asize[st];
+                ST_Coffset[s] = ST_Csize[st];
+                ST_Moffset[s] = ST_Msize[st];
+                ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+                ST_Csize[st] += ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+                ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
+                break;
+            }
+            else
+                st = Next[st];
+        }
+
+        if ( st < 0 )
+        {
+            ST_Map[s] = ST_Num;
+            ST_Aoffset[s] = 0;
+            ST_Coffset[s] = 0;
+            ST_Moffset[s] = 0;
+            ST_Asize[ST_Num] = ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+            ST_Csize[ST_Num] = ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+            ST_Msize[ST_Num] = ( Lsip[s+1] - Lsip[s] );
+            if ( Sparent[s] >= 0 )
+            {
+                Next[ST_Num] = Head [ ST_Map [ Sparent[s] ] ];
+                Head [ ST_Map [ Sparent[s] ] ] = ST_Num;
+            }
+            ST_Num++;
         }
     }
 
+    ST_Pointer = malloc ( nrow * sizeof(Long) );
+    ST_Index = malloc ( nrow * sizeof(Long) );
+
     matrix_info->ST_Num = ST_Num;
+    matrix_info->ST_Map = ST_Map;
+    matrix_info->ST_Aoffset = ST_Aoffset;
+    matrix_info->ST_Coffset = ST_Coffset;
+    matrix_info->ST_Moffset = ST_Moffset;
+    matrix_info->ST_Pointer = ST_Pointer;
+    matrix_info->ST_Index = ST_Index;
 
     return 0;
 }
@@ -1649,12 +1714,6 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
     matrix_info->Super = malloc ( ( nrow + 1 ) * sizeof(Long) );
     matrix_info->SuperMap = malloc ( nrow * sizeof(Long) );
     matrix_info->Sparent = malloc ( nrow * sizeof(Long) );
-
-    matrix_info->ST_Pointer = malloc ( nrow * sizeof(Long) );
-    matrix_info->ST_Index = malloc ( nrow * sizeof(Long) );
-    matrix_info->ST_Aoffset = malloc ( nrow * sizeof(size_t) );
-    matrix_info->ST_Coffset = malloc ( nrow * sizeof(size_t) );
-    matrix_info->ST_Moffset = malloc ( nrow * sizeof(size_t) );
 
     SparseFrame_analyze_supernodal ( common_info, matrix_info );
 
