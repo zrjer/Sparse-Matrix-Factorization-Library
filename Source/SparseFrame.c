@@ -1589,10 +1589,45 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     for ( s = nsuper - 1; s >= 0; s-- )
     {
-        if ( Sparent[s] < 0 )
-            st = 0;
+        if ( Sparent[s] >= 0 )
+        {
+            st = ST_Map [ Sparent[s] ];
+            if (
+                    (
+                     !isComplex
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) <= devSlotSize
+                    )
+                    ||
+                    (
+                     isComplex
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) <= devSlotSize
+                    )
+               )
+            {
+                ST_Map[s] = st;
+                if ( !isComplex )
+                {
+                    ST_Aoffset[s] = ST_Asize[st] * sizeof(Float);
+                    ST_Coffset[s] = ST_Csize[st] * sizeof(Float);
+                }
+                else
+                {
+                    ST_Aoffset[s] = ST_Asize[st] * sizeof(Complex);
+                    ST_Coffset[s] = ST_Csize[st] * sizeof(Complex);
+                }
+                ST_Moffset[s] = ST_Msize[st] * sizeof(Long);
+                ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+                ST_Csize[st] += ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+                ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
+                continue;
+            }
+            else
+                st = Head [ ST_Map [ Sparent[s] ] ];
+        }
         else
-            st = Head [ ST_Map [ Sparent[s] ] ];
+            st = 0;
 
         while ( st >= 0 )
         {
