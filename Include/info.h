@@ -107,11 +107,12 @@ struct matrix_info_struct
 
     Long ST_Num;
     Long *ST_Map;
-    size_t *ST_Aoffset;
-    size_t *ST_Coffset;
-    size_t *ST_Moffset;
     Long *ST_Pointer;
     Long *ST_Index;
+    Long *ST_Parent;
+
+    Long nstleaf;
+    Long *ST_LeafQueue;
 
     Long isize;
     Long xsize;
