@@ -5,6 +5,7 @@
 //#define PRINT_DEBUG
 #define PRINT_INFO
 
+#define MAX_NUM_THREAD 32
 #define CP_NUM_THREAD 8
 #define CP_THREAD_THRESHOLD 64
 
