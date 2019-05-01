@@ -3310,7 +3310,7 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
     {
         if ( !isComplex )
         {
-            Bx[i] = 1 + (Float)i / nrow;
+            Bx[i] = 1 + i / (Float)nrow;
         }
         else
         {
@@ -3354,9 +3354,9 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
             i = Li[p];
             if ( !isComplex )
             {
-                workspace[j] += abs ( Lx[p] );
+                workspace[j] += fabs ( Lx[p] );
                 if ( i != j )
-                    workspace[i] += abs ( Lx[p] );
+                    workspace[i] += fabs ( Lx[p] );
             }
             else
             {
@@ -3375,19 +3375,17 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
     {
         if ( !isComplex )
         {
-            bnorm += ( Bx[i] * Bx[i] );
-            xnorm += ( Xx[i] * Xx[i] );
-            rnorm += ( Rx[i] * Rx[i] );
+            bnorm = MAX ( bnorm, fabs ( Bx[i] ) );
+            xnorm = MAX ( xnorm, fabs ( Xx[i] ) );
+            rnorm = MAX ( rnorm, fabs ( Rx[i] ) );
         }
         else
         {
             // TODO
         }
     }
-    bnorm = sqrt ( bnorm );
-    xnorm = sqrt ( xnorm );
-    rnorm = sqrt ( rnorm );
 
+    printf ("checkpoint anorm = %le bnorm = %le xnorm = %le rnorm = %le\n", anorm, bnorm, xnorm, rnorm);
     residual = rnorm / ( anorm * xnorm + bnorm );
     matrix_info->residual = residual;
 
