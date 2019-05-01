@@ -1884,7 +1884,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Nstchild = workspace + 6 * nsuper;
     nodeState = (enum NodeState*) ( workspace + 7 * nsuper );
     ST_State = (enum NodeState*) ( workspace + 8 * nsuper );
-    Aoffset = workspace + 9 * nsuper;
+    Aoffset = (size_t*) ( workspace + 9 * nsuper );
     Coffset = Aoffset + 1 * nsuper;
     Moffset = Aoffset + 2 * nsuper;
 
