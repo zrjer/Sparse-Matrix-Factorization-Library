@@ -87,8 +87,6 @@ struct matrix_info_struct
 
     enum PermMethod permMethod;
 
-    Long *Head;
-    Long *Next;
     Long *Perm;
     Long *Pinv;
 
@@ -105,7 +103,7 @@ struct matrix_info_struct
     Long nsleaf;
     Long *LeafQueue;
 
-    Long ST_Num;
+    Long nsubtree;
     Long *ST_Map;
     Long *ST_Pointer;
     Long *ST_Index;
