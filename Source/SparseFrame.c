@@ -67,8 +67,8 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
         devMemSize = prop.totalGlobalMem;
         devMemSize = ( size_t ) ( ( ( double ) devMemSize - 64 * ( 0x400 * 0x400 ) ) * 0.9 );
-        devMemSize = devMemSize - devMemSize % ( 0x400 * 0x400 ); // align to 1 MB
         devMemSize /= numSplit;
+        devMemSize = devMemSize - devMemSize % ( 0x400 * 0x400 ); // align to 1 MB
 
         for ( gpuIndex = gpuIndex_physical; gpuIndex < numGPU; gpuIndex += numGPU_physical )
         {
@@ -3385,7 +3385,7 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    printf ("checkpoint anorm = %le bnorm = %le xnorm = %le rnorm = %le\n", anorm, bnorm, xnorm, rnorm);
+    printf ("anorm = %le bnorm = %le xnorm = %le rnorm = %le\n", anorm, bnorm, xnorm, rnorm);
     residual = rnorm / ( anorm * xnorm + bnorm );
     matrix_info->residual = residual;
 
