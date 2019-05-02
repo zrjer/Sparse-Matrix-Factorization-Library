@@ -2021,23 +2021,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Long j, i, p;
 
                         Long s;
-                        Long sparent;
                         Long nscol, nsrow;
                         Long sj, si;
 
-                        Long sn, sm, slda;
-                        Long d_queue[4], lpos_queue[4], lpos_next_queue[4];
-                        int slot_index_queue[4], c_index;
-
                         Float *h_A;
                         Float *d_A;
-
-                        int devWorkSize;
-                        Float *d_workspace;
-                        int *d_info;
-
-                        d_workspace = gpu_info->devMem + 5 * devSlotSize;
-                        d_info = gpu_info->devMem + 6 * devSlotSize;
 
                         s = ST_Index[pt];
 
@@ -2084,8 +2072,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
-                        Long j, i, p;
-
                         Long s;
                         Long sparent;
                         Long nscol, nsrow;
