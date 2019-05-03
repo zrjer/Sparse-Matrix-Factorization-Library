@@ -1746,9 +1746,10 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
     matrix_info->Perm = malloc ( nrow * sizeof(Long) );
     matrix_info->Pinv = malloc ( nrow * sizeof(Long) );
 
-    //SparseFrame_amd ( matrix_info );
-
-    SparseFrame_metis ( matrix_info );
+    if ( sizeof(idx_t) < sizeof(Long) )
+        SparseFrame_amd ( matrix_info );
+    else
+        SparseFrame_metis ( matrix_info );
 
     matrix_info->Lp = malloc ( ( nrow + 1 ) * sizeof(Long) );
     matrix_info->Li = malloc ( nzmax * sizeof(Long) );
