@@ -1825,7 +1825,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Long *Nstchild;
 
     Long st, nsubtree, nstleaf;
-    Long *ST_Pointer, *ST_Index, *ST_Parent, *ST_LeafQueue;
+    Long *ST_Map, *ST_Pointer, *ST_Index, *ST_Parent, *ST_LeafQueue;
     Long ST_leafQueueHead, ST_leafQueueTail;
     enum NodeState *ST_State;
 
@@ -1865,6 +1865,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     nsubtree = matrix_info->nsubtree;
     nstleaf = matrix_info->nstleaf;
+    ST_Map = matrix_info->ST_Map;
     ST_Pointer = matrix_info->ST_Pointer;
     ST_Index = matrix_info->ST_Index;
     ST_Parent = matrix_info->ST_Parent;
@@ -1969,7 +1970,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     int gpuIndex;
                     struct gpu_info_struct *gpu_info;
 
-                    size_t Asize, Csize;
+                    size_t Asize;
 
                     gpuIndex = 0;
                     while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
@@ -2069,7 +2070,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
                     }
 
-                    /*
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
                         Long dt_queue[4];
@@ -2084,13 +2084,38 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         slot_index_queue[1] = -1;
                         slot_index_queue[2] = -1;
                         slot_index_queue[3] = -1;
+                        c_index = 0;
 
                         while ( dt_queue[0] >= 0 || dt_queue[1] >= 0 || dt_queue[2] >= 0 || dt_queue[3] >= 0 )
                         {
                             {
-                                Long dt;
+                                Long dt, dpt;
 
                                 dt = dt_queue[0];
+
+                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
+                                {
+                                    Long d;
+                                    Long ndrow;
+                                    Long lpos, lpos_next;
+
+                                    d = ST_Index[dpt];
+
+                                    ndrow = Lsip[d+1] - Lsip[d];
+
+                                    if ( d >= 0 )
+                                    {
+                                        lpos = Lpos[d];
+                                        for ( lpos_next = lpos; lpos_next < ndrow && ST_Map [ SuperMap [ ( Lsi + Lsip[d] ) [ lpos_next ] ] ] <= st; lpos_next++ );
+                                    }
+                                    else
+                                    {
+                                        lpos = -1;
+                                        lpos_next = -1;
+                                    }
+
+                                    Lpos_next[d] = lpos_next;
+                                }
                             }
 
                             if ( dt_queue[3] >= 0 )
@@ -2106,6 +2131,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 void *d_B, *d_C;
 
+                                dt = dt_queue[2];
+
                                 slot_index = slot_index_queue[2];
 
                                 d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize;
@@ -2115,7 +2142,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
                                 {
-                                    Long d, dj, di;
+                                    Long d;
                                     Long ndcol, ndrow;
                                     Long lpos, lpos_next;
 
@@ -2159,14 +2186,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             if ( dt_queue[1] >= 0 )
                             {
-                                Long dt, dpt;
                                 size_t dAsize;
 
                                 int slot_index;
 
                                 void *h_B, *d_B;
-
-                                dt = dt_queue[0];
 
                                 slot_index = slot_index_queue[0];
 
@@ -2265,7 +2289,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             c_index = 1 - c_index;
                         }
                     }
-                */
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
