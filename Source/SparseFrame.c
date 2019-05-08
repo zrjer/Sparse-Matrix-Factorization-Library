@@ -1839,7 +1839,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     numGPU = common_info->numGPU;
     useGPU = ( numGPU > 0 ) ? TRUE : FALSE;
     useSubtree = useGPU;
-    useSubtree = FALSE;
 
     devSlotSize = common_info->devSlotSize;
 
@@ -2463,6 +2462,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         nscol = Super[s+1] - Super[s];
                         nsrow = Lsip[s+1] - Lsip[s];
 
+                        sn = nscol;
+                        sm = nsrow - nscol;
+                        slda = sn + sm;
+
                         h_A = gpu_info->hostMem + Aoffset[s];
                         d_A = gpu_info->devMem + Aoffset[s];
 
@@ -2741,10 +2744,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             c_index = 1 - c_index;
                         }
-
-                        sn = nscol;
-                        sm = nsrow - nscol;
-                        slda = sn + sm;
 
                         //cudaStreamWaitEvent ( gpu_info->s_cudaStream, gpu_info->d_cudaEvent_updated, 0 );
 
