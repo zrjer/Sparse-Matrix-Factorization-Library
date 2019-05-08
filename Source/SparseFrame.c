@@ -2088,8 +2088,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         dAsize_queue[3] = 0;
                         c_index = 0;
 
+                        printf ("checkpoint 0\n");
                         while ( dt_queue[0] >= 0 || dt_queue[1] >= 0 || dt_queue[2] >= 0 || dt_queue[3] >= 0 )
                         {
+                        printf ("checkpoint 0.0\n");
                             {
                                 Long dt, dpt;
 
@@ -2119,6 +2121,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     Lpos_next[d] = lpos_next;
                                 }
                             }
+                        printf ("checkpoint 0.1\n");
 
                             if ( dt_queue[3] >= 0 )
                             {
@@ -2132,7 +2135,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 slot_index = slot_index_queue[3];
                                 dAsize = dAsize_queue[3];
 
+                        printf ("checkpoint 0.1.0\n");
                                 cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
+                        printf ("checkpoint 0.1.1\n");
 
                                 for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
                                 {
@@ -2148,6 +2153,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     lpos = Lpos[d];
                                     lpos_next = Lpos_next[d];
 
+                        printf ("checkpoint 0.1.1.0\n");
                                     if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
                                     {
                                         lpos_0 = lpos;
@@ -2188,12 +2194,17 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                                 mappedSubtract ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
                                             else
                                                 mappedSubtractComplex ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+
+                                            lpos_0 = lpos_1;
                                         }
                                     }
+                        printf ("checkpoint 0.1.1.1\n");
 
                                     //cudaEventRecord ( gpu_info->d_cudaEvent_updated, gpu_info->d_cudaStream[slot_index] );
                                 }
+                        printf ("checkpoint 0.1.2\n");
                             }
+                        printf ("checkpoint 0.2\n");
 
                             if ( dt_queue[2] >= 0 )
                             {
@@ -2213,6 +2224,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 dCsize = 0;
 
+                        printf ("checkpoint 0.2.0\n");
                                 for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
                                 {
                                     Long d;
@@ -2237,10 +2249,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         dlda = dn + dm;
                                         dldc = dn + dm;
 
+                        printf ("checkpoint 0.2.0.0\n");
                                         if (!isComplex)
                                             cublasDsyrk ( gpu_info->d_cublasHandle[slot_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B + Aoffset[d], dlda, zero, d_C + dCsize, dldc);
                                         else
                                             cublasZherk ( gpu_info->d_cublasHandle[slot_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B + Aoffset[d], dlda, zero, d_C + dCsize, dldc);
+                        printf ("checkpoint 0.2.0.1\n");
 
                                         if ( dm > 0 )
                                         {
@@ -2251,6 +2265,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                                 cublasZgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_C,
                                                         dm, dn, dk, (Complex*) one, d_B + Aoffset[d] + dn * sizeof(Complex), dlda, d_B + Aoffset[d], dlda, (Complex*) zero, d_C + dCsize + dn * sizeof(Complex), dldc );
                                         }
+                        printf ("checkpoint 0.2.0.2\n");
 
                                         Coffset[d] = dCsize;
 
@@ -2260,7 +2275,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             dCsize += dn * ( dn + dm ) * sizeof(Complex);
                                     }
                                 }
+                        printf ("checkpoint 0.2.1\n");
                             }
+                        printf ("checkpoint 0.3\n");
 
                             if ( dt_queue[1] >= 0 )
                             {
@@ -2280,6 +2297,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     cudaMemcpyAsync ( d_B, h_B, dAsize, cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
                                 cudaStreamSynchronize(gpu_info->d_cudaStream[slot_index]); // will be removed
                             }
+                        printf ("checkpoint 0.4\n");
 
                             if ( dt_queue[0] >= 0 )
                             {
@@ -2337,6 +2355,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 dAsize_queue[0] = dAsize;
                             }
+                        printf ("checkpoint 0.5\n");
 
                             {
                                 Long dt, dt_next;
@@ -2432,9 +2451,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 dAsize_queue[1] = dAsize_queue[0];
                                 dAsize_queue[0] = 0;
                             }
+                        printf ("checkpoint 0.6\n");
 
                             c_index = 1 - c_index;
                         }
+                        printf ("checkpoint 1\n");
                     }
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
@@ -2718,10 +2739,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         Long dancestor;
 
                                         dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
-#pragma omp critical (HeadNext)
+                                        if ( ST_Map[dancestor] == st )
                                         {
-                                            Next[d] = Head[dancestor];
-                                            Head[dancestor] = d;
+#pragma omp critical (HeadNext)
+                                            {
+                                                Next[d] = Head[dancestor];
+                                                Head[dancestor] = d;
+                                            }
                                         }
                                     }
                                 }
@@ -2793,10 +2817,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         if ( nscol < nsrow )
                         {
                             sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-#pragma omp critical (HeadNext)
+                            if ( ST_Map[sparent] == st )
                             {
-                                Next[s] = Head[sparent];
-                                Head[sparent] = s;
+#pragma omp critical (HeadNext)
+                                {
+                                    Next[s] = Head[sparent];
+                                    Head[sparent] = s;
+                                }
                             }
                             ST_State[st] = NODE_STATE_FACTORIZED;
                         }
