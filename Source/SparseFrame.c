@@ -2070,13 +2070,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
                     }
 
-                    for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
                         Long dt_queue[4];
                         int slot_index_queue[4], c_index;
                         size_t dAsize_queue[4];
 
-                        dt_queue[0] = ST_Head[s];
+                        dt_queue[0] = ST_Head[st];
                         dt_queue[1] = -1;
                         dt_queue[2] = -1;
                         dt_queue[3] = -1;
@@ -2339,12 +2338,46 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 if ( dt >= 0 )
                                 {
                                     Long dpt;
+                                    Long dtancestor;
+
+                                    dtancestor = -1;
 
                                     for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
                                     {
                                         Long d;
 
                                         d = ST_Index[dpt];
+                                        if ( d >= 0 )
+                                        {
+                                            Long ndrow, lpos_next;
+
+                                            ndrow = Lsip[d+1] - Lsip[d];
+                                            lpos_next = Lpos_next[d];
+                                            if ( lpos_next < ndrow )
+                                            {
+                                                Long dancestor;
+
+                                                dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
+#pragma omp critical (HeadNext)
+                                                {
+                                                    Next[d] = Head[dancestor];
+                                                    Head[dancestor] = d;
+                                                }
+                                                if ( dancestor >= 0 )
+                                                {
+                                                    dtancestor = ( dtancestor < 0 ) ? ST_Map[dancestor] : MIN ( dtancestor, ST_Map[dancestor] );
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if ( dtancestor >= 0 )
+                                    {
+#pragma omp critical (ST_HeadNext)
+                                        {
+                                            ST_Next[dt] = ST_Head[dtancestor];
+                                            ST_Head[dtancestor] = dt;
+                                        }
                                     }
                                 }
 
@@ -2629,20 +2662,21 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 cudaStreamSynchronize ( gpu_info->d_cudaStream [ slot_index_queue[3] ] ); // Don't know why but this synchronization seems necessary here
 
                             {
-                                Long d, d_next, dancestor;
-                                Long ndrow;
-                                Long lpos_next;
+                                Long d, d_next;
 
                                 d = d_queue[0];
                                 d_next = ( d < 0 ) ? -1 : Next[d];
 
-                                lpos_next = Lpos_next[d];
-
                                 if ( d >= 0 )
                                 {
+                                    Long ndrow, lpos_next;
+
                                     ndrow = Lsip[d+1] - Lsip[d];
+                                    lpos_next = Lpos_next[d];
                                     if ( lpos_next < ndrow )
                                     {
+                                        Long dancestor;
+
                                         dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
 #pragma omp critical (HeadNext)
                                         {
@@ -3094,20 +3128,21 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             cudaStreamSynchronize ( gpu_info->d_cudaStream [ slot_index_queue[3] ] ); // Don't know why but this synchronization seems necessary here
 
                         {
-                            Long d, d_next, dancestor;
-                            Long ndrow;
-                            Long lpos_next;
+                            Long d, d_next;
 
                             d = d_queue[0];
                             d_next = ( d < 0 ) ? -1 : Next[d];
 
-                            lpos_next = Lpos_next[d];
-
                             if ( d >= 0 )
                             {
+                                Long ndrow, lpos_next;
+
                                 ndrow = Lsip[d+1] - Lsip[d];
+                                lpos_next = Lpos_next[d];
                                 if ( lpos_next < ndrow )
                                 {
+                                    Long dancestor;
+
                                     dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
 #pragma omp critical (HeadNext)
                                     {
@@ -3291,7 +3326,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                 while ( Head[s] >= 0 )
                 {
-                    Long d, di, dancestor;
+                    Long d, di;
                     Long ndcol, ndrow;
                     Long lpos_next;
 
@@ -3348,6 +3383,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     Head[s] = Next[d];
                     if ( lpos_next < ndrow )
                     {
+                        Long dancestor;
+
                         dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
 #pragma omp critical (HeadNext)
                         {
