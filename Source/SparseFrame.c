@@ -2604,7 +2604,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 {
                                     if (!isComplex)
                                         cublasDgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, d_B + dn * sizeof(Float), dlda, d_B, dlda, zero, d_C + dn * sizeof(Float), dldc );
-                                    else                                                                                
+                                    else
                                         cublasZgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, d_B + dn * sizeof(Complex), dlda, d_B, dlda, (Complex*) zero, d_C + dn * sizeof(Complex), dldc );
                                 }
                             }
@@ -2772,7 +2772,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         {
                             if (!isComplex)
                                 cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT, sm, sn, one, d_A, slda, d_A + sn * sizeof(Float), slda );
-                            else                                                                                                                            
+                            else
                                 cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, CUBLAS_DIAG_NON_UNIT, sm, sn, (Complex*) one, d_A, slda, d_A + sn * sizeof(Complex), slda );
                         }
 
@@ -3075,7 +3075,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             {
                                 if (!isComplex)
                                     cublasDgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, d_B + dn * sizeof(Float), dlda, d_B, dlda, zero, d_C + dn * sizeof(Float), dldc );
-                                else                                                                                    
+                                else
                                     cublasZgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, d_B + dn * sizeof(Complex), dlda, d_B, dlda, (Complex*) zero, d_C + dn * sizeof(Complex), dldc );
                             }
                         }
@@ -3239,7 +3239,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     {
                         if (!isComplex)
                             cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT, sm, sn, one, d_A, slda, d_A + sn * sizeof(Float), slda );
-                        else                                                                                                                            
+                        else
                             cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, CUBLAS_DIAG_NON_UNIT, sm, sn, (Complex*) one, d_A, slda, d_A + sn * sizeof(Complex), slda );
                     }
 
