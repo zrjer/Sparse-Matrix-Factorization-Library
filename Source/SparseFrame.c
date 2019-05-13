@@ -2281,7 +2281,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 if ( dAsize > 0 )
                                     cudaMemcpyAsync ( d_B, h_B, dAsize, cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                cudaStreamSynchronize(gpu_info->d_cudaStream[slot_index]); // will be removed
                             }
 
                             if ( dt_queue[0] >= 0 )
@@ -2340,6 +2339,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 dAsize_queue[0] = dAsize;
                             }
+
+                            if ( dt_queue[3] >= 0 )
+                                cudaStreamSynchronize ( gpu_info->d_cudaStream [ slot_index_queue[3] ] ); // Don't know why but this synchronization seems necessary here
 
                             {
                                 Long dt, dt_next;
