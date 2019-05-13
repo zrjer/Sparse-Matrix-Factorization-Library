@@ -2096,7 +2096,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 dt = dt_queue[0];
 
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
+                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                                 {
                                     Long d;
                                     Long ndrow;
@@ -2135,7 +2135,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
+                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                                 {
                                     Long d;
                                     Long ndrow;
@@ -2185,6 +2185,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                             d_RelativeMap = d_B + dAsize;
 
+                                        printf ("apply %ld -> %ld\n", d, dancestor);
                                             if ( !isComplex )
                                                 mappedSubtract ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
                                             else
@@ -2216,7 +2217,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 dCsize = 0;
 
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
+                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                                 {
                                     Long d;
                                     Long ndcol, ndrow;
@@ -2301,7 +2302,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 dAsize = 0;
 
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
+                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                                 {
                                     Long d, dj, di;
                                     Long ndcol, ndrow, lpos;
@@ -2354,7 +2355,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                     dtancestor = -1;
 
-                                    for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dpt+1] && ST_Index[dpt] >= 0; dpt++ )
+                                    for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                                     {
                                         Long d;
 
@@ -2554,6 +2555,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
+                                        printf ("apply %ld -> %ld\n", d, s);
                                 if ( !isComplex )
                                     mappedSubtract ( d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
                                 else
@@ -2755,6 +2757,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         //cudaStreamWaitEvent ( gpu_info->s_cudaStream, gpu_info->d_cudaEvent_updated, 0 );
 
+                        printf ("factorize %ld\n", s);
                         if (!isComplex)
                         {
                             cusolverDnDpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
@@ -3064,6 +3067,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize;
                             d_C = gpu_info->devMem + 5 * devSlotSize + c_index * devSlotSize;
 
+                                        printf ("apply %ld -> %ld\n", d, s);
                             if (!isComplex)
                                 cublasDsyrk ( gpu_info->d_cublasHandle[slot_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
                             else
@@ -3222,6 +3226,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     //cudaStreamWaitEvent ( gpu_info->s_cudaStream, gpu_info->d_cudaEvent_updated, 0 );
 
+                        printf ("factorize %ld\n", s);
                     if (!isComplex)
                     {
                         cusolverDnDpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
@@ -3396,6 +3401,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     dlda = ndrow;
                     dldc = ndrow - Lpos[d];
 
+                                        printf ("apply %ld -> %ld\n", d, s);
                     if (!isComplex)
                         dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
                     else
@@ -3447,6 +3453,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 sm = nsrow - nscol;
                 slda = nsrow;
 
+                        printf ("factorize %ld\n", s);
                 if (!isComplex)
                     dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
                 else
