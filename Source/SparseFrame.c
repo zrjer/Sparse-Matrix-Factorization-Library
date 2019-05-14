@@ -2050,8 +2050,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         h_A = gpu_info->hostMem + Aoffset[s];
                         d_A = gpu_info->devMem + Aoffset[s];
 
-                        h_Map = h_A + Moffset[s];
-                        d_Map = d_A + Moffset[s];
+                        h_Map = gpu_info->hostMem + Moffset[s];
+                        d_Map = gpu_info->devMem + Moffset[s];
 
                         memcpy ( h_Lsi + Lsip[s], Lsi + Lsip[s], ( Lsip[s+1] - Lsip[s] ) * sizeof(Long) );
                         cudaMemcpyAsync ( d_Lsi + Lsip[s], h_Lsi + Lsip[s], ( Lsip[s+1] - Lsip[s] ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
@@ -2206,15 +2206,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                                 d_C = gpu_info->devMem + 5 * devSlotSize + ( 1 - c_index ) * devSlotSize + Coffset[d] + ( ( lpos_0 - lpos ) * ( ndrow - lpos ) + ( lpos_0 - lpos ) ) * sizeof(Complex);
                                             }
 
-                                            d_Map = d_A + Moffset[dancestor];
-                                            d_RelativeMap = d_B + Moffset[d];
+                                            d_Map = gpu_info->devMem + Moffset[dancestor];
+                                            d_RelativeMap = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Moffset[d];
 
                                             createRelativeMap ( d_RelativeMap, d_Map, d_Lsi, Lsip[d] + lpos_0, ndrow - lpos_0, gpu_info->d_cudaStream[slot_index] );
 
                                             if ( !isComplex )
-                                                mappedSubtractAtomic ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                                                mappedSubtract ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
                                             else
-                                                mappedSubtractComplexAtomic ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                                                mappedSubtractComplex ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
 
                                             lpos_0 = lpos_1;
                                         }
@@ -2486,7 +2486,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             c_index = 1 - c_index;
                         }
                     }
-                    cudaDeviceSynchronize();
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
@@ -2521,7 +2520,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         h_A = gpu_info->hostMem + Aoffset[s];
                         d_A = gpu_info->devMem + Aoffset[s];
 
-                        h_Map = h_A + Moffset[s];
+                        h_Map = gpu_info->hostMem + Moffset[s];
 
                         for ( si = 0; si < nsrow; si++ )
                         {
@@ -2898,112 +2897,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 Map = NULL;
             }
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         else
         {
 #pragma omp parallel for schedule(static) num_threads(numGPU)
