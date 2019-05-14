@@ -14,7 +14,6 @@ struct common_info_struct
     int numSparseMatrix;
 
     size_t minDevMemSize;
-    size_t devSlotSize;
 
     double allocateTime;
     double computeTime;
@@ -64,6 +63,8 @@ struct matrix_info_struct
     Long ncol;
     Long nrow;
     Long nzmax;
+
+    size_t devSlotSize;
 
     Long *Tj;
     Long *Ti;

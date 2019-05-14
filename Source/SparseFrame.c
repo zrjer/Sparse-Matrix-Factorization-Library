@@ -18,7 +18,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     int numGPU, numGPU_physical, numSplit;
     int gpuIndex_physical;
 
-    size_t minDevMemSize, devSlotSize;
+    size_t minDevMemSize;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_allocate_gpu================\n\n");
@@ -165,11 +165,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
         }
     }
 
-    devSlotSize = minDevMemSize / 7;
-    devSlotSize = devSlotSize - devSlotSize % 0x400;
-
     common_info->minDevMemSize = minDevMemSize;
-    common_info->devSlotSize = devSlotSize;
 
 #ifdef PRINT_INFO
     printf ( "Minimum device memory size = %lf GiB\n", ( double ) minDevMemSize / ( 0x400 * 0x400 * 0x400 ) );
@@ -1158,7 +1154,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     int isComplex;
 
-    Long j, i, k, p, nrow;
+    Long j, i, k, p, nrow, nzmax;
 
     Long *Up, *Ui;
 
@@ -1202,11 +1198,14 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
 #endif
 
-    devSlotSize = common_info->devSlotSize;
-
     isComplex = matrix_info->isComplex;
 
     nrow = matrix_info->nrow;
+    nzmax = matrix_info->nzmax;
+
+    devSlotSize = ( common_info->minDevMemSize - nzmax * sizeof(Long) ) / 7;
+    devSlotSize = devSlotSize - devSlotSize % 0x400;
+    matrix_info->devSlotSize = devSlotSize;
 
     Up = matrix_info->Up;
     Ui = matrix_info->Ui;
@@ -1283,7 +1282,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                  !isComplex &&
                  (
                   ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Float)
-                  + ColCount [ Super[nfsuper-1] ] * sizeof(Long)
+                  //+ ColCount [ Super[nfsuper-1] ] * sizeof(Long)
+                  + nrow * sizeof(Long)
                   > devSlotSize
                  )
                 )
@@ -1292,7 +1292,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                  isComplex &&
                  (
                   ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Complex)
-                  + ColCount [ Super[nfsuper-1] ] * sizeof(Long)
+                  //+ ColCount [ Super[nfsuper-1] ] * sizeof(Long)
+                  + nrow * sizeof(Long)
                   > devSlotSize
                  )
                 )
@@ -1365,7 +1366,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                          !isComplex &&
                          (
                           ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Float)
-                          + ( s_ncol + p_colcount ) * sizeof(Long)
+                          //+ ( s_ncol + p_colcount ) * sizeof(Long)
+                          + nrow * sizeof(Long)
                           <= devSlotSize
                          )
                         )
@@ -1374,7 +1376,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                          isComplex &&
                          (
                           ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Complex)
-                          + ( s_ncol + p_colcount ) * sizeof(Long)
+                          //+ ( s_ncol + p_colcount ) * sizeof(Long)
+                          + nrow * sizeof(Long)
                           <= devSlotSize
                          )
                         )
@@ -1587,13 +1590,15 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
             if (
                     (
                      !isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     //&& ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + nrow ) * sizeof(Long) <= devSlotSize
                      && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) <= devSlotSize
                     )
                     ||
                     (
                      isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     //&& ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + nrow ) * sizeof(Long) <= devSlotSize
                      && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) <= devSlotSize
                     )
                )
@@ -1601,7 +1606,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                 ST_Map[s] = st;
                 ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
                 ST_Csize[st] += ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
-                ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
+                //ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
+                ST_Msize[st] += nrow;
                 continue;
             }
             else
@@ -1615,13 +1621,15 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
             if (
                     (
                      !isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     //&& ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + nrow ) * sizeof(Long) <= devSlotSize
                      && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) <= devSlotSize
                     )
                     ||
                     (
                      isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     //&& ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + nrow ) * sizeof(Long) <= devSlotSize
                      && ( ST_Csize[st] + ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) <= devSlotSize
                     )
                )
@@ -1629,7 +1637,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                 ST_Map[s] = st;
                 ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
                 ST_Csize[st] += ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
-                ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
+                //ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
+                ST_Msize[st] += nrow;
                 break;
             }
             else
@@ -1641,7 +1650,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
             ST_Map[s] = nsubtree;
             ST_Asize[nsubtree] = ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
             ST_Csize[nsubtree] = ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
-            ST_Msize[nsubtree] = ( Lsip[s+1] - Lsip[s] );
+            //ST_Msize[nsubtree] = ( Lsip[s+1] - Lsip[s] );
+            ST_Msize[nsubtree] = nrow;
             if ( Sparent[s] >= 0 )
             {
                 ST_Next[nsubtree] = ST_Head [ ST_Map [ Sparent[s] ] ];
@@ -1840,7 +1850,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     useGPU = ( numGPU > 0 ) ? TRUE : FALSE;
     useSubtree = useGPU;
 
-    devSlotSize = common_info->devSlotSize;
+    devSlotSize = matrix_info->devSlotSize;
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
@@ -1970,6 +1980,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     Long st, stparent, pt;
                     int gpuIndex;
                     struct gpu_info_struct *gpu_info;
+                    Long *h_Lsi, *d_Lsi;
 
                     size_t Asize;
 
@@ -1980,6 +1991,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     gpu_info = gpu_info_list + gpuIndex;
 
                     cudaSetDevice ( gpu_info->gpuIndex_physical );
+
+                    h_Lsi = gpu_info->hostMem + 7 * devSlotSize;
+                    d_Lsi = gpu_info->devMem + 7 * devSlotSize;
 
                     st = ST_LeafQueue[ST_leafQueueIndex];
 
@@ -2014,7 +2028,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         nsrow = Lsip[s+1] - Lsip[s];
 
                         Moffset[s] = Asize;
-                        Asize += nsrow * sizeof(Long);
+                        Asize += nrow * sizeof(Long);
                     }
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
@@ -2026,6 +2040,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Long sj, si;
 
                         void *h_A, *d_A;
+                        Long *h_Map, *d_Map;
 
                         s = ST_Index[pt];
 
@@ -2035,10 +2050,18 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         h_A = gpu_info->hostMem + Aoffset[s];
                         d_A = gpu_info->devMem + Aoffset[s];
 
+                        h_Map = h_A + Moffset[s];
+                        d_Map = d_A + Moffset[s];
+
+                        memcpy ( h_Lsi + Lsip[s], Lsi + Lsip[s], ( Lsip[s+1] - Lsip[s] ) * sizeof(Long) );
+                        cudaMemcpyAsync ( d_Lsi + Lsip[s], h_Lsi + Lsip[s], ( Lsip[s+1] - Lsip[s] ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+
                         for ( si = 0; si < nsrow; si++ )
                         {
-                            Map [ Lsi [ Lsip[s] + si ] ] = si;
+                            h_Map [ Lsi [ Lsip[s] + si ] ] = si;
                         }
+
+                        cudaMemcpyAsync ( d_Map, h_Map, nrow * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
 
                         if ( !isComplex )
                             memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
@@ -2051,7 +2074,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             for ( p = Lp[j]; p < Lp[j+1]; p++ )
                             {
                                 i = Li[p];
-                                si = Map[i];
+                                si = h_Map[i];
                                 if ( !isComplex )
                                     ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
                                 else
@@ -2066,9 +2089,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                         else
                             cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-
-                        cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
                     }
+
+                    cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
 
                     {
                         Long dt_queue[4];
@@ -2160,7 +2183,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             Long dn, dm, lda, ldc;
 
                                             void *d_A, *d_B, *d_C;
-                                            Long *d_RelativeMap;
+                                            Long *h_Map, *d_Map, *d_RelativeMap;
 
                                             dancestor = SuperMap [ ( Lsi + Lsip[d] ) [ lpos_0 ] ];
 
@@ -2175,20 +2198,23 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             if ( !isComplex )
                                             {
                                                 d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + ( lpos_0 - lpos ) * sizeof(Float);
-                                                d_C = gpu_info->devMem + 5 * devSlotSize + c_index * devSlotSize + Coffset[d] + ( ( lpos_0 - lpos ) * ( lpos_next - lpos ) + ( lpos_0 - lpos ) ) * sizeof(Float);
+                                                d_C = gpu_info->devMem + 5 * devSlotSize + ( 1 - c_index ) * devSlotSize + Coffset[d] + ( ( lpos_0 - lpos ) * ( ndrow - lpos ) + ( lpos_0 - lpos ) ) * sizeof(Float);
                                             }
                                             else
                                             {
                                                 d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + ( lpos_0 - lpos ) * sizeof(Complex);
-                                                d_C = gpu_info->devMem + 5 * devSlotSize + c_index * devSlotSize + Coffset[d] + ( ( lpos_0 - lpos ) * ( lpos_next - lpos ) + ( lpos_0 - lpos ) ) * sizeof(Complex);
+                                                d_C = gpu_info->devMem + 5 * devSlotSize + ( 1 - c_index ) * devSlotSize + Coffset[d] + ( ( lpos_0 - lpos ) * ( ndrow - lpos ) + ( lpos_0 - lpos ) ) * sizeof(Complex);
                                             }
 
-                                            d_RelativeMap = d_B + dAsize;
+                                            d_Map = d_A + Moffset[dancestor];
+                                            d_RelativeMap = d_B + Moffset[d];
+
+                                            createRelativeMap ( d_RelativeMap, d_Map, d_Lsi, Lsip[d] + lpos_0, ndrow - lpos_0, gpu_info->d_cudaStream[slot_index] );
 
                                             if ( !isComplex )
-                                                mappedSubtract ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                                                mappedSubtractAtomic ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
                                             else
-                                                mappedSubtractComplex ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                                                mappedSubtractComplexAtomic ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
 
                                             lpos_0 = lpos_1;
                                         }
@@ -2267,11 +2293,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             if ( dt_queue[1] >= 0 )
                             {
+                                Long dt, dpt;
                                 size_t dAsize;
 
                                 int slot_index;
 
                                 void *h_B, *d_B;
+
+                                dt = dt_queue[1];
 
                                 slot_index = slot_index_queue[1];
                                 dAsize = dAsize_queue[1];
@@ -2281,6 +2310,22 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 if ( dAsize > 0 )
                                     cudaMemcpyAsync ( d_B, h_B, dAsize, cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+
+                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
+                                {
+                                    Long d;
+                                    Long lpos;
+
+                                    d = ST_Index[dpt];
+
+                                    lpos = Lpos[d];
+
+                                    if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
+                                    {
+                                        memcpy ( h_Lsi + Lsip[d], Lsi + Lsip[d], ( Lsip[d+1] - Lsip[d] ) * sizeof(Long) );
+                                        cudaMemcpyAsync ( d_Lsi + Lsip[d], h_Lsi + Lsip[d], ( Lsip[d+1] - Lsip[d] ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                    }
+                                }
                             }
 
                             if ( dt_queue[0] >= 0 )
@@ -2441,6 +2486,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             c_index = 1 - c_index;
                         }
                     }
+                    cudaDeviceSynchronize();
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
@@ -2454,6 +2500,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         int slot_index_queue[4], c_index;
 
                         void *h_A, *d_A;
+                        Long *h_Map;
 
                         int devWorkSize;
                         Float *d_workspace;
@@ -2473,6 +2520,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         h_A = gpu_info->hostMem + Aoffset[s];
                         d_A = gpu_info->devMem + Aoffset[s];
+
+                        h_Map = h_A + Moffset[s];
 
                         for ( si = 0; si < nsrow; si++ )
                         {
@@ -2849,6 +2898,112 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 Map = NULL;
             }
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         else
         {
 #pragma omp parallel for schedule(static) num_threads(numGPU)
@@ -3413,7 +3568,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     for ( di = 0; di < ndrow - Lpos[d]; di++ )
                     {
-                        RelativeMap [ di ] = Map [ Lsi[ Lsip[d] + Lpos[d] + di ] ];
+                        RelativeMap [ di ] = Map [ Lsi [ Lsip[d] + Lpos[d] + di ] ];
                     }
 
                     for ( cj = 0; cj < dn; cj++ )
