@@ -561,7 +561,7 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
                     ( 8 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(Long),
                     ( 3 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(idx_t)
                     ),
-                10 * matrix_info->nrow * sizeof(Long) + 3 * matrix_info->nrow * sizeof(size_t)
+                11 * matrix_info->nrow * sizeof(Long) + 3 * matrix_info->nrow * sizeof(size_t)
               );
     matrix_info->workspace = malloc ( matrix_info->workSize );
 
@@ -1812,7 +1812,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Float *Lx;
 
     Long nsuper, s;
-    Long *Super, *SuperMap, *Sparent;
+    Long *Super, *SuperMap;
 
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
@@ -1831,7 +1831,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     size_t *Aoffset, *Coffset, *Moffset;
 
-    Long *ST_Head, *ST_Next;
+    Long *ST_Head, *ST_Next, *ST_Pointer_Tail;
     Long *Nstchild;
 
     Long st, nsubtree, nstleaf;
@@ -1862,7 +1862,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     nsuper = matrix_info->nsuper;
     Super = matrix_info->Super;
     SuperMap = matrix_info->SuperMap;
-    Sparent = matrix_info->Sparent;
 
     Lsip = matrix_info->Lsip;
     Lsxp = matrix_info->Lsxp;
@@ -1890,11 +1889,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Next = workspace + 3 * nsuper;
     ST_Head = workspace + 4 * nsuper;
     ST_Next = workspace + 5 * nsuper;
-    Nschild = workspace + 6 * nsuper;
-    Nstchild = workspace + 7 * nsuper;
-    nodeState = (enum NodeState*) ( workspace + 8 * nsuper );
-    ST_State = (enum NodeState*) ( workspace + 9 * nsuper );
-    Aoffset = (size_t*) ( workspace + 10 * nsuper );
+    ST_Pointer_Tail = workspace + 6 * nsuper;
+    Nschild = workspace + 7 * nsuper;
+    Nstchild = workspace + 8 * nsuper;
+    nodeState = (enum NodeState*) ( workspace + 9 * nsuper );
+    ST_State = (enum NodeState*) ( workspace + 10 * nsuper );
+    Aoffset = (size_t*) ( workspace + 11 * nsuper );
     Coffset = Aoffset + 1 * nsuper;
     Moffset = Aoffset + 2 * nsuper;
 
@@ -1930,6 +1930,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     {
         ST_Head[st] = -1;
         ST_Next[st] = -1;
+        ST_Pointer_Tail[st] = ST_Pointer[st+1];
         ST_State[st] = NODE_STATE_INITIAL;
     }
 
@@ -1958,9 +1959,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
             {
                 Long ST_leafQueueIndex;
-                Long *Map;
 
-                Map = NULL;
 
 #pragma omp critical (ST_leafQueueHead)
                 {
@@ -1968,11 +1967,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         ST_leafQueueIndex = nsubtree;
                     else
                         ST_leafQueueIndex = ST_leafQueueHead++;
-                }
-
-                if ( ST_leafQueueIndex < nsubtree )
-                {
-                    Map = malloc ( nrow * sizeof(Long) );
                 }
 
                 while ( ST_leafQueueIndex < nsubtree )
@@ -2021,11 +2015,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
                         Long s;
-                        Long nsrow;
 
                         s = ST_Index[pt];
-
-                        nsrow = Lsip[s+1] - Lsip[s];
 
                         Moffset[s] = Asize;
                         Asize += nrow * sizeof(Long);
@@ -2147,18 +2138,17 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             if ( dt_queue[3] >= 0 )
                             {
                                 Long dt, dpt;
-                                size_t dAsize;
 
                                 int slot_index;
 
                                 dt = dt_queue[3];
 
                                 slot_index = slot_index_queue[3];
-                                dAsize = dAsize_queue[3];
 
                                 cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
+#pragma omp parallel for schedule(static) num_threads(numThread)
+                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer_Tail[dt]; dpt++ )
                                 {
                                     Long d;
                                     Long ndrow;
@@ -2182,8 +2172,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                             Long dn, dm, lda, ldc;
 
-                                            void *d_A, *d_B, *d_C;
-                                            Long *h_Map, *d_Map, *d_RelativeMap;
+                                            void *d_A, *d_C;
+                                            Long *d_Map, *d_RelativeMap;
 
                                             dancestor = SuperMap [ ( Lsi + Lsip[d] ) [ lpos_0 ] ];
 
@@ -2197,12 +2187,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             d_A = gpu_info->devMem + Aoffset[dancestor];
                                             if ( !isComplex )
                                             {
-                                                d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + ( lpos_0 - lpos ) * sizeof(Float);
                                                 d_C = gpu_info->devMem + 5 * devSlotSize + ( 1 - c_index ) * devSlotSize + Coffset[d] + ( ( lpos_0 - lpos ) * ( ndrow - lpos ) + ( lpos_0 - lpos ) ) * sizeof(Float);
                                             }
                                             else
                                             {
-                                                d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + ( lpos_0 - lpos ) * sizeof(Complex);
                                                 d_C = gpu_info->devMem + 5 * devSlotSize + ( 1 - c_index ) * devSlotSize + Coffset[d] + ( ( lpos_0 - lpos ) * ( ndrow - lpos ) + ( lpos_0 - lpos ) ) * sizeof(Complex);
                                             }
 
@@ -2463,6 +2451,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         }
                                     }
 
+                                    ST_Pointer_Tail[dt] = dpt_;
+
                                     while ( dpt_ < ST_Pointer[dt+1] )
                                         ST_Index[dpt_++] = -1;
                                 }
@@ -2521,11 +2511,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         d_A = gpu_info->devMem + Aoffset[s];
 
                         h_Map = gpu_info->hostMem + Moffset[s];
-
-                        for ( si = 0; si < nsrow; si++ )
-                        {
-                            Map [ Lsi [ Lsip[s] + si ] ] = si;
-                        }
 
                         d_queue[0] = Head[s];
                         d_queue[1] = -1;
@@ -2747,7 +2732,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 for ( di = 0; di < ndrow - lpos; di++ )
                                 {
-                                    h_RelativeMap[di] = Map [ Lsi [ Lsip[d] + lpos + di ] ];
+                                    h_RelativeMap[di] = h_Map [ Lsi [ Lsip[d] + lpos + di ] ];
                                 }
                             }
 
@@ -2867,6 +2852,32 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     if ( ST_State[st] == NODE_STATE_FACTORIZED )
                     {
+                        Long spt, spt_;
+
+                        spt_ = ST_Pointer[st];
+
+                        for ( spt = ST_Pointer[st]; spt < ST_Pointer[st+1] && ST_Index[spt] >= 0; spt++ )
+                        {
+                            Long s;
+
+                            s = ST_Index[spt];
+                            if ( s >= 0 )
+                            {
+                                if ( Lpos[s] < Lsip[s+1] - Lsip[s] )
+                                {
+                                    ST_Index[spt_++] = s;
+                                }
+                            }
+                        }
+
+                        ST_Pointer_Tail[st] = spt_;
+
+                        while ( spt_ < ST_Pointer[st+1] )
+                            ST_Index[spt_++] = -1;
+                    }
+
+                    if ( ST_State[st] == NODE_STATE_FACTORIZED )
+                    {
                         stparent = ST_Parent[st];
 #pragma omp critical (ST_HeadNext)
                         {
@@ -2891,10 +2902,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
                 }
-
-                if ( Map != NULL ) free ( Map );
-
-                Map = NULL;
             }
         }
         else
