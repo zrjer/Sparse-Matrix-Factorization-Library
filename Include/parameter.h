@@ -5,6 +5,8 @@
 //#define PRINT_DEBUG
 #define PRINT_INFO
 
+#define MATRIX_THREAD_NUM 2
+
 #define MAX_NUM_THREAD 32
 #define CP_NUM_THREAD 8
 #define CP_THREAD_THRESHOLD 64
@@ -23,9 +25,10 @@
 
 #undef MEM_LIMITS
 
-#define MATRIX_THREAD_NUM 2
-
 #define MAXMMLINE 1024
+
+#define D_BUFFER 3;
+#define C_BUFFER 2;
 
 const enum PermMethod perm_method = PERM_METIS;
 
