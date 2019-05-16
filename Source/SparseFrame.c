@@ -2655,15 +2655,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     }
                                 }
 
-                                for ( di = 0; di < ndrow - lpos; di++ )
-                                {
-                                    h_RelativeMap[di] = h_Map [ Lsi [ Lsip[d] + lpos + di ] ];
-                                }
-
                                 if (!isComplex)
                                     cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
                                 else
                                     cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+
+                                for ( di = 0; di < ndrow - lpos; di++ )
+                                {
+                                    h_RelativeMap[di] = h_Map [ Lsi [ Lsip[d] + lpos + di ] ];
+                                }
 
                                 cudaMemcpyAsync ( d_RelativeMap, h_RelativeMap, ( ndrow - lpos ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
                             }
