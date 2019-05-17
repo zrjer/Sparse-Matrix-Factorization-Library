@@ -31,9 +31,9 @@ __global__ void createRelativeMap_kernel ( Long *d_RelativeMap, Long di_offset, 
 
 void createRelativeMap ( Long *d_RelativeMap, Long di_offset, Long *d_Map, Long *d_Lsi, Long dip_offset, Long ldd, cudaStream_t stream )
 {
-    dim3 block;
-    dim3 thread(256);
+    dim3 block, thread;
 
+    thread.x = CUDA_BLOCKDIM_X * CUDA_BLOCKDIM_Y;
     block.x = ( ldd + thread.x - 1 ) / thread.x;
 
     createRelativeMap_kernel <<< block, thread, 0, stream >>> ( d_RelativeMap, di_offset, d_Map, d_Lsi, dip_offset, ldd );
@@ -51,9 +51,9 @@ __global__ void createRelativeMap_batched_kernel ( Long **d_RelativeMap, Long *d
 
 void createRelativeMap_batched ( Long batchSize, Long **d_RelativeMap, Long *di_offset, Long **d_Map, Long *d_Lsi, Long *dip_offset, Long *ldd, cudaStream_t stream )
 {
-    dim3 block;
-    dim3 thread(256);
+    dim3 block, thread;
 
+    thread.x = CUDA_BLOCKDIM_X * CUDA_BLOCKDIM_Y;
     block.x = batchSize;
 
     createRelativeMap_batched_kernel <<< block, thread, 0, stream >>> ( d_RelativeMap, di_offset, d_Map, d_Lsi, dip_offset, ldd );
@@ -102,9 +102,10 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
 
 void mappedSubtract ( int isAtomic, int isComplex, void *d_A, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap, cudaStream_t stream )
 {
-    dim3 block;
-    dim3 thread(16, 16);
+    dim3 block, thread;
 
+    thread.x = CUDA_BLOCKDIM_X;
+    thread.y = CUDA_BLOCKDIM_Y;
     block.x = ( nccol + thread.x - 1 ) / thread.x;
     block.y = ( ncrow + thread.y - 1 ) / thread.y;
 
@@ -154,9 +155,10 @@ __global__ void mappedSubtract_batched_kernel ( int isAtomic, int isComplex, voi
 
 void mappedSubtract_batched ( Long batchSize, int isAtomic, int isComplex, void **d_A, Long *lda, void **d_C, Long *cj_offset, Long *ci_offset, Long *nccol, Long *ncrow, Long *ldc, Long **d_RelativeMap, cudaStream_t stream )
 {
-    dim3 block;
-    dim3 thread(16, 16);
+    dim3 block, thread;
 
+    thread.x = CUDA_BLOCKDIM_X;
+    thread.y = CUDA_BLOCKDIM_Y;
     block.x = batchSize;
 
     mappedSubtract_batched_kernel <<< block, thread, 0, stream >>> ( isAtomic, isComplex, d_A, lda, d_C, cj_offset, ci_offset, nccol, ncrow, ldc, d_RelativeMap );
