@@ -1203,7 +1203,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     nrow = matrix_info->nrow;
     nzmax = matrix_info->nzmax;
 
-    devSlotSize = ( common_info->minDevMemSize - ( 6 * nrow * sizeof(Long) + 4 * nrow * sizeof(void*) + nzmax * sizeof(Long) ) ) / 6;
+    devSlotSize = ( common_info->minDevMemSize - ( 9 * MAX_BATCHSIZE * sizeof(Long) + 4 * MAX_BATCHSIZE * sizeof(void*) + nzmax * sizeof(Long) ) ) / 6;
     devSlotSize = devSlotSize - devSlotSize % 0x400;
     matrix_info->devSlotSize = devSlotSize;
 
@@ -1804,10 +1804,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 {
     int numThread, nodeThreadIndex;
     int useGPU, useSubtree, numGPU;
-    size_t devSlotSize;
+    size_t devSlotSize, devLongSlotSize, devAddrSlotSize;
 
     int isComplex;
-    Long nrow, nzmax;
+    Long nrow;
     Long *Lp, *Li;
     Float *Lx;
 
@@ -1851,10 +1851,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     useSubtree = useGPU;
 
     devSlotSize = matrix_info->devSlotSize;
+    devLongSlotSize = MAX_BATCHSIZE * sizeof(Long);
+    devAddrSlotSize = MAX_BATCHSIZE * sizeof(void*);
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
-    nzmax = matrix_info->nzmax;
 
     Lp = matrix_info->Lp;
     Li = matrix_info->Li;
@@ -1975,13 +1976,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     Long st, stparent, pt;
                     int gpuIndex;
                     struct gpu_info_struct *gpu_info;
-                    Long *h_Lsi, *d_Lsi;
-                    Long *h_nccol, *h_ncrow, *h_lda, *h_ldc, *h_ldd, *h_di_offset;
+                    Long *h_nccol, *h_ncrow, *h_lda, *h_ldd, *h_ldc, *h_dip_offset, *h_di_offset, *h_cj_offset, *h_ci_offset;
                     void **h_A_list, **h_C_list;
                     Long **h_Map_list, **h_RelativeMap_list;
-                    Long *d_nccol, *d_ncrow, *d_lda, *d_ldc, *d_ldd, *d_di_offset;
+                    Long *d_nccol, *d_ncrow, *d_lda, *d_ldd, *d_ldc, *d_dip_offset, *d_di_offset, *d_cj_offset, *d_ci_offset;
                     void **d_A_list, **d_C_list;
                     Long **d_Map_list, **d_RelativeMap_list;
+                    Long *h_Lsi, *d_Lsi;
 
                     size_t Asize;
 
@@ -1993,30 +1994,36 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     cudaSetDevice ( gpu_info->gpuIndex_physical );
 
-                    h_Lsi = gpu_info->hostMem + 6 * devSlotSize;
-                    d_Lsi = gpu_info->devMem + 6 * devSlotSize;
+                    h_nccol = gpu_info->hostMem + 6 * devSlotSize + 0 * devLongSlotSize;
+                    h_ncrow = gpu_info->hostMem + 6 * devSlotSize + 1 * devLongSlotSize;
+                    h_lda = gpu_info->hostMem + 6 * devSlotSize + 2 * devLongSlotSize;
+                    h_ldd = gpu_info->hostMem + 6 * devSlotSize + 3 * devLongSlotSize;
+                    h_ldc = gpu_info->hostMem + 6 * devSlotSize + 4 * devLongSlotSize;
+                    h_dip_offset = gpu_info->hostMem + 6 * devSlotSize + 5 * devLongSlotSize;
+                    h_di_offset = gpu_info->hostMem + 6 * devSlotSize + 6 * devLongSlotSize;
+                    h_cj_offset = gpu_info->hostMem + 6 * devSlotSize + 7 * devLongSlotSize;
+                    h_ci_offset = gpu_info->hostMem + 6 * devSlotSize + 8 * devLongSlotSize;
+                    h_A_list = gpu_info->hostMem + 6 * devSlotSize + 9 * devLongSlotSize + 0 * devAddrSlotSize;
+                    h_C_list = gpu_info->hostMem + 6 * devSlotSize + 9 * devLongSlotSize + 1 * devAddrSlotSize;
+                    h_Map_list = gpu_info->hostMem + 6 * devSlotSize + 9 * devLongSlotSize + 2 * devAddrSlotSize;
+                    h_RelativeMap_list = gpu_info->hostMem + 6 * devSlotSize + 9 * devLongSlotSize + 3 * devAddrSlotSize;
 
-                    h_nccol = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 0 * nrow * sizeof(Long);
-                    h_ncrow = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 1 * nrow * sizeof(Long);
-                    h_lda = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 2 * nrow * sizeof(Long);
-                    h_ldc = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 3 * nrow * sizeof(Long);
-                    h_ldd = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 4 * nrow * sizeof(Long);
-                    h_di_offset = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 5 * nrow * sizeof(Long);
-                    h_A_list = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 0 * nrow * sizeof(void*);
-                    h_C_list = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 1 * nrow * sizeof(void*);
-                    h_Map_list = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 2 * nrow * sizeof(void*);
-                    h_RelativeMap_list = gpu_info->hostMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 3 * nrow * sizeof(void*);
+                    d_nccol = gpu_info->devMem + 6 * devSlotSize + 0 * devLongSlotSize;
+                    d_ncrow = gpu_info->devMem + 6 * devSlotSize + 1 * devLongSlotSize;
+                    d_lda = gpu_info->devMem + 6 * devSlotSize + 2 * devLongSlotSize;
+                    d_ldd = gpu_info->devMem + 6 * devSlotSize + 3 * devLongSlotSize;
+                    d_ldc = gpu_info->devMem + 6 * devSlotSize + 4 * devLongSlotSize;
+                    d_dip_offset = gpu_info->devMem + 6 * devSlotSize + 5 * devLongSlotSize;
+                    d_di_offset = gpu_info->devMem + 6 * devSlotSize + 6 * devLongSlotSize;
+                    d_cj_offset = gpu_info->devMem + 6 * devSlotSize + 7 * devLongSlotSize;
+                    d_ci_offset = gpu_info->devMem + 6 * devSlotSize + 8 * devLongSlotSize;
+                    d_A_list = gpu_info->devMem + 6 * devSlotSize + 9 * devLongSlotSize + 0 * devAddrSlotSize;
+                    d_C_list = gpu_info->devMem + 6 * devSlotSize + 9 * devLongSlotSize + 1 * devAddrSlotSize;
+                    d_Map_list = gpu_info->devMem + 6 * devSlotSize + 9 * devLongSlotSize + 2 * devAddrSlotSize;
+                    d_RelativeMap_list = gpu_info->devMem + 6 * devSlotSize + 9 * devLongSlotSize + 3 * devAddrSlotSize;
 
-                    d_nccol = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 0 * nrow * sizeof(Long);
-                    d_ncrow = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 1 * nrow * sizeof(Long);
-                    d_lda = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 2 * nrow * sizeof(Long);
-                    d_ldc = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 3 * nrow * sizeof(Long);
-                    d_ldd = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 4 * nrow * sizeof(Long);
-                    d_di_offset = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 5 * nrow * sizeof(Long);
-                    d_A_list = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 0 * nrow * sizeof(void*);
-                    d_C_list = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 1 * nrow * sizeof(void*);
-                    d_Map_list = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 2 * nrow * sizeof(void*);
-                    d_RelativeMap_list = gpu_info->devMem + 6 * devSlotSize + nzmax * sizeof(Long) + 6 * nrow * sizeof(Long) + 3 * nrow * sizeof(void*);
+                    h_Lsi = gpu_info->hostMem + 6 * devSlotSize + 9 * devLongSlotSize + 4 * devAddrSlotSize;
+                    d_Lsi = gpu_info->devMem + 6 * devSlotSize + 9 * devLongSlotSize + 4 * devAddrSlotSize;
 
                     st = ST_LeafQueue[ST_leafQueueIndex];
 
@@ -2185,11 +2192,79 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 {
                                     Long batchSize;
 
-                                    finished = TRUE;
+                                    Long di_offset, cj_offset, ci_offset;
+
+                                    dpt = ST_Pointer[dt];
 
                                     batchSize = 0;
+                                    di_offset = 0;
 
-                                    for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer_Tail[dt]; dpt++ )
+                                    while ( dpt < ST_Pointer_Tail[dt] )
+                                    {
+                                        Long d;
+                                        Long ndrow;
+                                        Long lpos_next;
+
+                                        d = ST_Index[dpt];
+
+                                        ndrow = Lsip[d+1] - Lsip[d];
+
+                                        lpos_next = Lpos_next[d];
+
+                                        if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + Lpos_low[d] ] ] ] == st )
+                                        {
+                                            Long dancestor;
+                                            Long lpos_low, lpos_high;
+
+                                            lpos_low = Lpos_low[d];
+                                            dancestor = SuperMap [ ( Lsi + Lsip[d] ) [ lpos_low ] ];
+                                            for ( lpos_high = lpos_low; lpos_high < lpos_next && ( Lsi + Lsip[d] ) [ lpos_high ] < Super[dancestor+1]; lpos_high++ );
+
+                                            h_ldd[batchSize] = ndrow - lpos_low;
+                                            h_dip_offset[batchSize] = Lsip[d] + lpos_low;
+                                            h_di_offset[batchSize] = di_offset;
+
+                                            h_Map_list[batchSize] = gpu_info->devMem + Moffset[dancestor];
+                                            h_RelativeMap_list[batchSize] = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Moffset[d];
+
+                                            batchSize++;
+
+                                            di_offset += 256;
+
+                                            if ( di_offset >= ndrow - lpos_low )
+                                            {
+                                                di_offset = 0;
+                                                dpt++;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            di_offset = 0;
+                                            dpt++;
+                                        }
+
+                                        if ( batchSize >= MAX_BATCHSIZE || ( dpt >= ST_Pointer_Tail[dt] && batchSize > 0 ) )
+                                        {
+                                            cudaMemcpyAsync ( d_ldd, h_ldd, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_dip_offset, h_dip_offset, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_di_offset, h_di_offset, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_Map_list, h_Map_list, batchSize * sizeof(Long*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_RelativeMap_list, h_RelativeMap_list, batchSize * sizeof(Long*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            createRelativeMap_batched ( batchSize, d_RelativeMap_list, d_di_offset, d_Map_list, d_Lsi, d_dip_offset, d_ldd, gpu_info->d_cudaStream[slot_index] );
+                                            batchSize = 0;
+                                            cudaStreamSynchronize ( gpu_info->d_cudaStream[slot_index] );
+                                        }
+                                    }
+
+                                    finished = TRUE;
+
+                                    dpt = ST_Pointer[dt];
+
+                                    batchSize = 0;
+                                    cj_offset = 0;
+                                    ci_offset = 0;
+
+                                    while ( dpt < ST_Pointer_Tail[dt] )
                                     {
                                         Long d;
                                         Long ndrow;
@@ -2213,8 +2288,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             dancestor = SuperMap [ ( Lsi + Lsip[d] ) [ lpos_low ] ];
                                             for ( lpos_high = lpos_low; lpos_high < lpos_next && ( Lsi + Lsip[d] ) [ lpos_high ] < Super[dancestor+1]; lpos_high++ );
 
-                                            Lpos_low[d] = lpos_high;
-
                                             dn = lpos_high - lpos_low;
                                             dm = ndrow - lpos_high;
                                             lda = Lsip[dancestor+1] - Lsip[dancestor];
@@ -2224,8 +2297,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             h_ncrow[batchSize] = dn + dm;
                                             h_lda[batchSize] = lda;
                                             h_ldc[batchSize] = ldc;
-                                            h_ldd[batchSize] = ndrow - lpos_low;
-                                            h_di_offset[batchSize] = Lsip[d] + lpos_low;
+                                            h_cj_offset[batchSize] = cj_offset;
+                                            h_ci_offset[batchSize] = ci_offset;
 
                                             h_A_list[batchSize] = gpu_info->devMem + Aoffset[dancestor];
                                             if ( !isComplex )
@@ -2237,32 +2310,50 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                                 h_C_list[batchSize] = gpu_info->devMem + 4 * devSlotSize + ( 1 - c_index ) * devSlotSize + Coffset[d] + ( ( lpos_low - lpos ) * ( ndrow - lpos ) + ( lpos_low - lpos ) ) * sizeof(Complex);
                                             }
 
-                                            h_Map_list[batchSize] = gpu_info->devMem + Moffset[dancestor];
                                             h_RelativeMap_list[batchSize] = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Moffset[d];
 
                                             batchSize++;
+
+                                            ci_offset += 16;
+                                            if ( ci_offset >= dn + dm )
+                                            {
+                                                ci_offset = 0;
+                                                cj_offset += 16;
+                                            }
+                                            if ( cj_offset >= dn )
+                                            {
+                                                ci_offset = 0;
+                                                cj_offset = 0;
+                                                dpt++;
+                                                Lpos_low[d] = lpos_high;
+
+                                                if ( lpos_high < lpos_next )
+                                                    finished = FALSE;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            ci_offset = 0;
+                                            cj_offset = 0;
+                                            dpt++;
                                         }
 
-                                        if ( Lpos_low[d] < lpos_next )
-                                            finished = FALSE;
+                                        if ( batchSize >= MAX_BATCHSIZE || ( dpt >= ST_Pointer_Tail[dt] && batchSize > 0 ) )
+                                        {
+                                            cudaMemcpyAsync ( d_nccol, h_nccol, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_ncrow, h_ncrow, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_lda, h_lda, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_ldc, h_ldc, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_cj_offset, h_cj_offset, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_ci_offset, h_ci_offset, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_A_list, h_A_list, batchSize * sizeof(void*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_C_list, h_C_list, batchSize * sizeof(void*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            cudaMemcpyAsync ( d_RelativeMap_list, h_RelativeMap_list, batchSize * sizeof(Long*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
+                                            mappedSubtract_batched ( batchSize, TRUE, isComplex, d_A_list, d_lda, d_C_list, d_cj_offset, d_ci_offset, d_nccol, d_ncrow, d_ldc, d_RelativeMap_list, gpu_info->d_cudaStream[slot_index] );
+                                            batchSize = 0;
+                                            cudaStreamSynchronize ( gpu_info->d_cudaStream[slot_index] );
+                                        }
                                     }
-
-                                    cudaMemcpyAsync ( d_nccol, h_nccol, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_ncrow, h_ncrow, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_lda, h_lda, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_ldc, h_ldc, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_ldd, h_ldd, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_di_offset, h_di_offset, batchSize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_A_list, h_A_list, batchSize * sizeof(void*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_C_list, h_C_list, batchSize * sizeof(void*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_Map_list, h_Map_list, batchSize * sizeof(Long*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    cudaMemcpyAsync ( d_RelativeMap_list, h_RelativeMap_list, batchSize * sizeof(Long*), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-
-                                    createRelativeMap_batched ( batchSize, d_RelativeMap_list, d_Map_list, d_Lsi, d_di_offset, d_ldd, gpu_info->d_cudaStream[slot_index] );
-
-                                    mappedSubtract_batched ( batchSize, TRUE, isComplex, d_A_list, d_lda, d_C_list, d_nccol, d_ncrow, d_ldc, d_RelativeMap_list, gpu_info->d_cudaStream[slot_index] );
-
-                                    cudaStreamSynchronize ( gpu_info->d_cudaStream[slot_index] );
                                 }
                             }
 
@@ -2612,7 +2703,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
-                                mappedSubtract ( FALSE, isComplex, d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                                mappedSubtract ( FALSE, isComplex, d_A, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
 
                                 //cudaEventRecord ( gpu_info->d_cudaEvent_updated, gpu_info->d_cudaStream[slot_index] );
                             }
@@ -3036,7 +3127,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
-                            mappedSubtract ( FALSE, isComplex, d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                            mappedSubtract ( FALSE, isComplex, d_A, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
 
                             //cudaEventRecord ( gpu_info->d_cudaEvent_updated, gpu_info->d_cudaStream[slot_index] );
                         }

@@ -30,6 +30,8 @@
 #define D_BUFFER 3;
 #define C_BUFFER 2;
 
+#define MAX_BATCHSIZE 4096
+
 const enum PermMethod perm_method = PERM_METIS;
 
 const double prune_dense = 10.0;
