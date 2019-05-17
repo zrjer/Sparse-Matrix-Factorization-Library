@@ -119,14 +119,14 @@ __global__ void mappedSubtract_batched_kernel ( int isAtomic, int isComplex, voi
         if ( !isComplex )
         {
             for ( cj = threadIdx.x; cj < nccol[blockIdx.x]; cj += blockDim.x )
-                for ( ci = threadIdx.y; ci < nccol[blockIdx.x]; ci += blockDim.x )
+                for ( ci = threadIdx.y; ci < ncrow[blockIdx.x]; ci += blockDim.y )
                     if ( cj < nccol[blockIdx.x] && ci < ncrow[blockIdx.x] )
                         ( (Float*) ( d_A[blockIdx.x] ) ) [ d_RelativeMap[blockIdx.x][cj] * lda[blockIdx.x] + d_RelativeMap[blockIdx.x][ci] ] -= ( (Float*) ( d_C[blockIdx.x] ) )  [ cj * ldc[blockIdx.x] + ci ];
         }
         else
         {
             for ( cj = threadIdx.x; cj < nccol[blockIdx.x]; cj += blockDim.x )
-                for ( ci = threadIdx.y; ci < nccol[blockIdx.x]; ci += blockDim.x )
+                for ( ci = threadIdx.y; ci < ncrow[blockIdx.x]; ci += blockDim.y )
                     if ( cj < nccol[blockIdx.x] && ci < ncrow[blockIdx.x] )
                     {
                         ( (Complex*) ( d_A[blockIdx.x] ) ) [ d_RelativeMap[blockIdx.x][cj] * lda[blockIdx.x] + d_RelativeMap[blockIdx.x][ci] ].x -= ( (Complex*) ( d_C[blockIdx.x] ) ) [ cj * ldc[blockIdx.x] + ci ].x;
@@ -139,14 +139,14 @@ __global__ void mappedSubtract_batched_kernel ( int isAtomic, int isComplex, voi
         if ( !isComplex )
         {
             for ( cj = threadIdx.x; cj < nccol[blockIdx.x]; cj += blockDim.x )
-                for ( ci = threadIdx.y; ci < nccol[blockIdx.x]; ci += blockDim.x )
+                for ( ci = threadIdx.y; ci < ncrow[blockIdx.x]; ci += blockDim.y )
                     if ( cj < nccol[blockIdx.x] && ci < ncrow[blockIdx.x] )
                         atomicAdd ( & ( ( (Float*) ( d_A[blockIdx.x] ) ) [ d_RelativeMap[blockIdx.x][cj] * lda[blockIdx.x] + d_RelativeMap[blockIdx.x][ci] ] ), - ( (Float*) ( d_C[blockIdx.x] ) ) [ cj * ldc[blockIdx.x] + ci ] );
         }
         else
         {
             for ( cj = threadIdx.x; cj < nccol[blockIdx.x]; cj += blockDim.x )
-                for ( ci = threadIdx.y; ci < nccol[blockIdx.x]; ci += blockDim.x )
+                for ( ci = threadIdx.y; ci < ncrow[blockIdx.x]; ci += blockDim.y )
                     if ( cj < nccol[blockIdx.x] && ci < ncrow[blockIdx.x] )
                     {
                         atomicAdd ( & ( ( (Complex*) ( d_A[blockIdx.x] ) ) [ d_RelativeMap[blockIdx.x][cj] * lda[blockIdx.x] + d_RelativeMap[blockIdx.x][ci] ].x ), - ( (Complex*) ( d_C[blockIdx.x] ) ) [ cj * ldc[blockIdx.x] + ci ].x );
