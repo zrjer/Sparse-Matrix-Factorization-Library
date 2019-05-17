@@ -2191,10 +2191,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                             createRelativeMap ( d_RelativeMap, d_Map, d_Lsi, Lsip[d] + lpos_0, ndrow - lpos_0, gpu_info->d_cudaStream[slot_index] );
 
-                                            if ( !isComplex )
-                                                mappedSubtract ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
-                                            else
-                                                mappedSubtractComplex ( d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                                            mappedSubtract ( FALSE, isComplex, d_A, lda, d_C, dn, dn + dm, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
 
                                             lpos_0 = lpos_1;
                                         }
@@ -2550,10 +2547,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
-                                if ( !isComplex )
-                                    mappedSubtract ( d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
-                                else
-                                    mappedSubtractComplex ( d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                                mappedSubtract ( FALSE, isComplex, d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
 
                                 //cudaEventRecord ( gpu_info->d_cudaEvent_updated, gpu_info->d_cudaStream[slot_index] );
                             }
@@ -2977,10 +2971,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
-                            if ( !isComplex )
-                                mappedSubtract ( d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
-                            else
-                                mappedSubtractComplex ( d_A, slda, (Complex*) d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
+                            mappedSubtract ( FALSE, isComplex, d_A, slda, d_C, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
 
                             //cudaEventRecord ( gpu_info->d_cudaEvent_updated, gpu_info->d_cudaStream[slot_index] );
                         }
