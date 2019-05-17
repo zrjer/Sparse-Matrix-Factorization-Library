@@ -32,6 +32,9 @@
 
 #define MAX_BATCHSIZE 4096
 
+#define CUDA_BLOCKDIM_X 16
+#define CUDA_BLOCKDIM_Y 16
+
 const enum PermMethod perm_method = PERM_METIS;
 
 const double prune_dense = 10.0;
