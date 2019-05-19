@@ -35,8 +35,10 @@ struct gpu_info_struct
 
     cudaEvent_t s_cudaEvent_reset;
     cudaEvent_t s_cudaEvent_onDevice;
+    cudaEvent_t s_cudaEvent_assembled;
     cudaEvent_t d_cudaEvent_onDevice[B_SLOT_NUM];
-    cudaEvent_t d_cudaEvent_updated;
+    cudaEvent_t d_cudaEvent_updated[B_SLOT_NUM];
+    cudaEvent_t d_cudaEvent_assembled[C_SLOT_NUM];
 
     cudaStream_t s_cudaStream;
     cudaStream_t d_cudaStream[B_SLOT_NUM];
