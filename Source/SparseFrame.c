@@ -89,7 +89,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                     (*gpu_info_list_ptr)[gpuIndex].hostMemSize = hostMemSize;
                     (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = sharedMemSize;
 
-                    cudaEventCreate ( &( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_reset ) );
                     cudaEventCreate ( &( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice ) );
                     cudaEventCreate ( &( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_assembled ) );
                     cudaStreamCreate ( &( (*gpu_info_list_ptr)[gpuIndex].s_cudaStream ) );
@@ -99,7 +98,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                     cusolverDnSetStream ( (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle, (*gpu_info_list_ptr)[gpuIndex].s_cudaStream );
                     for ( k = 0; k < MAX_D_STREAM; k++ )
                     {
-                        cudaEventCreate ( &( (*gpu_info_list_ptr)[gpuIndex].d_cudaEvent_assembled[k] ) );
                         cudaStreamCreate ( &( (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] ) );
                         cublasCreate ( &( (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] ) );
                         cublasSetStream ( (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k], (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] );
@@ -124,7 +122,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                     (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
                     (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
                     (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
-                    (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_reset = 0;
                     (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
                     (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_assembled = 0;
                     (*gpu_info_list_ptr)[gpuIndex].s_cudaStream = 0;
@@ -132,7 +129,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                     (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle = 0;
                     for ( k = 0; k < MAX_D_STREAM; k++ )
                     {
-                        (*gpu_info_list_ptr)[gpuIndex].d_cudaEvent_assembled[k] = 0;
                         (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] = 0;
                         (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] = 0;
                         (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] = 0;
@@ -151,7 +147,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                 (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
                 (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
                 (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
-                (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_reset = 0;
                 (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
                 (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_assembled = 0;
                 (*gpu_info_list_ptr)[gpuIndex].s_cudaStream = 0;
@@ -159,7 +154,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                 (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle = 0;
                 for ( k = 0; k < MAX_D_STREAM; k++ )
                 {
-                    (*gpu_info_list_ptr)[gpuIndex].d_cudaEvent_assembled[k] = 0;
                     (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] = 0;
                     (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] = 0;
                     (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] = 0;
@@ -218,14 +212,10 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
             cudaStreamDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cudaStream );
         if ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_assembled != 0 )
             cudaEventDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_assembled );
-        if ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_reset != 0 )
-            cudaEventDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_reset );
         if ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice != 0 )
             cudaEventDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice );
         for ( k = 0; k < MAX_D_STREAM; k++ )
         {
-            if ( (*gpu_info_list_ptr)[gpuIndex].d_cudaEvent_assembled[k] != 0 )
-            cudaEventDestroy ( (*gpu_info_list_ptr)[gpuIndex].d_cudaEvent_assembled[k] );
             if ( (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] != 0 )
                 cusolverDnDestroy ( (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] );
             if ( (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] != 0 )
@@ -239,7 +229,6 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
         (*gpu_info_list_ptr)[gpuIndex].devMemSize = 0;
         (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
         (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
-        (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_reset = 0;
         (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
         (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_assembled = 0;
         (*gpu_info_list_ptr)[gpuIndex].s_cudaStream = 0;
@@ -247,7 +236,6 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
         (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle = 0;
         for ( k = 0; k < MAX_D_STREAM; k++ )
         {
-        (*gpu_info_list_ptr)[gpuIndex].d_cudaEvent_assembled[k] = 0;
             (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] = 0;
             (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] = 0;
             (*gpu_info_list_ptr)[gpuIndex].d_cusolverDnHandle[k] = 0;
@@ -1995,949 +1983,338 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     if ( useGPU == TRUE )
     {
-        if ( useSubtree == TRUE )
-        {
 #pragma omp parallel for schedule(static) num_threads(numGPU)
-            for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
-            {
-                Long ST_leafQueueIndex;
+        for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
+        {
+            Long leafQueueIndex;
+            Long *Map;
 
-#pragma omp critical (ST_leafQueueHead)
+            Map = NULL;
+
+#pragma omp critical (leafQueueHead)
+            {
+                if ( leafQueueHead >= leafQueueTail )
+                    leafQueueIndex = nsuper;
+                else
+                    leafQueueIndex = leafQueueHead++;
+            }
+
+            if ( leafQueueIndex < nsuper )
+            {
+                Map = malloc ( nrow * sizeof(Long) );
+            }
+
+            while ( leafQueueIndex < nsuper )
+            {
+                Long j, i, p;
+
+                Long s, sj, si, nscol, nsrow, sparent;
+
+                Long sn, sm, slda;
+
+                int gpuIndex;
+                struct gpu_info_struct *gpu_info;
+                void *h_A, *d_A;
+
+                int devWorkSize;
+                Float *d_workspace;
+                int *d_info;
+
+                Long d_index, d_count;;
+                int stream_index;
+                size_t bc_offset;
+
+                gpuIndex = 0;
+                while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
+                    gpuIndex = ( gpuIndex + 1 ) / numGPU;
+
+                gpu_info = gpu_info_list + gpuIndex;
+
+                cudaSetDevice ( gpu_info->gpuIndex_physical );
+
+                d_workspace = gpu_info->devMem + ( 1 + B_SLOT_NUM ) * devSlotSize;
+                d_info = gpu_info->devMem + ( 2 + B_SLOT_NUM ) * devSlotSize;
+
+                s = LeafQueue[leafQueueIndex];
+
+                nscol = Super[s+1] - Super[s];
+                nsrow = Lsip[s+1] - Lsip[s];
+
+                sn = nscol;
+                sm = nsrow - nscol;
+                slda = sn + sm;
+
+                h_A = gpu_info->hostMem;
+                d_A = gpu_info->devMem;
+
+                for ( si = 0; si < nsrow; si++ )
                 {
-                    if ( ST_leafQueueHead >= ST_leafQueueTail )
-                        ST_leafQueueIndex = nsubtree;
-                    else
-                        ST_leafQueueIndex = ST_leafQueueHead++;
+                    Map [ Lsi [ Lsip[s] + si ] ] = si;
                 }
 
-                while ( ST_leafQueueIndex < nsubtree )
+                if ( !isComplex )
+                    memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
+                else
+                    memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
+
+                for ( j = Super[s]; j < Super[s+1]; j++ )
                 {
-                    Long st, stparent, pt;
-                    int gpuIndex;
-                    struct gpu_info_struct *gpu_info;
-                    Long *h_Lsi, *d_Lsi;
-
-                    size_t Asize;
-
-                    gpuIndex = 0;
-                    while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
-                        gpuIndex = ( gpuIndex + 1 ) / numGPU;
-
-                    gpu_info = gpu_info_list + gpuIndex;
-
-                    cudaSetDevice ( gpu_info->gpuIndex_physical );
-
-                    h_Lsi = gpu_info->hostMem + ( 1 + B_SLOT_NUM + C_SLOT_NUM ) * devSlotSize;
-                    d_Lsi = gpu_info->devMem + ( 1 + B_SLOT_NUM + C_SLOT_NUM ) * devSlotSize;
-
-                    st = ST_LeafQueue[ST_leafQueueIndex];
-
-                    ST_State[st] = NODE_STATE_ASSEMBLED;
-
-                    Asize = 0;
-
-                    for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
+                    sj = j - Super[s];
+                    for ( p = Lp[j]; p < Lp[j+1]; p++ )
                     {
-                        Long s;
-                        Long nscol, nsrow;
-
-                        s = ST_Index[pt];
-
-                        nscol = Super[s+1] - Super[s];
-                        nsrow = Lsip[s+1] - Lsip[s];
-
-                        Aoffset[s] = Asize;
+                        i = Li[p];
+                        si = Map[i];
                         if ( !isComplex )
-                            Asize += nscol * nsrow * sizeof(Float);
+                            ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
                         else
-                            Asize += nscol * nsrow * sizeof(Complex);
-                    }
-
-                    for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
-                    {
-                        Long s;
-
-                        s = ST_Index[pt];
-
-                        Moffset[s] = Asize;
-                        Asize += nrow * sizeof(Long);
-                    }
-
-                    for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
-                    {
-                        Long j, i, p;
-
-                        Long s;
-                        Long nscol, nsrow;
-                        Long sj, si;
-
-                        void *h_A, *d_A;
-                        Long *h_Map, *d_Map;
-
-                        s = ST_Index[pt];
-
-                        nscol = Super[s+1] - Super[s];
-                        nsrow = Lsip[s+1] - Lsip[s];
-
-                        h_A = gpu_info->hostMem + Aoffset[s];
-                        d_A = gpu_info->devMem + Aoffset[s];
-
-                        h_Map = gpu_info->hostMem + Moffset[s];
-                        d_Map = gpu_info->devMem + Moffset[s];
-
-                        memcpy ( h_Lsi + Lsip[s], Lsi + Lsip[s], ( Lsip[s+1] - Lsip[s] ) * sizeof(Long) );
-                        cudaMemcpyAsync ( d_Lsi + Lsip[s], h_Lsi + Lsip[s], ( Lsip[s+1] - Lsip[s] ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-
-                        for ( si = 0; si < nsrow; si++ )
                         {
-                            h_Map [ Lsi [ Lsip[s] + si ] ] = si;
+                            ( (Complex*) h_A ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                            ( (Complex*) h_A ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
                         }
+                    }
+                }
 
-                        cudaMemcpyAsync ( d_Map, h_Map, nrow * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                if ( !isComplex )
+                    cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                else
+                    cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
 
-                        if ( !isComplex )
-                            memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
-                        else
-                            memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
+                cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
 
-                        for ( j = Super[s]; j < Super[s+1]; j++ )
-                        {
-                            sj = j - Super[s];
-                            for ( p = Lp[j]; p < Lp[j+1]; p++ )
-                            {
-                                i = Li[p];
-                                si = h_Map[i];
-                                if ( !isComplex )
-                                    ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
-                                else
-                                {
-                                    ( (Complex*) h_A ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
-                                    ( (Complex*) h_A ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
-                                }
-                            }
-                        }
+                d_count = 0;
 
-                        if ( !isComplex )
-                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                        else
-                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                while ( Head[s] >= 0 )
+                {
+                    size_t b_size, c_size, map_size, bc_size;
+
+                    Long d;
+
+                    Long ndcol, ndrow;
+                    Long lpos, lpos_next;
+
+                    Long dn, dm, dk;
+
+                    d = Head[s];
+
+                    ndcol = Super[d+1] - Super[d];
+                    ndrow = Lsip[d+1] - Lsip[d];
+
+                    lpos = Lpos[d];
+                    for ( lpos_next = lpos; lpos_next < ndrow && ( Lsi + Lsip[d] ) [ lpos_next ] < Super[s+1]; lpos_next++ );
+                    Lpos_next[d] = lpos_next;
+
+                    dn = lpos_next - lpos;
+                    dm = ndrow - lpos_next;
+                    dk = ndcol;
+
+                    if ( !isComplex )
+                    {
+                        b_size = dk * ( dn + dm ) * sizeof(Float);
+                        c_size = dn * ( dn + dm ) * sizeof(Float);
+                        map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Float) );
+                    }
+                    else
+                    {
+                        b_size = dk * ( dn + dm ) * sizeof(Complex);
+                        c_size = dn * ( dn + dm ) * sizeof(Complex);
+                        map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Complex) );
                     }
 
-                    cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
+                    bc_size = b_size + c_size + map_size;
 
+                    node_size_queue[d_count].node = d;
+                    node_size_queue[d_count].size = bc_size;
+
+                    d_count++;
+
+                    Head[s] = Next[d];
+                }
+
+                qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
+
+                stream_index = 0;
+                bc_offset = 0;
+
+                for ( d_index = 0; d_index < d_count; d_index++ )
+                {
+                    size_t b_size, c_size, map_size, bc_size;
+
+                    Long d, dj, di;
+                    Long ndcol, ndrow;
+                    Long lpos, lpos_next;
+
+                    Long dn, dm, dk, dlda, dldc;
+
+                    void *h_B, *d_B, *d_C;
+                    Long *h_RelativeMap, *d_RelativeMap;
+
+                    d = node_size_queue[d_index].node;
+
+                    ndcol = Super[d+1] - Super[d];
+                    ndrow = Lsip[d+1] - Lsip[d];
+
+                    lpos = Lpos[d];
+
+                    lpos = Lpos[d];
+                    for ( lpos_next = lpos; lpos_next < ndrow && ( Lsi + Lsip[d] ) [ lpos_next ] < Super[s+1]; lpos_next++ );
+                    Lpos_next[d] = lpos_next;
+
+                    dn = lpos_next - lpos;
+                    dm = ndrow - lpos_next;
+                    dk = ndcol;
+                    dlda = dn + dm;
+                    dldc = dn + dm;
+
+                    if ( !isComplex )
                     {
-                        Long dt_queue[4];
-                        int slot_index_queue[4], c_index;
+                        b_size = dk * ( dn + dm ) * sizeof(Float);
+                        c_size = dn * ( dn + dm ) * sizeof(Float);
+                        map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Float) );
+                    }
+                    else
+                    {
+                        b_size = dk * ( dn + dm ) * sizeof(Complex);
+                        c_size = dn * ( dn + dm ) * sizeof(Complex);
+                        map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Complex) );
+                    }
+
+                    bc_size = b_size + c_size + map_size;
+
+                    if ( bc_offset + bc_size > devBCSize )
+                    {
+                        bc_offset = 0;
+                        cudaEventSynchronize ( gpu_info->s_cudaEvent_assembled );
+                    }
+
+                    h_B = gpu_info->hostMem + devASize + bc_offset;
+                    d_B = gpu_info->devMem + devASize + bc_offset;
+                    d_C = gpu_info->devMem + devASize + bc_offset + b_size;
+                    h_RelativeMap = gpu_info->hostMem + devASize + bc_offset + b_size + c_size;
+                    d_RelativeMap = gpu_info->devMem + devASize + bc_offset + b_size + c_size;
 
-                        dt_queue[0] = ST_Head[st];
-                        dt_queue[1] = -1;
-                        dt_queue[2] = -1;
-                        dt_queue[3] = -1;
-                        slot_index_queue[0] = 0;
-                        slot_index_queue[1] = -1;
-                        slot_index_queue[2] = -1;
-                        slot_index_queue[3] = -1;
-                        c_index = 0;
-
-                        while ( dt_queue[0] >= 0 || dt_queue[1] >= 0 || dt_queue[2] >= 0 || dt_queue[3] >= 0 )
-                        {
-                            {
-                                Long dt, dpt;
-
-                                dt = dt_queue[0];
-
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                {
-                                    Long d;
-                                    Long ndrow;
-                                    Long lpos, lpos_next;
-
-                                    d = ST_Index[dpt];
-
-                                    ndrow = Lsip[d+1] - Lsip[d];
-
-                                    if ( d >= 0 )
-                                    {
-                                        lpos = Lpos[d];
-                                        for ( lpos_next = lpos; lpos_next < ndrow && ST_Map [ SuperMap [ ( Lsi + Lsip[d] ) [ lpos_next ] ] ] <= st; lpos_next++ );
-                                    }
-                                    else
-                                    {
-                                        lpos = -1;
-                                        lpos_next = -1;
-                                    }
-
-                                    Lpos_next[d] = lpos_next;
-                                }
-                            }
-
-                            if ( dt_queue[3] >= 0 )
-                            {
-                                int slot_index;
-
-                                int finished;
-
-                                Long dt, dpt;
-
-                                slot_index = slot_index_queue[3];
-
-                                dt = dt_queue[3];
-
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer_Tail[dt]; dpt++ )
-                                {
-                                    Long d;
-
-                                    d = ST_Index[dpt];
-                                    Lpos_low[d] = Lpos[d];
-                                }
-
-                                cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
-
-                                finished = FALSE;
-
-                                while ( !finished )
-                                {
-                                    finished = TRUE;
-
-                                    for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer_Tail[dt]; dpt++ )
-                                    {
-                                        Long d;
-                                        Long ndrow;
-                                        Long lpos, lpos_next;
-
-                                        d = ST_Index[dpt];
-
-                                        ndrow = Lsip[d+1] - Lsip[d];
-
-                                        lpos = Lpos[d];
-                                        lpos_next = Lpos_next[d];
-
-                                        if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + Lpos_low[d] ] ] ] == st )
-                                        {
-                                            Long dancestor;
-                                            Long lpos_low, lpos_high;
-                                            Long dip_offset;
-
-                                            void *d_A, *d_C;
-                                            Long *d_Map, *d_RelativeMap;
-
-                                            Long nccol, ncrow;
-                                            Long dn, dm, lda, ldc, ldd;
-
-                                            lpos_low = Lpos_low[d];
-                                            dancestor = SuperMap [ ( Lsi + Lsip[d] ) [ lpos_low ] ];
-                                            for ( lpos_high = lpos_low; lpos_high < lpos_next && ( Lsi + Lsip[d] ) [ lpos_high ] < Super[dancestor+1]; lpos_high++ );
-                                            Lpos_low[d] = lpos_high;
-
-                                            if ( lpos_high < lpos_next )
-                                                finished = FALSE;
-
-                                            dn = lpos_high - lpos_low;
-                                            dm = ndrow - lpos_high;
-                                            lda = Lsip[dancestor+1] - Lsip[dancestor];
-                                            ldc = ndrow - lpos;
-                                            ldd = ndrow - lpos_low;
-
-                                            dip_offset = Lsip[d] + lpos_low;
-
-                                            nccol = dn;
-                                            ncrow = dn + dm;
-
-                                            d_A = gpu_info->devMem + Aoffset[dancestor];
-                                            if ( !isComplex )
-                                            {
-                                                d_C = gpu_info->devMem + ( 1 + B_SLOT_NUM ) * devSlotSize + ( c_index + C_SLOT_NUM - 1 ) % C_SLOT_NUM * devSlotSize + Coffset[d] + ( ( lpos_low - lpos ) * ( ndrow - lpos ) + ( lpos_low - lpos ) ) * sizeof(Float);
-                                            }
-                                            else
-                                            {
-                                                d_C = gpu_info->devMem + ( 1 + B_SLOT_NUM ) * devSlotSize + ( c_index + C_SLOT_NUM - 1 ) % C_SLOT_NUM * devSlotSize + Coffset[d] + ( ( lpos_low - lpos ) * ( ndrow - lpos ) + ( lpos_low - lpos ) ) * sizeof(Complex);
-                                            }
-
-                                            d_Map = gpu_info->devMem + Moffset[dancestor];
-                                            d_RelativeMap = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Moffset[d];
-
-                                            createRelativeMap ( d_RelativeMap, 0, d_Map, d_Lsi, dip_offset, ldd, gpu_info->d_cudaStream[slot_index] );
-                                            mappedSubtract ( TRUE, isComplex, d_A, lda, d_C, 0, 0, nccol, ncrow, ldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
-                                        }
-                                    }
-                                }
-                            }
-
-                            if ( dt_queue[2] >= 0 )
-                            {
-                                int slot_index;
-
-                                Long dt, dpt;
-                                size_t dCsize;
-
-                                void *d_C;
-
-                                slot_index = slot_index_queue[2];
-
-                                dt = dt_queue[2];
-
-                                d_C = gpu_info->devMem + ( 1 + B_SLOT_NUM ) * devSlotSize + c_index * devSlotSize;
-
-                                dCsize = 0;
-
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                {
-                                    Long d;
-                                    Long ndcol, ndrow;
-                                    Long lpos, lpos_next;
-
-                                    void *d_B;
-
-                                    d = ST_Index[dpt];
-
-                                    ndcol = Super[d+1] - Super[d];
-                                    ndrow = Lsip[d+1] - Lsip[d];
-
-                                    lpos = Lpos[d];
-                                    lpos_next = Lpos_next[d];
-
-                                    if ( !isComplex )
-                                        d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Float);
-                                    else
-                                        d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Complex);
-
-                                    if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
-                                    {
-                                        Long dn, dm, dk, dlda, dldc;
-
-                                        dn = lpos_next - lpos;
-                                        dm = ndrow - lpos_next;
-                                        dk = ndcol;
-                                        dlda = ndrow;
-                                        dldc = dn + dm;
-
-                                        if (!isComplex)
-                                            cublasDsyrk ( gpu_info->d_cublasHandle[slot_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C + dCsize, dldc);
-                                        else
-                                            cublasZherk ( gpu_info->d_cublasHandle[slot_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C + dCsize, dldc);
-
-                                        if ( dm > 0 )
-                                        {
-                                            if (!isComplex)
-                                                cublasDgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_T,
-                                                        dm, dn, dk, one, d_B + dn * sizeof(Float), dlda, d_B, dlda, zero, d_C + dCsize + dn * sizeof(Float), dldc );
-                                            else
-                                                cublasZgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_C,
-                                                        dm, dn, dk, (Complex*) one, d_B + dn * sizeof(Complex), dlda, d_B, dlda, (Complex*) zero, d_C + dCsize + dn * sizeof(Complex), dldc );
-                                        }
-
-                                        Coffset[d] = dCsize;
-
-                                        if ( !isComplex )
-                                            dCsize += dn * ( dn + dm ) * sizeof(Float);
-                                        else
-                                            dCsize += dn * ( dn + dm ) * sizeof(Complex);
-                                    }
-                                }
-                            }
-
-                            if ( dt_queue[1] >= 0 )
-                            {
-                                int slot_index;
-
-                                Long dt, dpt;
-
-                                slot_index = slot_index_queue[1];
-
-                                dt = dt_queue[1];
-
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                {
-                                    Long d;
-                                    Long ndcol, ndrow, lpos;
-
-                                    void *h_B, *d_B;
-
-                                    d = ST_Index[dpt];
-
-                                    ndcol = Super[d+1] - Super[d];
-                                    ndrow = Lsip[d+1] - Lsip[d];
-                                    lpos = Lpos[d];
-
-                                    if ( !isComplex )
-                                    {
-                                        h_B = gpu_info->hostMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Float);
-                                        d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Float);
-                                    }
-                                    else
-                                    {
-                                        h_B = gpu_info->hostMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Complex);
-                                        d_B = gpu_info->devMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Complex);
-                                    }
-
-
-                                    if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
-                                    {
-                                        if ( !isComplex )
-                                            cudaMemcpy2DAsync ( d_B, ndrow * sizeof(Float), h_B, ndrow * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                        else
-                                            cudaMemcpy2DAsync ( d_B, ndrow * sizeof(Complex), h_B, ndrow * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    }
-                                }
-
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                {
-                                    Long d;
-                                    Long lpos;
-
-                                    d = ST_Index[dpt];
-
-                                    lpos = Lpos[d];
-
-                                    if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
-                                    {
-                                        cudaMemcpyAsync ( d_Lsi + Lsip[d], h_Lsi + Lsip[d], ( Lsip[d+1] - Lsip[d] ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                                    }
-                                }
-                            }
-
-                            if ( dt_queue[0] >= 0 )
-                            {
-                                int slot_index;
-
-                                Long dt, dpt;
-
-                                slot_index = slot_index_queue[0];
-
-                                dt = dt_queue[0];
-
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                {
-                                    Long d, dj, di;
-                                    Long ndcol, ndrow, lpos;
-
-                                    void *h_B;
-
-                                    d = ST_Index[dpt];
-
-                                    ndcol = Super[d+1] - Super[d];
-                                    ndrow = Lsip[d+1] - Lsip[d];
-                                    lpos = Lpos[d];
-
-                                    if ( !isComplex )
-                                    {
-                                        h_B = gpu_info->hostMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Float);
-                                    }
-                                    else
-                                    {
-                                        h_B = gpu_info->hostMem + 1 * devSlotSize + slot_index * devSlotSize + Aoffset[d] + lpos * sizeof(Complex);
-                                    }
-
-                                    if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
-                                    {
 #pragma omp parallel for private(di) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
-                                        for ( dj = 0; dj < ndcol; dj++ )
-                                        {
-                                            for ( di = 0; di < ndrow - lpos; di++ )
-                                            {
-                                                if (!isComplex)
-                                                    ( (Float*) h_B ) [ dj * ndrow + di ] = ( Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ];
-                                                else
-                                                {
-                                                    ( (Complex*) h_B ) [ dj * ndrow + di ].x = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].x;
-                                                    ( (Complex*) h_B ) [ dj * ndrow + di ].y = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].y;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                {
-                                    Long d;
-                                    Long lpos;
-
-                                    d = ST_Index[dpt];
-
-                                    lpos = Lpos[d];
-
-                                    if ( ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
-                                    {
-                                        memcpy ( h_Lsi + Lsip[d], Lsi + Lsip[d], ( Lsip[d+1] - Lsip[d] ) * sizeof(Long) );
-                                    }
-                                }
-                            }
-
-                            if ( dt_queue[3] >= 0 )
-                                cudaStreamSynchronize ( gpu_info->d_cudaStream [ slot_index_queue[3] ] ); // Don't know why but this synchronization seems necessary here
-
-                            {
-                                Long dt, dt_next;
-
-                                dt = dt_queue[0];
-                                dt_next = ( dt < 0 ) ? -1 : ST_Next[dt];
-
-                                if ( dt >= 0 )
-                                {
-                                    Long dpt;
-                                    Long dtancestor;
-
-                                    dtancestor = -1;
-
-                                    for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                    {
-                                        Long d;
-
-                                        d = ST_Index[dpt];
-                                        if ( d >= 0 )
-                                        {
-                                            Long ndrow, lpos_next;
-
-                                            ndrow = Lsip[d+1] - Lsip[d];
-                                            lpos_next = Lpos_next[d];
-                                            if ( lpos_next < ndrow )
-                                            {
-                                                Long dancestor;
-
-                                                dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
-                                                if ( dancestor >= 0 )
-                                                {
-                                                    dtancestor = ( dtancestor < 0 ) ? ST_Map[dancestor] : MIN ( dtancestor, ST_Map[dancestor] );
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if ( dtancestor >= 0 )
-                                    {
-#pragma omp critical (ST_HeadNext)
-                                        {
-                                            ST_Next[dt] = ST_Head[dtancestor];
-                                            ST_Head[dtancestor] = dt;
-                                        }
-                                    }
-                                }
-
-                                dt = dt_queue[3];
-
-                                if ( dt >= 0 )
-                                {
-                                    Long dpt, dpt_;
-
-                                    dpt_ = ST_Pointer[dt];
-
-                                    for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
-                                    {
-                                        Long d;
-
-                                        d = ST_Index[dpt];
-                                        if ( d >= 0 )
-                                        {
-                                            Long ndrow, lpos_next;
-
-                                            Lpos[d] = Lpos_next[d];
-
-                                            ndrow = Lsip[d+1] - Lsip[d];
-                                            lpos_next = Lpos_next[d];
-                                            if ( lpos_next < ndrow )
-                                            {
-                                                ST_Index[dpt_++] = d;
-                                            }
-                                        }
-                                    }
-
-                                    ST_Pointer_Tail[dt] = dpt_;
-
-                                    while ( dpt_ < ST_Pointer[dt+1] )
-                                        ST_Index[dpt_++] = -1;
-                                }
-
-                                dt_queue[3] = dt_queue[2];
-                                dt_queue[2] = dt_queue[1];
-                                dt_queue[1] = dt_queue[0];
-                                dt_queue[0] = dt_next;
-
-                                slot_index_queue[3] = slot_index_queue[2];
-                                slot_index_queue[2] = slot_index_queue[1];
-                                slot_index_queue[1] = slot_index_queue[0];
-                                slot_index_queue[0] = ( slot_index_queue[0] + 1 ) % B_SLOT_NUM;
-                            }
-
-                            c_index = ( c_index + 1 ) % C_SLOT_NUM;
-                        }
-                    }
-
-                    for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
+                    for ( dj = 0; dj < ndcol; dj++ )
                     {
-                        Long s;
-                        Long sparent;
-                        Long nscol, nsrow;
-                        Long sj, si;
-
-                        Long sn, sm, slda;
-                        Long d_queue[4];
-                        int slot_index_queue[4], c_index;
-
-                        void *h_A, *d_A;
-                        Long *h_Map;
-
-                        int devWorkSize;
-                        Float *d_workspace;
-                        int *d_info;
-
-                        d_workspace = gpu_info->devMem +( 1 +  B_SLOT_NUM ) * devSlotSize;
-                        d_info = gpu_info->devMem + ( 2 + B_SLOT_NUM ) * devSlotSize;
-
-                        s = ST_Index[pt];
-
-                        nscol = Super[s+1] - Super[s];
-                        nsrow = Lsip[s+1] - Lsip[s];
-
-                        sn = nscol;
-                        sm = nsrow - nscol;
-                        slda = sn + sm;
-
-                        h_A = gpu_info->hostMem + Aoffset[s];
-                        d_A = gpu_info->devMem + Aoffset[s];
-
-                        h_Map = gpu_info->hostMem + Moffset[s];
-
-                        d_queue[0] = Head[s];
-                        d_queue[1] = -1;
-                        d_queue[2] = -1;
-                        d_queue[3] = -1;
-                        slot_index_queue[0] = 0;
-                        slot_index_queue[1] = -1;
-                        slot_index_queue[2] = -1;
-                        slot_index_queue[3] = -1;
-                        c_index = 0;
-                        Head[s] = -1;
-
-                        while ( d_queue[0] >= 0 || d_queue[1] >= 0 || d_queue[2] >= 0 || d_queue[3] >= 0 )
-                        {
-                            {
-                                Long d;
-                                Long ndrow;
-                                Long lpos, lpos_next;
-
-                                d = d_queue[0];
-
-                                ndrow = Lsip[d+1] - Lsip[d];
-
-                                if ( d >= 0 )
-                                {
-                                    lpos = Lpos[d];
-                                    for ( lpos_next = lpos; lpos_next < ndrow && ( Lsi + Lsip[d] ) [ lpos_next ] < Super[s+1]; lpos_next++ );
-                                }
-                                else
-                                {
-                                    lpos = -1;
-                                    lpos_next = -1;
-                                }
-
-                                Lpos_next[d] = lpos_next;
-                            }
-
-                            if ( d_queue[3] >= 0 )
-                            {
-                                int slot_index;
-
-                                Long d;
-                                Long ndrow;
-                                Long lpos, lpos_next;
-
-                                Long dn, dm, dldc;
-
-                                void *d_C;
-                                Long *d_RelativeMap;
-
-                                slot_index = slot_index_queue[3];
-
-                                d = d_queue[3];
-
-                                ndrow = Lsip[d+1] - Lsip[d];
-
-                                lpos = Lpos[d];
-                                lpos_next = Lpos_next[d];
-
-                                dn = lpos_next - lpos;
-                                dm = ndrow - lpos_next;
-                                dldc = dn + dm;
-
-                                d_C = gpu_info->devMem + ( 1 + B_SLOT_NUM ) * devSlotSize + ( c_index + C_SLOT_NUM - 1 ) % C_SLOT_NUM * devSlotSize;
-
-                                d_RelativeMap =  gpu_info->devMem + Moffset[d];
-
-                                cudaStreamWaitEvent ( gpu_info->d_cudaStream[slot_index], gpu_info->s_cudaEvent_onDevice, 0 );
-
-                                mappedSubtract ( FALSE, isComplex, d_A, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[slot_index] );
-                            }
-
-                            if ( d_queue[2] >= 0 )
-                            {
-                                int slot_index;
-
-                                Long d;
-                                Long ndcol, ndrow;
-                                Long lpos, lpos_next;
-
-                                Long dn, dm, dk, dlda, dldc;
-
-                                void *d_B, *d_C;
-
-                                slot_index = slot_index_queue[2];
-
-                                d = d_queue[2];
-
-                                ndcol = Super[d+1] - Super[d];
-                                ndrow = Lsip[d+1] - Lsip[d];
-
-                                lpos = Lpos[d];
-                                lpos_next = Lpos_next[d];
-
-                                dn = lpos_next - lpos;
-                                dm = ndrow - lpos_next;
-                                dk = ndcol;
-                                dlda = ndrow;
-                                dldc = dn + dm;
-
-                                if ( !isComplex )
-                                    d_B = gpu_info->devMem + Aoffset[d] + lpos * sizeof(Float);
-                                else
-                                    d_B = gpu_info->devMem + Aoffset[d] + lpos * sizeof(Complex);
-
-                                d_C = gpu_info->devMem + ( 1 + B_SLOT_NUM ) * devSlotSize + c_index * devSlotSize;
-
-                                if (!isComplex)
-                                    cublasDsyrk ( gpu_info->d_cublasHandle[slot_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
-                                else
-                                    cublasZherk ( gpu_info->d_cublasHandle[slot_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
-
-                                if ( dm > 0 )
-                                {
-                                    if (!isComplex)
-                                        cublasDgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, d_B + dn * sizeof(Float), dlda, d_B, dlda, zero, d_C + dn * sizeof(Float), dldc );
-                                    else
-                                        cublasZgemm ( gpu_info->d_cublasHandle[slot_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, d_B + dn * sizeof(Complex), dlda, d_B, dlda, (Complex*) zero, d_C + dn * sizeof(Complex), dldc );
-                                }
-                            }
-
-                            if ( d_queue[1] >= 0 )
-                            {
-                                int slot_index;
-
-                                Long d;
-                                Long ndrow;
-                                Long lpos;
-
-                                Long *h_RelativeMap, *d_RelativeMap;
-
-                                slot_index = slot_index_queue[1];
-
-                                d = d_queue[1];
-
-                                ndrow = Lsip[d+1] - Lsip[d];
-
-                                lpos = Lpos[d];
-
-                                h_RelativeMap =  gpu_info->hostMem + Moffset[d];
-                                d_RelativeMap =  gpu_info->devMem + Moffset[d];
-
-                                cudaMemcpyAsync ( d_RelativeMap, h_RelativeMap, ( ndrow - lpos ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[slot_index] );
-                            }
-
-                            if ( d_queue[0] >= 0 )
-                            {
-                                Long d, di;
-                                Long ndrow;
-                                Long lpos;
-
-                                Long *h_RelativeMap;
-
-                                d = d_queue[0];
-
-                                ndrow = Lsip[d+1] - Lsip[d];
-
-                                lpos = Lpos[d];
-
-                                h_RelativeMap =  gpu_info->hostMem + Moffset[d];
-
-                                for ( di = 0; di < ndrow - lpos; di++ )
-                                {
-                                    h_RelativeMap[di] = h_Map [ Lsi [ Lsip[d] + lpos + di ] ];
-                                }
-                            }
-
-                            if ( d_queue[3] >= 0 )
-                                cudaStreamSynchronize ( gpu_info->d_cudaStream [ slot_index_queue[3] ] ); // Don't know why but this synchronization seems necessary here
-
-                            {
-                                Long d, d_next;
-
-                                d = d_queue[0];
-                                d_next = ( d < 0 ) ? -1 : Next[d];
-
-                                if ( d >= 0 )
-                                {
-                                    Long ndrow, lpos_next;
-
-                                    ndrow = Lsip[d+1] - Lsip[d];
-                                    lpos_next = Lpos_next[d];
-                                    if ( lpos_next < ndrow )
-                                    {
-                                        Long dancestor;
-
-                                        dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
-                                        if ( ST_Map[dancestor] == st )
-                                        {
-#pragma omp critical (HeadNext)
-                                            {
-                                                Next[d] = Head[dancestor];
-                                                Head[dancestor] = d;
-                                            }
-                                        }
-                                        else
-                                            Next[d] = -1;
-                                    }
-                                }
-
-                                d = d_queue[3];
-
-                                if ( d >= 0 )
-                                    Lpos[d] = Lpos_next[d];
-
-                                d_queue[3] = d_queue[2];
-                                d_queue[2] = d_queue[1];
-                                d_queue[1] = d_queue[0];
-                                d_queue[0] = d_next;
-
-                                slot_index_queue[3] = slot_index_queue[2];
-                                slot_index_queue[2] = slot_index_queue[1];
-                                slot_index_queue[1] = slot_index_queue[0];
-                                slot_index_queue[0] = ( slot_index_queue[0] + 1 ) % B_SLOT_NUM;
-                            }
-
-                            c_index = ( c_index + 1 ) % C_SLOT_NUM;
-                        }
-
-                        if (!isComplex)
-                        {
-                            cusolverDnDpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
-                            cusolverDnDpotrf ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, d_workspace, devWorkSize, d_info );
-                        }
-                        else
-                        {
-                            cusolverDnZpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
-                            cusolverDnZpotrf ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, (Complex*) d_workspace, devWorkSize, d_info );
-                        }
-
-                        if ( nscol < nsrow )
+                        for ( di = 0; di < ndrow - lpos; di++ )
                         {
                             if (!isComplex)
-                                cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT, sm, sn, one, d_A, slda, d_A + sn * sizeof(Float), slda );
+                                ( (Float*) h_B ) [ dj * ( ndrow - lpos ) + di ] = ( Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ];
                             else
-                                cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, CUBLAS_DIAG_NON_UNIT, sm, sn, (Complex*) one, d_A, slda, d_A + sn * sizeof(Complex), slda );
+                            {
+                                ( (Complex*) h_B ) [ dj * ( ndrow - lpos ) + di ].x = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].x;
+                                ( (Complex*) h_B ) [ dj * ( ndrow - lpos ) + di ].y = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].y;
+                            }
                         }
+                    }
 
-                        if ( !isComplex )
-                            cudaMemcpyAsync ( h_A, d_A, nscol * nsrow * sizeof(Float), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
+                    if (!isComplex)
+                        cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
+                    else
+                        cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
+
+                    for ( di = 0; di < ndrow - lpos; di++ )
+                    {
+                        h_RelativeMap[di] = Map [ Lsi [ Lsip[d] + lpos + di ] ];
+                    }
+
+                    cudaMemcpyAsync ( d_RelativeMap, h_RelativeMap, ( ndrow - lpos ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
+
+                    if (!isComplex)
+                        cublasDsyrk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
+                    else
+                        cublasZherk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
+
+                    if ( dm > 0 )
+                    {
+                        if (!isComplex)
+                            cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, d_B + dn * sizeof(Float), dlda, d_B, dlda, zero, d_C + dn * sizeof(Float), dldc );
                         else
-                            cudaMemcpyAsync ( h_A, d_A, nscol * nsrow * sizeof(Complex), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
+                            cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, d_B + dn * sizeof(Complex), dlda, d_B, dlda, (Complex*) zero, d_C + dn * sizeof(Complex), dldc );
+                    }
 
-                        cudaStreamSynchronize ( gpu_info->s_cudaStream );
+                    cudaStreamWaitEvent ( gpu_info->d_cudaStream[stream_index], gpu_info->s_cudaEvent_onDevice, 0 );
+
+                    mappedSubtract ( TRUE, isComplex, d_A, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[stream_index] );
+
+                    cudaEventRecord ( gpu_info->s_cudaEvent_assembled, gpu_info->d_cudaStream[stream_index] );
+
+                    if ( lpos_next < ndrow )
+                    {
+                        Long dancestor;
+
+                        dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
+#pragma omp critical (HeadNext)
+                        {
+                            Next[d] = Head[dancestor];
+                            Head[dancestor] = d;
+                        }
+                    }
+                    Lpos[d] = lpos_next;
+
+                    stream_index = ( stream_index + 1 ) % MAX_D_STREAM;
+                    bc_offset += bc_size;
+                }
+
+                cudaEventSynchronize ( gpu_info->s_cudaEvent_assembled );
+
+                if (!isComplex)
+                {
+                    cusolverDnDpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
+                    cusolverDnDpotrf ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, d_workspace, devWorkSize, d_info );
+                }
+                else
+                {
+                    cusolverDnZpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
+                    cusolverDnZpotrf ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, (Complex*) d_workspace, devWorkSize, d_info );
+                }
+
+                if ( nscol < nsrow )
+                {
+                    if (!isComplex)
+                        cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT, sm, sn, one, d_A, slda, d_A + sn * sizeof(Float), slda );
+                    else
+                        cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, CUBLAS_DIAG_NON_UNIT, sm, sn, (Complex*) one, d_A, slda, d_A + sn * sizeof(Complex), slda );
+                }
+
+                if ( !isComplex )
+                    cudaMemcpyAsync ( h_A, d_A, nscol * nsrow * sizeof(Float), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
+                else
+                    cudaMemcpyAsync ( h_A, d_A, nscol * nsrow * sizeof(Complex), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
+
+                cudaStreamSynchronize ( gpu_info->s_cudaStream );
 
 #pragma omp parallel for private(si) num_threads(CP_NUM_THREAD) if(nscol>CP_THREAD_THRESHOLD)
-                        for ( sj = 0; sj < nscol; sj++ )
-                        {
-                            for ( si = sj; si < nsrow; si++ )
-                            {
-                                if ( !isComplex )
-                                    ( Lsx + Lsxp[s] ) [ sj * nsrow + si ] = ( (Float*) h_A ) [ sj * nsrow + si ];
-                                else
-                                {
-                                    ( (Complex*) Lsx + Lsxp[s] )[ sj * nsrow + si ].x = ( (Complex*) h_A ) [ sj * nsrow + si ].x;
-                                    ( (Complex*) Lsx + Lsxp[s] )[ sj * nsrow + si ].y = ( (Complex*) h_A ) [ sj * nsrow + si ].y;
-                                }
-                            }
-                        }
-
-                        Lpos[s] = Super[s+1] - Super[s];
-
-                        if ( nscol < nsrow )
-                        {
-                            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-                            if ( ST_Map[sparent] == st )
-                            {
-#pragma omp critical (HeadNext)
-                                {
-                                    Next[s] = Head[sparent];
-                                    Head[sparent] = s;
-                                }
-                            }
-                            else
-                                Next[s] = -1;
-                            ST_State[st] = NODE_STATE_FACTORIZED;
-                        }
-                    }
-
-                    if ( ST_State[st] == NODE_STATE_FACTORIZED )
+                for ( sj = 0; sj < nscol; sj++ )
+                {
+                    for ( si = sj; si < nsrow; si++ )
                     {
-                        Long spt, spt_;
-
-                        spt_ = ST_Pointer[st];
-
-                        for ( spt = ST_Pointer[st]; spt < ST_Pointer[st+1] && ST_Index[spt] >= 0; spt++ )
-                        {
-                            Long s;
-
-                            s = ST_Index[spt];
-                            if ( s >= 0 )
-                            {
-                                if ( Lpos[s] < Lsip[s+1] - Lsip[s] )
-                                {
-                                    ST_Index[spt_++] = s;
-                                }
-                            }
-                        }
-
-                        ST_Pointer_Tail[st] = spt_;
-
-                        while ( spt_ < ST_Pointer[st+1] )
-                            ST_Index[spt_++] = -1;
-                    }
-
-                    if ( ST_State[st] == NODE_STATE_FACTORIZED )
-                    {
-                        stparent = ST_Parent[st];
-#pragma omp critical (ST_HeadNext)
-                        {
-                            ST_Next[st] = ST_Head[stparent];
-                            ST_Head[stparent] = st;
-                        }
-#pragma omp critical (ST_leafQueueTail)
-                        {
-                            Nstchild[stparent]--;
-                            if ( Nstchild[stparent] <= 0 )
-                                ST_LeafQueue[ST_leafQueueTail++] = stparent;
-                        }
-                    }
-
-#pragma omp critical (ST_leafQueueHead)
-                    {
-                        if ( ST_leafQueueHead >= ST_leafQueueTail )
-                            ST_leafQueueIndex = nsubtree;
+                        if ( !isComplex )
+                            ( Lsx + Lsxp[s] ) [ sj * nsrow + si ] = ( (Float*) h_A ) [ sj * nsrow + si ];
                         else
-                            ST_leafQueueIndex = ST_leafQueueHead++;
+                        {
+                            ( (Complex*) Lsx + Lsxp[s] )[ sj * nsrow + si ].x = ( (Complex*) h_A ) [ sj * nsrow + si ].x;
+                            ( (Complex*) Lsx + Lsxp[s] )[ sj * nsrow + si ].y = ( (Complex*) h_A ) [ sj * nsrow + si ].y;
+                        }
                     }
-
-                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
                 }
-            }
-        }
-        else
-        {
-#pragma omp parallel for schedule(static) num_threads(numGPU)
-            for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
-            {
-                Long leafQueueIndex;
-                Long *Map;
 
-                Map = NULL;
+                Lpos[s] = Super[s+1] - Super[s];
+
+                if ( nscol < nsrow )
+                {
+                    sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+#pragma omp critical (HeadNext)
+                    {
+                        Next[s] = Head[sparent];
+                        Head[sparent] = s;
+                    }
+#pragma omp critical (leafQueueTail)
+                    {
+                        Nschild[sparent]--;
+                        if ( Nschild[sparent] <= 0 )
+                            LeafQueue[leafQueueTail++] = sparent;
+                    }
+                }
 
 #pragma omp critical (leafQueueHead)
                 {
@@ -2947,339 +2324,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         leafQueueIndex = leafQueueHead++;
                 }
 
-                if ( leafQueueIndex < nsuper )
-                {
-                    Map = malloc ( nrow * sizeof(Long) );
-                }
-
-                while ( leafQueueIndex < nsuper )
-                {
-                    Long j, i, p;
-
-                    Long s, sj, si, nscol, nsrow, sparent;
-
-                    Long sn, sm, slda;
-
-                    int gpuIndex;
-                    struct gpu_info_struct *gpu_info;
-                    void *h_A, *d_A;
-
-                    int devWorkSize;
-                    Float *d_workspace;
-                    int *d_info;
-
-                    Long d_index, d_count;;
-                    int stream_index;
-                    size_t bc_offset;
-
-                    gpuIndex = 0;
-                    while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
-                        gpuIndex = ( gpuIndex + 1 ) / numGPU;
-
-                    gpu_info = gpu_info_list + gpuIndex;
-
-                    cudaSetDevice ( gpu_info->gpuIndex_physical );
-
-                    d_workspace = gpu_info->devMem + ( 1 + B_SLOT_NUM ) * devSlotSize;
-                    d_info = gpu_info->devMem + ( 2 + B_SLOT_NUM ) * devSlotSize;
-
-                    s = LeafQueue[leafQueueIndex];
-
-                    nscol = Super[s+1] - Super[s];
-                    nsrow = Lsip[s+1] - Lsip[s];
-
-                    sn = nscol;
-                    sm = nsrow - nscol;
-                    slda = sn + sm;
-
-                    h_A = gpu_info->hostMem;
-                    d_A = gpu_info->devMem;
-
-                    for ( si = 0; si < nsrow; si++ )
-                    {
-                        Map [ Lsi [ Lsip[s] + si ] ] = si;
-                    }
-
-                    if ( !isComplex )
-                        memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
-                    else
-                        memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
-
-                    for ( j = Super[s]; j < Super[s+1]; j++ )
-                    {
-                        sj = j - Super[s];
-                        for ( p = Lp[j]; p < Lp[j+1]; p++ )
-                        {
-                            i = Li[p];
-                            si = Map[i];
-                            if ( !isComplex )
-                                ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
-                            else
-                            {
-                                ( (Complex*) h_A ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
-                                ( (Complex*) h_A ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
-                            }
-                        }
-                    }
-
-                    if ( !isComplex )
-                        cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                    else
-                        cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-
-                    cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
-
-                    d_count = 0;
-
-                    while ( Head[s] >= 0 )
-                    {
-                        size_t b_size, c_size, map_size, bc_size;
-
-                        Long d;
-
-                        Long ndcol, ndrow;
-                        Long lpos, lpos_next;
-
-                        Long dn, dm, dk;
-
-                        d = Head[s];
-
-                        ndcol = Super[d+1] - Super[d];
-                        ndrow = Lsip[d+1] - Lsip[d];
-
-                        lpos = Lpos[d];
-                        for ( lpos_next = lpos; lpos_next < ndrow && ( Lsi + Lsip[d] ) [ lpos_next ] < Super[s+1]; lpos_next++ );
-                        Lpos_next[d] = lpos_next;
-
-                        dn = lpos_next - lpos;
-                        dm = ndrow - lpos_next;
-                        dk = ndcol;
-
-                        if ( !isComplex )
-                        {
-                            b_size = dk * ( dn + dm ) * sizeof(Float);
-                            c_size = dn * ( dn + dm ) * sizeof(Float);
-                            map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Float) );
-                        }
-                        else
-                        {
-                            b_size = dk * ( dn + dm ) * sizeof(Complex);
-                            c_size = dn * ( dn + dm ) * sizeof(Complex);
-                            map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Complex) );
-                        }
-
-                        bc_size = b_size + c_size + map_size;
-
-                        node_size_queue[d_count].node = d;
-                        node_size_queue[d_count].size = bc_size;
-
-                        d_count++;
-
-                        Head[s] = Next[d];
-                    }
-
-                    qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
-
-                    stream_index = 0;
-                    bc_offset = 0;
-
-                    for ( d_index = 0; d_index < d_count; d_index++ )
-                    {
-                        size_t b_size, c_size, map_size, bc_size;
-
-                        Long d, dj, di;
-                        Long ndcol, ndrow;
-                        Long lpos, lpos_next;
-
-                        Long dn, dm, dk, dlda, dldc;
-
-                        void *h_B, *d_B, *d_C;
-                        Long *h_RelativeMap, *d_RelativeMap;
-
-                        d = node_size_queue[d_index].node;
-
-                        ndcol = Super[d+1] - Super[d];
-                        ndrow = Lsip[d+1] - Lsip[d];
-
-                        lpos = Lpos[d];
-
-                        lpos = Lpos[d];
-                        for ( lpos_next = lpos; lpos_next < ndrow && ( Lsi + Lsip[d] ) [ lpos_next ] < Super[s+1]; lpos_next++ );
-                        Lpos_next[d] = lpos_next;
-
-                        dn = lpos_next - lpos;
-                        dm = ndrow - lpos_next;
-                        dk = ndcol;
-                        dlda = dn + dm;
-                        dldc = dn + dm;
-
-                        if ( !isComplex )
-                        {
-                            b_size = dk * ( dn + dm ) * sizeof(Float);
-                            c_size = dn * ( dn + dm ) * sizeof(Float);
-                            map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Float) );
-                        }
-                        else
-                        {
-                            b_size = dk * ( dn + dm ) * sizeof(Complex);
-                            c_size = dn * ( dn + dm ) * sizeof(Complex);
-                            map_size = ALIGN ( ( dn + dm ) * sizeof(Long), sizeof(Complex) );
-                        }
-
-                        bc_size = b_size + c_size + map_size;
-
-                        if ( stream_index >= MAX_D_STREAM ||  bc_offset + bc_size > devBCSize )
-                        {
-                            stream_index = 0;
-                            bc_offset = 0;
-                            cudaEventSynchronize ( gpu_info->s_cudaEvent_assembled );
-                        }
-
-                        h_B = gpu_info->hostMem + devASize + bc_offset;
-                        d_B = gpu_info->devMem + devASize + bc_offset;
-                        d_C = gpu_info->devMem + devASize + bc_offset + b_size;
-                        h_RelativeMap = gpu_info->hostMem + devASize + bc_offset + b_size + c_size;
-                        d_RelativeMap = gpu_info->devMem + devASize + bc_offset + b_size + c_size;
-
-#pragma omp parallel for private(di) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
-                        for ( dj = 0; dj < ndcol; dj++ )
-                        {
-                            for ( di = 0; di < ndrow - lpos; di++ )
-                            {
-                                if (!isComplex)
-                                    ( (Float*) h_B ) [ dj * ( ndrow - lpos ) + di ] = ( Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ];
-                                else
-                                {
-                                    ( (Complex*) h_B ) [ dj * ( ndrow - lpos ) + di ].x = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].x;
-                                    ( (Complex*) h_B ) [ dj * ( ndrow - lpos ) + di ].y = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].y;
-                                }
-                            }
-                        }
-
-                        if (!isComplex)
-                            cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
-                        else
-                            cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
-
-                        for ( di = 0; di < ndrow - lpos; di++ )
-                        {
-                            h_RelativeMap[di] = Map [ Lsi [ Lsip[d] + lpos + di ] ];
-                        }
-
-                        cudaMemcpyAsync ( d_RelativeMap, h_RelativeMap, ( ndrow - lpos ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
-
-                        if (!isComplex)
-                            cublasDsyrk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
-                        else
-                            cublasZherk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
-
-                        if ( dm > 0 )
-                        {
-                            if (!isComplex)
-                                cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, d_B + dn * sizeof(Float), dlda, d_B, dlda, zero, d_C + dn * sizeof(Float), dldc );
-                            else
-                                cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, d_B + dn * sizeof(Complex), dlda, d_B, dlda, (Complex*) zero, d_C + dn * sizeof(Complex), dldc );
-                        }
-
-                        cudaStreamWaitEvent ( gpu_info->d_cudaStream[stream_index], gpu_info->s_cudaEvent_onDevice, 0 );
-
-                        mappedSubtract ( TRUE, isComplex, d_A, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[stream_index] );
-
-                        cudaEventRecord ( gpu_info->s_cudaEvent_assembled, gpu_info->d_cudaStream[stream_index] );
-
-                        if ( lpos_next < ndrow )
-                        {
-                            Long dancestor;
-
-                            dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
-#pragma omp critical (HeadNext)
-                            {
-                                Next[d] = Head[dancestor];
-                                Head[dancestor] = d;
-                            }
-                        }
-                        Lpos[d] = lpos_next;
-
-                        stream_index++;
-                        bc_offset += bc_size;
-                    }
-
-                    cudaEventSynchronize ( gpu_info->s_cudaEvent_assembled );
-
-                    if (!isComplex)
-                    {
-                        cusolverDnDpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
-                        cusolverDnDpotrf ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, d_workspace, devWorkSize, d_info );
-                    }
-                    else
-                    {
-                        cusolverDnZpotrf_bufferSize ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, &devWorkSize );
-                        cusolverDnZpotrf ( gpu_info->s_cusolverDnHandle, CUBLAS_FILL_MODE_LOWER, sn, d_A, slda, (Complex*) d_workspace, devWorkSize, d_info );
-                    }
-
-                    if ( nscol < nsrow )
-                    {
-                        if (!isComplex)
-                            cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT, sm, sn, one, d_A, slda, d_A + sn * sizeof(Float), slda );
-                        else
-                            cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, CUBLAS_DIAG_NON_UNIT, sm, sn, (Complex*) one, d_A, slda, d_A + sn * sizeof(Complex), slda );
-                    }
-
-                    if ( !isComplex )
-                        cudaMemcpyAsync ( h_A, d_A, nscol * nsrow * sizeof(Float), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
-                    else
-                        cudaMemcpyAsync ( h_A, d_A, nscol * nsrow * sizeof(Complex), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
-
-                    cudaStreamSynchronize ( gpu_info->s_cudaStream );
-
-#pragma omp parallel for private(si) num_threads(CP_NUM_THREAD) if(nscol>CP_THREAD_THRESHOLD)
-                    for ( sj = 0; sj < nscol; sj++ )
-                    {
-                        for ( si = sj; si < nsrow; si++ )
-                        {
-                            if ( !isComplex )
-                                ( Lsx + Lsxp[s] ) [ sj * nsrow + si ] = ( (Float*) h_A ) [ sj * nsrow + si ];
-                            else
-                            {
-                                ( (Complex*) Lsx + Lsxp[s] )[ sj * nsrow + si ].x = ( (Complex*) h_A ) [ sj * nsrow + si ].x;
-                                ( (Complex*) Lsx + Lsxp[s] )[ sj * nsrow + si ].y = ( (Complex*) h_A ) [ sj * nsrow + si ].y;
-                            }
-                        }
-                    }
-
-                    Lpos[s] = Super[s+1] - Super[s];
-
-                    if ( nscol < nsrow )
-                    {
-                        sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-#pragma omp critical (HeadNext)
-                        {
-                            Next[s] = Head[sparent];
-                            Head[sparent] = s;
-                        }
-#pragma omp critical (leafQueueTail)
-                        {
-                            Nschild[sparent]--;
-                            if ( Nschild[sparent] <= 0 )
-                                LeafQueue[leafQueueTail++] = sparent;
-                        }
-                    }
-
-#pragma omp critical (leafQueueHead)
-                    {
-                        if ( leafQueueHead >= leafQueueTail )
-                            leafQueueIndex = nsuper;
-                        else
-                            leafQueueIndex = leafQueueHead++;
-                    }
-
-                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
-                }
-
-                if ( Map != NULL ) free ( Map );
-
-                Map = NULL;
+                omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
             }
+
+            if ( Map != NULL ) free ( Map );
+
+            Map = NULL;
         }
     }
     else
