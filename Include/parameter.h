@@ -30,6 +30,8 @@
 #define B_SLOT_NUM 4
 #define C_SLOT_NUM 2
 
+#define MAX_D_STREAM 32
+
 #define MAX_BATCHSIZE 4096
 
 #define CUDA_BLOCKDIM_X 16

@@ -36,18 +36,16 @@ struct gpu_info_struct
     cudaEvent_t s_cudaEvent_reset;
     cudaEvent_t s_cudaEvent_onDevice;
     cudaEvent_t s_cudaEvent_assembled;
-    cudaEvent_t d_cudaEvent_onDevice[B_SLOT_NUM];
-    cudaEvent_t d_cudaEvent_updated[B_SLOT_NUM];
-    cudaEvent_t d_cudaEvent_assembled[C_SLOT_NUM];
+    cudaEvent_t d_cudaEvent_assembled[MAX_D_STREAM];
 
     cudaStream_t s_cudaStream;
-    cudaStream_t d_cudaStream[B_SLOT_NUM];
+    cudaStream_t d_cudaStream[MAX_D_STREAM];
 
     cublasHandle_t s_cublasHandle;
-    cublasHandle_t d_cublasHandle[B_SLOT_NUM];
+    cublasHandle_t d_cublasHandle[MAX_D_STREAM];
 
     cusolverDnHandle_t s_cusolverDnHandle;
-    cusolverDnHandle_t d_cusolverDnHandle[B_SLOT_NUM];
+    cusolverDnHandle_t d_cusolverDnHandle[MAX_D_STREAM];
 };
 
 struct matrix_info_struct
