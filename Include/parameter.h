@@ -27,8 +27,8 @@
 
 #define MAXMMLINE 1024
 
-#define D_BUFFER 3;
-#define C_BUFFER 2;
+#define B_SLOT_NUM 3
+#define C_SLOT_NUM 2
 
 #define MAX_BATCHSIZE 4096
 

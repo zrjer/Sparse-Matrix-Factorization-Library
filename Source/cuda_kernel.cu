@@ -163,3 +163,37 @@ void mappedSubtract_batched ( Long batchSize, int isAtomic, int isComplex, void 
 
     mappedSubtract_batched_kernel <<< block, thread, 0, stream >>> ( isAtomic, isComplex, d_A, lda, d_C, cj_offset, ci_offset, nccol, ncrow, ldc, d_RelativeMap );
 }
+
+__global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_A_, Long nscol, Long nsrow )
+{
+    Long sj, si;
+
+    sj = blockIdx.x * blockDim.x + threadIdx.x;
+    si = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if ( !isComplex )
+    {
+        if ( sj < nscol && si < nsrow )
+            ( (Float*) d_A ) [ sj * nsrow + si ] += ( (Float*) d_A_ )  [ sj * nsrow + si ];
+    }
+    else
+    {
+        if ( sj < nscol && si < nsrow )
+        {
+            ( (Complex*) d_A ) [ sj * nsrow + si ].x += ( (Complex*) d_A_ ) [ sj * nsrow + si ].x;
+            ( (Complex*) d_A ) [ sj * nsrow + si ].y += ( (Complex*) d_A_ ) [ sj * nsrow + si ].y;
+        }
+    }
+}
+
+void deviceSum ( int isComplex, void *d_A, void *d_A_, Long nscol, Long nsrow, cudaStream_t stream )
+{
+    dim3 block, thread;
+
+    thread.x = CUDA_BLOCKDIM_X;
+    thread.y = CUDA_BLOCKDIM_Y;
+    block.x = ( nscol + thread.x - 1 ) / thread.x;
+    block.y = ( nsrow + thread.y - 1 ) / thread.y;
+
+    deviceSum_kernel <<< block, thread, 0, stream >>> ( isComplex, d_A, d_A_, nscol, nsrow );
+}

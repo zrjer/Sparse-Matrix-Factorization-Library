@@ -22,6 +22,10 @@ extern "C"
 
     __host__ void mappedSubtract_batched ( Long batchSize, int isAtomic, int isComplex, void **d_A, Long *lda, void **d_C, Long *cj_offset, Long *ci_offset, Long *nccol, Long *ncrow, Long *ldc, Long **d_RelativeMap, cudaStream_t stream );
 
+    __global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_A_, Long nscol, Long nsrow );
+
+    __host__ void deviceSum ( int isComplex, void *d_A, void *d_A_, Long nscol, Long nsrow, cudaStream_t stream );
+
 #ifdef __cplusplus
 }
 #endif
