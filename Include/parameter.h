@@ -42,5 +42,6 @@ const double prune_dense = 10.0;
 const double aggressive = 1;
 
 #define RELAX_RATE (0.2)
+#define MIN_SUPERNODE_COLUMN (32)
 
 #endif
