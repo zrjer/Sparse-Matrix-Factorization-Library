@@ -21,7 +21,7 @@ NVCC = nvcc
 
 CFPTHREADS = -pthread
 
-CFLAGS = -O3 -fPIC -Wall $(CFOPENMP)
+CFLAGS = -O3 -fexceptions -fPIC -Wall $(CFOPENMP)
 CXXFLAGS = $(CFLAGS)
 NVCCFLAGS = -O3 \
 			-Xcompiler -fPIC \

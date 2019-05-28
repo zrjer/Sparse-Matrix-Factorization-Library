@@ -15,6 +15,9 @@ int main (int argc, char **argv)
     printf ("Size of Float = %ld\n", sizeof(Float));
     printf ("Size of Complex = %ld\n", sizeof(Complex));
     printf ("Size of idx_t = %ld\n", sizeof(idx_t));
+    printf ("Size of cudaStream_t = %ld\n", sizeof(cudaStream_t));
+    printf ("Size of cublasHandle_t = %ld\n", sizeof(cublasHandle_t));
+    printf ("Size of cusolverDnHandle_t = %ld\n", sizeof(cusolverDnHandle_t));
     printf ("\n");
 #endif
 
