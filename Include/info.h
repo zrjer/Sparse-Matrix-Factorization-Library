@@ -34,7 +34,6 @@ struct gpu_info_struct
     size_t sharedMemSize;
 
     cudaEvent_t s_cudaEvent_onDevice;
-    cudaEvent_t s_cudaEvent_assembled;
 
     cudaStream_t s_cudaStream;
     cudaStream_t d_cudaStream[MAX_D_STREAM];
@@ -43,7 +42,6 @@ struct gpu_info_struct
     cublasHandle_t d_cublasHandle[MAX_D_STREAM];
 
     cusolverDnHandle_t s_cusolverDnHandle;
-    cusolverDnHandle_t d_cusolverDnHandle[MAX_D_STREAM];
 };
 
 struct matrix_info_struct
