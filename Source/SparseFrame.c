@@ -2699,8 +2699,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             Nstchild[stparent]--;
                             if ( Nstchild[stparent] <= 0 )
                             {
-                                ST_LeafQueue[ST_leafQueueTail] = stparent; // do not merge these two lines unless you make them atomic ( see st_assignment )
-                                ST_leafQueueTail++; // do not merge these two lines unless you make them atomic ( see st_assignment )
+                                ST_LeafQueue[ST_leafQueueTail] = stparent; // do not merge these two lines unless you make them atomic ( see st_assignment for possible race condition )
+                                ST_leafQueueTail++; // do not merge these two lines unless you make them atomic ( see st_assignment for possible race condition )
                             }
                         }
                     }
@@ -3055,8 +3055,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             Nschild[sparent]--;
                             if ( Nschild[sparent] <= 0 )
                             {
-                                LeafQueue[leafQueueTail]= sparent; // do not merge these two lines unless you make them atomic ( see s_assignment )
-                                leafQueueTail++; // do not merge these two lines unless you make them atomic ( see s_assignment )
+                                LeafQueue[leafQueueTail]= sparent; // do not merge these two lines unless you make them atomic ( see s_assignment for possible race condition )
+                                leafQueueTail++; // do not merge these two lines unless you make them atomic ( see s_assignment for possible race condition )
                             }
                         }
                     }
