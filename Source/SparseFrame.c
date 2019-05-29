@@ -1812,7 +1812,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Float *Lsx;
 
     Long *Head, *Next;
-    Long *Nschild;
+    volatile Long *Nschild;
 
     Long *Lpos, *Lpos_next, *Lpos_low;
 
