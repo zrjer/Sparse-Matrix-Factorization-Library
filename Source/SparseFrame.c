@@ -1541,12 +1541,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     nsleaf = 0;
     for ( s = 0; s < nsuper; s++ )
-    {
         if ( LeafQueue[s] == 0 )
-        {
             LeafQueue[nsleaf++] = s;
-        }
-    }
 
     for ( s = nsleaf; s < nsuper; s++ )
         LeafQueue[s] = -1;
@@ -1691,12 +1687,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     nstleaf = 0;
     for ( st = 0; st < nsubtree; st++ )
-    {
         if ( ST_LeafQueue[st] == 0 )
-        {
             ST_LeafQueue[nstleaf++] = st;
-        }
-    }
 
     for ( st = nstleaf; st < nsubtree; st++ )
         ST_LeafQueue[st] = -1;
@@ -1804,7 +1796,7 @@ int SparseFrame_node_size_cmp ( const void *l, const void *r )
 
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct gpu_info_struct *gpu_info_list, struct matrix_info_struct *matrix_info )
 {
-    int numThread, nodeThreadIndex;
+    int numThread;
     int useGPU, useSubtree, numGPU;
     size_t devSlotSize, devASize, devBCSize;
 
@@ -1813,7 +1805,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Long *Lp, *Li;
     Float *Lx;
 
-    Long nsuper, s;
+    Long nsuper;
     Long *Super, *SuperMap;
 
     Long *Lsip, *Lsxp, *Lsi;
@@ -1836,7 +1828,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Long *ST_Head, *ST_Next, *ST_Pointer_Tail;
     Long *Nstchild;
 
-    Long st, nsubtree, nstleaf;
+    Long nsubtree, nstleaf;
     Long *ST_Map, *ST_Pointer, *ST_Index, *ST_Parent, *ST_LeafQueue;
     Long ST_leafQueueHead, ST_leafQueueTail;
     enum NodeState *ST_State;
@@ -1903,7 +1895,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Coffset = Aoffset + 1 * nsuper;
     Moffset = Aoffset + 2 * nsuper;
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         Head[s] = -1;
         Next[s] = -1;
@@ -1912,7 +1904,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     memset ( Nschild, 0, nsuper * sizeof(Long) );
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         Long nscol, nsrow, sparent;
 
@@ -1926,12 +1918,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         }
     }
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         Lpos[s] = 0;
     }
 
-    for ( st = 0; st < nsubtree; st++ )
+    for ( Long st = 0; st < nsubtree; st++ )
     {
         ST_Head[st] = -1;
         ST_Next[st] = -1;
@@ -1941,7 +1933,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     memset ( Nstchild, 0, nsubtree * sizeof(Long) );
 
-    for ( st = 0; st < nsubtree; st++ )
+    for ( Long st = 0; st < nsubtree; st++ )
     {
         Long stparent;
 
@@ -1960,15 +1952,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     {
         if ( useSubtree == TRUE )
         {
-#pragma omp parallel for schedule(static) num_threads(numGPU)
-            for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
+#pragma omp parallel num_threads(numGPU)
             {
                 Long ST_leafQueueIndex;
                 struct node_size_struct *node_size_queue;
 
                 node_size_queue = NULL;
 
-#pragma omp critical (ST_leafQueueHead)
+#pragma omp critical (ST_leafQueue)
                 {
                     if ( ST_leafQueueHead >= ST_leafQueueTail )
                         ST_leafQueueIndex = nsubtree;
@@ -2001,7 +1992,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     h_Lsi = gpu_info->hostMem + 6 * devSlotSize;
                     d_Lsi = gpu_info->devMem + 6 * devSlotSize;
 
-                    st = ST_LeafQueue[ST_leafQueueIndex]; // st_assignment
+                    st = ST_LeafQueue[ST_leafQueueIndex];
 
                     ST_State[st] = NODE_STATE_ASSEMBLED;
 
@@ -2398,9 +2389,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         ndrow = Lsip[d+1] - Lsip[d];
                                         lpos_next = Lpos_next[d];
                                         if ( lpos_next < ndrow )
-                                        {
                                             ST_Index[dpt_++] = d;
-                                        }
                                     }
                                 }
 
@@ -2417,7 +2406,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
                         Long s;
-                        Long sparent;
                         Long nscol, nsrow;
                         Long sj, si;
 
@@ -2645,6 +2633,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         if ( nscol < nsrow )
                         {
+                            Long sparent;
+
                             sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
                             if ( ST_Map[sparent] == st )
                             {
@@ -2660,6 +2650,24 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         }
                     }
 
+                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
+
+                    if ( ST_State[st] == NODE_STATE_FACTORIZED )
+                    {
+                        stparent = ST_Parent[st];
+#pragma omp critical (ST_HeadNext)
+                        {
+                            ST_Next[st] = ST_Head[stparent];
+                            ST_Head[stparent] = st;
+                        }
+#pragma omp critical (ST_leafQueue)
+                        {
+                            Nstchild[stparent]--;
+                            if ( Nstchild[stparent] <= 0 )
+                                ST_LeafQueue[ST_leafQueueTail++] = stparent;
+                        }
+                    }
+
                     if ( ST_State[st] == NODE_STATE_FACTORIZED )
                     {
                         Long spt, spt_;
@@ -2672,12 +2680,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             s = ST_Index[spt];
                             if ( s >= 0 )
-                            {
                                 if ( Lpos[s] < Lsip[s+1] - Lsip[s] )
-                                {
                                     ST_Index[spt_++] = s;
-                                }
-                            }
                         }
 
                         ST_Pointer_Tail[st] = spt_;
@@ -2686,34 +2690,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             ST_Index[spt_++] = -1;
                     }
 
-                    if ( ST_State[st] == NODE_STATE_FACTORIZED )
-                    {
-                        stparent = ST_Parent[st];
-#pragma omp critical (ST_HeadNext)
-                        {
-                            ST_Next[st] = ST_Head[stparent];
-                            ST_Head[stparent] = st;
-                        }
-#pragma omp critical (ST_leafQueueTail)
-                        {
-                            Nstchild[stparent]--;
-                            if ( Nstchild[stparent] <= 0 )
-                            {
-                                ST_LeafQueue[ST_leafQueueTail] = stparent; // do not merge these two lines unless you make them atomic ( see st_assignment for possible race condition )
-                                ST_leafQueueTail++; // do not merge these two lines unless you make them atomic ( see st_assignment for possible race condition )
-                            }
-                        }
-                    }
-
-#pragma omp critical (ST_leafQueueHead)
+#pragma omp critical (ST_leafQueue)
                     {
                         if ( ST_leafQueueHead >= ST_leafQueueTail )
                             ST_leafQueueIndex = nsubtree;
                         else
                             ST_leafQueueIndex = ST_leafQueueHead++;
                     }
-
-                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
                 }
 
                 if ( node_size_queue != NULL ) free ( node_size_queue );
@@ -2723,8 +2706,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         }
         else
         {
-#pragma omp parallel for schedule(static) num_threads(numGPU)
-            for ( nodeThreadIndex = 0; nodeThreadIndex < numGPU; nodeThreadIndex++ )
+#pragma omp parallel num_threads(numGPU)
             {
                 Long leafQueueIndex;
                 Long *Map;
@@ -2733,7 +2715,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 Map = NULL;
                 node_size_queue = NULL;
 
-#pragma omp critical (leafQueueHead)
+#pragma omp critical (leafQueue)
                 {
                     if ( leafQueueHead >= leafQueueTail )
                         leafQueueIndex = nsuper;
@@ -2751,7 +2733,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 {
                     Long j, i, p;
 
-                    Long s, sj, si, nscol, nsrow, sparent;
+                    Long s, sj, si, nscol, nsrow;
 
                     Long sn, sm, slda;
 
@@ -2778,7 +2760,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     d_info = gpu_info->devMem + devASize;
                     d_workspace = gpu_info->devMem + devASize + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
 
-                    s = LeafQueue[leafQueueIndex]; // s_assignment
+                    s = LeafQueue[leafQueueIndex];
 
                     nscol = Super[s+1] - Super[s];
                     nsrow = Lsip[s+1] - Lsip[s];
@@ -3042,34 +3024,33 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     Lpos[s] = Super[s+1] - Super[s];
 
+                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
+
                     if ( nscol < nsrow )
                     {
+                        Long sparent;
+
                         sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
 #pragma omp critical (HeadNext)
                         {
                             Next[s] = Head[sparent];
                             Head[sparent] = s;
                         }
-#pragma omp critical (leafQueueTail)
+#pragma omp critical (leafQueue)
                         {
                             Nschild[sparent]--;
                             if ( Nschild[sparent] <= 0 )
-                            {
-                                LeafQueue[leafQueueTail]= sparent; // do not merge these two lines unless you make them atomic ( see s_assignment for possible race condition )
-                                leafQueueTail++; // do not merge these two lines unless you make them atomic ( see s_assignment for possible race condition )
-                            }
+                                LeafQueue[leafQueueTail++]= sparent;
                         }
                     }
 
-#pragma omp critical (leafQueueHead)
+#pragma omp critical (leafQueue)
                     {
                         if ( leafQueueHead >= leafQueueTail )
                             leafQueueIndex = nsuper;
                         else
                             leafQueueIndex = leafQueueHead++;
                     }
-
-                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
                 }
 
                 if ( Map != NULL ) free ( Map );
@@ -3082,8 +3063,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     }
     else
     {
-#pragma omp parallel for schedule(static) num_threads(numThread)
-        for ( nodeThreadIndex = 0; nodeThreadIndex < numThread; nodeThreadIndex++ )
+#pragma omp parallel num_threads(numThread)
         {
             Long leafQueueIndex;
 
@@ -3094,7 +3074,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             RelativeMap = NULL;
             C = NULL;
 
-#pragma omp critical (leafQueueHead)
+#pragma omp critical (leafQueue)
             {
                 if ( leafQueueHead >= leafQueueTail )
                     leafQueueIndex = nsuper;
@@ -3118,7 +3098,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 Long j, i, p;
 
                 Long s;
-                Long sparent;
                 Long nscol, nsrow;
                 Long sj, si;
 
@@ -3246,21 +3225,23 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                 if ( nscol < nsrow )
                 {
+                    Long sparent;
+
                     sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
 #pragma omp critical (HeadNext)
                     {
                         Next[s] = Head[sparent];
                         Head[sparent] = s;
                     }
-#pragma omp critical (leafQueueTail)
+#pragma omp critical (leafQueue)
                     {
                         Nschild[sparent]--;
                         if ( Nschild[sparent] <= 0 )
-                            LeafQueue[leafQueueTail++] = sparent;
+                            LeafQueue[leafQueueTail++]= sparent;
                     }
                 }
 
-#pragma omp critical (leafQueueHead)
+#pragma omp critical (leafQueue)
                 {
                     if ( leafQueueHead >= leafQueueTail )
                         leafQueueIndex = nsuper;
