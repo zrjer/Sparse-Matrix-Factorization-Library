@@ -1902,7 +1902,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         nodeState[s] = NODE_STATE_INITIAL;
     }
 
-    memset ( Nschild, 0, nsuper * sizeof(Long) );
+    memset ( (void*) Nschild, 0, nsuper * sizeof(Long) );
 
     for ( Long s = 0; s < nsuper; s++ )
     {
