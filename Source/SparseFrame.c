@@ -668,7 +668,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     Mworkspace = matrix_info->workspace;
 
     if ( sizeof(idx_t) == sizeof(Long) )
-        Mperm = Perm;
+        Mperm = (idx_t*) Perm;
     else
         Mperm  = Mworkspace;
     Miperm = Mworkspace + 1 * nrow;
@@ -721,7 +721,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     }
     else
     {
-        METIS_NodeND (&nrow, Mp, Mi, NULL, NULL, Mperm, Miperm);
+        METIS_NodeND ( (idx_t*) &nrow, Mp, Mi, NULL, NULL, Mperm, Miperm);
     }
 
     if ( sizeof(idx_t) != sizeof(Long) )
