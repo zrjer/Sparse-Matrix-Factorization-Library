@@ -24,6 +24,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     printf ("\n================SparseFrame_allocate_gpu================\n\n");
 #endif
 
+    numGPU_physical = 0;
     cudaGetDeviceCount ( &numGPU_physical );
 #if ( defined ( MAX_NUM_GPU ) && ( MAX_NUM_GPU >= 0 ) )
     numGPU_physical = MIN ( numGPU_physical, MAX_NUM_GPU );
