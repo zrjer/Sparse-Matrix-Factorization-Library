@@ -48,7 +48,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     if ( *gpu_info_list_ptr == NULL ) return 1;
 
-    minDevMemSize = SIZE_MAX;
+    minDevMemSize = ( numGPU_physical > 0 ) ? SIZE_MAX : 0;
 
     for ( gpuIndex_physical = 0; gpuIndex_physical < numGPU_physical; gpuIndex_physical++ )
     {
