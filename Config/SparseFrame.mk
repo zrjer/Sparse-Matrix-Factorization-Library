@@ -31,7 +31,7 @@ NVCCFLAGS = -O3 \
 			-gencode arch=compute_60,code=sm_60
 
 LBLAS = -lopenblas
-LCUDA = -lcublas -lcublas_device -lcusolver -lcudart -lcudadevrt
+LCUDA = -lcublas -lcusolver -lcudart -lcudadevrt
 LDLIBS += -lgfortran -lm -lrt -lamd -lcamd -lcolamd -lccolamd -lmetis $(LBLAS) $(LCUDA)
 
 SOFLAGS = -shared -Wl,--no-undefined
