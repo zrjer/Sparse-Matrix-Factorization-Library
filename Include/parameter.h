@@ -11,7 +11,7 @@
 #define CP_NUM_THREAD 8
 #define CP_THREAD_THRESHOLD 64
 
-#define MAX_NUM_GPU (4)
+#define MAX_NUM_GPU (-1)
 #define MAX_GPU_SPLIT (4)
 
 #define MEM_LIMITS
