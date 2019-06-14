@@ -15,13 +15,24 @@ double SparseFrame_time ()
 
 int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gpu_info_struct **gpu_info_list_ptr )
 {
-    int numGPU, numGPU_physical, numSplit;
+    int numCPU, numGPU, numGPU_physical, numSplit;
 
     size_t minDevMemSize;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_allocate_gpu================\n\n");
 #endif
+
+    numCPU = sysconf(_SC_NPROCESSORS_ONLN);
+#if ( defined ( MAX_NUM_CPU ) && ( MAX_NUM_CPU > 0 ) )
+    numCPU = MIN ( numCPU, MAX_NUM_CPU );
+#endif
+
+#ifdef PRINT_INFO
+    printf ( "Num of CPU = %d\n", numCPU );
+#endif
+
+    common_info->numCPU = numCPU;
 
     numGPU_physical = 0;
     cudaGetDeviceCount ( &numGPU_physical );

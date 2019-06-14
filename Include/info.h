@@ -9,6 +9,7 @@
 
 struct common_info_struct
 {
+    int numCPU;
     int numGPU;
     int numThread;
     int numSparseMatrix;
