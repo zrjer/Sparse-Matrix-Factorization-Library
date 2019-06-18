@@ -1798,7 +1798,7 @@ int SparseFrame_node_size_cmp ( const void *l, const void *r )
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct gpu_info_struct *gpu_info_list, struct matrix_info_struct *matrix_info )
 {
     int numThread;
-    int useGPU, useSubtree, numGPU;
+    int useGPU, useSubtree, numCPU, numGPU, numPU;
     size_t devSlotSize, devASize, devBCSize;
 
     int isComplex;
@@ -1841,7 +1841,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 #endif
 
     numThread = common_info->numThread;
+    numCPU = common_info->numCPU;
     numGPU = common_info->numGPU;
+    numPU = numCPU + numGPU;
     useGPU = ( numGPU > 0 ) ? TRUE : FALSE;
     useSubtree = FALSE;
 
