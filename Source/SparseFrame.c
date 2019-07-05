@@ -1974,7 +1974,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     {
         if ( useSubtree == TRUE )
         {
-#pragma omp parallel num_threads(numGPU)
+#pragma omp parallel num_threads( numGPU + numCPU )
             {
                 Long ST_leafQueueIndex;
                 struct node_size_struct *node_size_queue;
@@ -2741,7 +2741,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         }
         else
         {
-#pragma omp parallel num_threads(numGPU)
+#pragma omp parallel num_threads( numGPU + numCPU )
             {
                 Long leafQueueIndex;
                 Long *Map, *RelativeMap;
