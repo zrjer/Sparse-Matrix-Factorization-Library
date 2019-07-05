@@ -24,15 +24,9 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 #endif
 
     numCPU = sysconf(_SC_NPROCESSORS_ONLN);
-#if ( defined ( MAX_NUM_CPU ) && ( MAX_NUM_CPU > 0 ) )
+#if ( defined ( MAX_NUM_CPU ) && ( MAX_NUM_CPU >= 0 ) )
     numCPU = MIN ( numCPU, MAX_NUM_CPU );
 #endif
-
-#ifdef PRINT_INFO
-    printf ( "Num of CPU = %d\n", numCPU );
-#endif
-
-    common_info->numCPU = numCPU;
 
     numGPU_physical = 0;
     cudaGetDeviceCount ( &numGPU_physical );
@@ -40,7 +34,13 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     numGPU_physical = MIN ( numGPU_physical, MAX_NUM_GPU );
 #endif
 
+    if ( numGPU_physical <= 0 )
+        numCPU = MAX ( numCPU, 1 );
+
+    common_info->numCPU = numCPU;
+
 #ifdef PRINT_INFO
+    printf ( "Num of CPU = %d\n", numCPU );
     printf ( "Num of GPU = %d\n", numGPU_physical );
 #endif
 
@@ -53,7 +53,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     common_info->numGPU = numGPU;
 
-    *gpu_info_list_ptr = malloc ( numGPU * sizeof ( struct gpu_info_struct ) );
+    *gpu_info_list_ptr = malloc ( ( numGPU + numCPU ) * sizeof ( struct gpu_info_struct ) );
 
     if ( *gpu_info_list_ptr == NULL ) return 1;
 
@@ -162,6 +162,29 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     common_info->minDevMemSize = minDevMemSize;
 
+    for ( int gpuIndex = numGPU; gpuIndex < numGPU + numCPU; gpuIndex++ )
+    {
+        (*gpu_info_list_ptr)[gpuIndex].gpuIndex_physical = -1;
+        omp_init_lock ( &( (*gpu_info_list_ptr)[gpuIndex].gpuLock ) );
+        (*gpu_info_list_ptr)[gpuIndex].devMem = NULL;
+        (*gpu_info_list_ptr)[gpuIndex].devMemSize = 0;
+        (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
+        (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
+        (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cudaStream = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cublasHandle = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cusolverDnHandle = 0;
+        for ( int k = 0; k < MAX_D_STREAM; k++ )
+        {
+            (*gpu_info_list_ptr)[gpuIndex].d_cudaStream[k] = 0;
+            (*gpu_info_list_ptr)[gpuIndex].d_cublasHandle[k] = 0;
+        }
+#ifdef PRINT_INFO
+        printf ( "CPU %d device handler %d ( pretended GPU )\n", gpuIndex - numGPU, gpuIndex);
+#endif
+    }
+
 #ifdef PRINT_INFO
     printf ( "Minimum device memory size = %lf GiB\n", ( double ) minDevMemSize / ( 0x400 * 0x400 * 0x400 ) );
 #endif
@@ -192,6 +215,7 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
 
         gpuIndex_physical = (*gpu_info_list_ptr)[gpuIndex].gpuIndex_physical;
 
+        if ( gpuIndex_physical >= 0 )
         cudaSetDevice ( gpuIndex_physical );
 
         if ( (*gpu_info_list_ptr)[gpuIndex].devMem != NULL )
