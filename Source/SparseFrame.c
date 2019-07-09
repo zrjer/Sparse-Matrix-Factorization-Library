@@ -1162,6 +1162,7 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
+    int A_multiple, BC_multiple;
     size_t devSlotSize;
 
     int isComplex;
@@ -1215,7 +1216,12 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     nrow = matrix_info->nrow;
     nzmax = matrix_info->nzmax;
 
-    devSlotSize = ( common_info->minDevMemSize - nzmax * sizeof(Long) ) / ( 1 + BC_MULTIPLE );
+    A_multiple = A_MULTIPLE;
+    BC_multiple = BC_MULTIPLE;
+    matrix_info->A_multiple = A_multiple;
+    matrix_info->BC_multiple = BC_multiple;
+
+    devSlotSize = ( common_info->minDevMemSize - nzmax * sizeof(Long) ) / ( A_multiple + BC_multiple );
     devSlotSize = devSlotSize - devSlotSize % 0x400;
     matrix_info->devSlotSize = devSlotSize;
 
@@ -1822,6 +1828,8 @@ int SparseFrame_node_size_cmp ( const void *l, const void *r )
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct gpu_info_struct *gpu_info_list, struct matrix_info_struct *matrix_info )
 {
     int useSubtree, numCPU, numGPU;
+
+    int A_multiple, BC_multiple;
     size_t devSlotSize, devASize, devBCSize;
 
     int isComplex;
@@ -1867,9 +1875,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     numGPU = common_info->numGPU;
     useSubtree = FALSE;
 
+    A_multiple = matrix_info->A_multiple;
+    BC_multiple = matrix_info->BC_multiple;
+
     devSlotSize = matrix_info->devSlotSize;
-    devASize = devSlotSize;
-    devBCSize = BC_MULTIPLE * devSlotSize;
+    devASize = A_multiple * devSlotSize;
+    devBCSize = BC_multiple * devSlotSize;
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;

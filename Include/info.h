@@ -63,6 +63,8 @@ struct matrix_info_struct
     Long nrow;
     Long nzmax;
 
+    int A_multiple;
+    int BC_multiple;
     size_t devSlotSize;
 
     Long *Tj;

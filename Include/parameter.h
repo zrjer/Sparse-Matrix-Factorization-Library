@@ -11,10 +11,10 @@
 #define CP_NUM_THREAD 8
 #define CP_THREAD_THRESHOLD 64
 
-#define MAX_NUM_CPU (4)
+#define MAX_NUM_CPU (0)
 
 #define MAX_NUM_GPU (-1)
-#define MAX_GPU_SPLIT (4)
+#define MAX_GPU_SPLIT (1)
 
 #define MEM_LIMITS
 
@@ -29,6 +29,7 @@
 
 #define MAXMMLINE 1024
 
+#define A_MULTIPLE 1
 #define BC_MULTIPLE 5
 
 #define MAX_D_STREAM 4
