@@ -1162,7 +1162,7 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
-    int A_multiple, BC_multiple;
+    int AMultiple, BCMultiple;
     size_t devSlotSize;
 
     int isComplex;
@@ -1216,12 +1216,12 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     nrow = matrix_info->nrow;
     nzmax = matrix_info->nzmax;
 
-    A_multiple = A_MULTIPLE;
-    BC_multiple = BC_MULTIPLE;
-    matrix_info->A_multiple = A_multiple;
-    matrix_info->BC_multiple = BC_multiple;
+    AMultiple = A_MULTIPLE;
+    BCMultiple = BC_MULTIPLE;
+    matrix_info->AMultiple = AMultiple;
+    matrix_info->BCMultiple = BCMultiple;
 
-    devSlotSize = ( common_info->minDevMemSize - nzmax * sizeof(Long) ) / ( A_multiple + BC_multiple );
+    devSlotSize = ( common_info->minDevMemSize - nzmax * sizeof(Long) ) / ( AMultiple + BCMultiple );
     devSlotSize = devSlotSize - devSlotSize % 0x400;
     matrix_info->devSlotSize = devSlotSize;
 
@@ -1835,8 +1835,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 {
     int useSubtree, numCPU, numGPU;
 
-    int A_multiple, BC_multiple;
+    int AMultiple, BCMultiple;
     size_t devSlotSize, devASize, devBCSize;
+    Long maxOrphanApplyBatch, maxApplyBatch, maxSolveBatch;
 
     int isComplex;
     Long nrow;
@@ -1881,12 +1882,20 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     numGPU = common_info->numGPU;
     useSubtree = FALSE;
 
-    A_multiple = matrix_info->A_multiple;
-    BC_multiple = matrix_info->BC_multiple;
+    AMultiple = matrix_info->AMultiple;
+    BCMultiple = matrix_info->BCMultiple;
 
     devSlotSize = matrix_info->devSlotSize;
-    devASize = A_multiple * devSlotSize;
-    devBCSize = BC_multiple * devSlotSize;
+    devASize = AMultiple * devSlotSize;
+    devBCSize = BCMultiple * devSlotSize;
+
+    maxOrphanApplyBatch = devBCSize / ( sizeof(struct cholesky_apply_task_struct) + CUDA_BLOCKDIM_X * CUDA_BLOCKDIM_Y * sizeof(Float) + CUDA_BLOCKDIM_Y * CUDA_BLOCKDIM_Y * sizeof(Float));
+    maxApplyBatch = devBCSize / sizeof(struct cholesky_apply_task_struct);
+    maxSolveBatch = devBCSize / sizeof(struct cholesky_solve_task_struct);
+
+    maxOrphanApplyBatch = MIN ( maxOrphanApplyBatch, MAX_BATCH);
+    maxApplyBatch = MIN ( maxApplyBatch, MAX_BATCH);
+    maxSolveBatch = MIN ( maxSolveBatch, MAX_BATCH);
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
@@ -2458,7 +2467,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Float *d_workspace;
                         int *d_info;
 
-                        Long d_count;
+                        Long d_count, large_count, small_count;
                         int stream_index;
                         size_t c_offset;
 
@@ -2518,6 +2527,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].size = c_size;
 
                             d_count++;
+                            if ( dn > CUDA_BLOCKDIM_X || dn + dm > CUDA_BLOCKDIM_Y )
+                                large_count++;
+                            else
+                                small_count++;
 
                             Head[s] = Next[d];
                         }
@@ -2822,7 +2835,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Float *d_workspace;
                         int *d_info;
 
-                        Long d_count;
+                        Long d_count, large_count, small_count;
                         int stream_index;
                         size_t bc_offset;
 
@@ -2869,6 +2882,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
 
                         d_count = 0;
+                        large_count = 0;
+                        small_count = 9;
 
                         while ( Head[s] >= 0 )
                         {
@@ -2915,6 +2930,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].size = bc_size;
 
                             d_count++;
+                            if ( dn > CUDA_BLOCKDIM_X || dn + dm > CUDA_BLOCKDIM_Y )
+                                large_count++;
+                            else
+                                small_count++;
 
                             Head[s] = Next[d];
                         }

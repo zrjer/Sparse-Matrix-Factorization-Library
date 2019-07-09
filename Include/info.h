@@ -63,8 +63,8 @@ struct matrix_info_struct
     Long nrow;
     Long nzmax;
 
-    int A_multiple;
-    int BC_multiple;
+    int AMultiple;
+    int BCMultiple;
     size_t devSlotSize;
 
     Long *Tj;
@@ -143,6 +143,19 @@ struct node_size_struct
 };
 
 struct cholesky_apply_task_struct
+{
+    int dn;
+    int dm;
+    int dk;
+    Long slda;
+    Long dlda;
+    Long dldc;
+    Float *d_A;
+    Float *d_B;
+    Float *d_C;
+};
+
+struct cholesky_solve_task_struct
 {
     int dn;
     int dm;
