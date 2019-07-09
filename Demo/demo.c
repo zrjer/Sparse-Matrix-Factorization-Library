@@ -18,6 +18,7 @@ int main (int argc, char **argv)
     printf ("Size of cudaStream_t = %ld\n", sizeof(cudaStream_t));
     printf ("Size of cublasHandle_t = %ld\n", sizeof(cublasHandle_t));
     printf ("Size of cusolverDnHandle_t = %ld\n", sizeof(cusolverDnHandle_t));
+    printf ("Size of struct cholesky_apply_task_struct = %ld\n", sizeof(struct cholesky_apply_task_struct));
     printf ("\n");
 #endif
 

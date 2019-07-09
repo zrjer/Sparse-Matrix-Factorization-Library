@@ -1813,16 +1813,22 @@ int SparseFrame_node_size_cmp ( const void *l, const void *r )
     l_struct = l;
     r_struct = r;
 
+    if ( ( l_struct->col <= CUDA_BLOCKDIM_X && l_struct->row <= CUDA_BLOCKDIM_Y ) && ( r_struct->col > CUDA_BLOCKDIM_X || r_struct->row > CUDA_BLOCKDIM_Y ) )
+        return 1;
+    if ( ( l_struct->col > CUDA_BLOCKDIM_X || l_struct->row > CUDA_BLOCKDIM_Y ) && ( r_struct->col <= CUDA_BLOCKDIM_X && r_struct->row <= CUDA_BLOCKDIM_Y ) )
+        return -1;
+
     if ( l_struct->size < r_struct->size )
         return 1;
-    else if ( l_struct->size > r_struct->size )
+    if ( l_struct->size > r_struct->size )
         return -1;
-    else if ( l_struct->node < r_struct->node )
+
+    if ( l_struct->node < r_struct->node )
         return 1;
-    else if ( l_struct->node > r_struct->node )
+    if ( l_struct->node > r_struct->node )
         return -1;
-    else
-        return 0;
+
+    return 0;
 }
 
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct gpu_info_struct *gpu_info_list, struct matrix_info_struct *matrix_info )
@@ -2507,6 +2513,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             }
 
                             node_size_queue[d_count].node = d;
+                            node_size_queue[d_count].col = dn;
+                            node_size_queue[d_count].row = dn + dm;
                             node_size_queue[d_count].size = c_size;
 
                             d_count++;
@@ -2902,6 +2910,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             bc_size = b_size + c_size + map_size;
 
                             node_size_queue[d_count].node = d;
+                            node_size_queue[d_count].col = dn;
+                            node_size_queue[d_count].row = dn + dm;
                             node_size_queue[d_count].size = bc_size;
 
                             d_count++;

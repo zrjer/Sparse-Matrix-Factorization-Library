@@ -134,4 +134,23 @@ struct matrix_info_struct
     double solveTime;
 };
 
+struct node_size_struct
+{
+    Long node;
+    size_t col;
+    size_t row;
+    size_t size;
+};
+
+struct cholesky_apply_task_struct
+{
+    int dn;
+    int dm;
+    int dk;
+    Long slda;
+    Float *d_A;
+    Float *d_B;
+    Float *d_C;
+};
+
 #endif
