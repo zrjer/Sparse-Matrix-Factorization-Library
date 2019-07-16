@@ -34,8 +34,8 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     numGPU_physical = MIN ( numGPU_physical, MAX_NUM_GPU );
 #endif
 
-    if ( numGPU_physical <= 0 )
-        numCPU = MAX ( numCPU, 1 );
+    if ( numCPU <= 0 && numGPU_physical <= 0 )
+        numCPU = 1;
 
     common_info->numCPU = numCPU;
 
@@ -1893,9 +1893,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     maxApplyBatch = devBCSize / sizeof(struct cholesky_apply_task_struct);
     maxSolveBatch = devBCSize / sizeof(struct cholesky_solve_task_struct);
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH >= 0 ) )
     maxOrphanApplyBatch = MIN ( maxOrphanApplyBatch, MAX_BATCH);
     maxApplyBatch = MIN ( maxApplyBatch, MAX_BATCH);
     maxSolveBatch = MIN ( maxSolveBatch, MAX_BATCH);
+#endif
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
@@ -2944,10 +2946,19 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
 
-                            stream_index = 0;
-                            bc_offset = 0;
+#if ( !defined ( MAX_BATCH ) || ( MAX_BATCH != 0 ) )
+                            if ( large_count > 0 )
+#endif
+                            {
+                                stream_index = 0;
+                                bc_offset = 0;
+                            }
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH == 0 ) )
                             for ( Long d_index = 0; d_index < d_count; d_index++ )
+#else
+                            for ( Long d_index = 0; d_index < large_count; d_index++ )
+#endif
                             {
                                 size_t b_size, c_size, map_size, bc_size;
 
@@ -3066,11 +3077,153 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 bc_offset += bc_size;
                             }
 
+#if ( !defined ( MAX_BATCH ) || ( MAX_BATCH != 0 ) )
+                            if ( large_count > 0 )
+#endif
+                            {
 #if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-                            for ( int index = 0; index < MAX_D_STREAM; index++ )
-                                cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+                                for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                    cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
 #else
-                            cudaDeviceSynchronize();
+                                cudaDeviceSynchronize();
+#endif
+                            }
+
+#if ( !defined ( MAX_BATCH ) || ( MAX_BATCH != 0 ) )
+                            if ( small_count > 0 )
+                            {
+                                stream_index = 0;
+                                bc_offset = 0;
+                            }
+
+                            for ( Long d_index = large_count; d_index < d_count; d_index++ )
+                            {
+                                size_t b_size, c_size, map_size, bc_size;
+
+                                Long d, dj, di;
+                                Long ndcol, ndrow;
+                                Long lpos, lpos_next;
+
+                                Long dn, dm, dk, dlda, dldc;
+
+                                void *h_B, *d_B, *d_C;
+                                Long *h_RelativeMap, *d_RelativeMap;
+
+                                d = node_size_queue[d_index].node;
+
+                                ndcol = Super[d+1] - Super[d];
+                                ndrow = Lsip[d+1] - Lsip[d];
+                                lpos = Lpos[d];
+                                lpos_next = Lpos_next[d];
+
+                                dn = lpos_next - lpos;
+                                dm = ndrow - lpos_next;
+                                dk = ndcol;
+                                dlda = dn + dm;
+                                dldc = dn + dm;
+
+                                if ( !isComplex )
+                                {
+                                    b_size = dk * ( dn + dm ) * sizeof(Float);
+                                    c_size = dn * ( dn + dm ) * sizeof(Float);
+                                    map_size = ( dn + dm ) * sizeof(Long);
+                                }
+                                else
+                                {
+                                    b_size = dk * ( dn + dm ) * sizeof(Complex);
+                                    c_size = dn * ( dn + dm ) * sizeof(Complex);
+                                    map_size = ( dn + dm ) * sizeof(Long);
+                                }
+
+                                bc_size = b_size + c_size + map_size;
+
+                                if ( bc_offset + bc_size > devBCSize )
+                                {
+                                    bc_offset = 0;
+#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
+                                    for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                        cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+#else
+                                    cudaDeviceSynchronize();
+#endif
+                                }
+
+                                h_B = gpu_info->hostMem + devASize + bc_offset;
+                                d_B = gpu_info->devMem + devASize + bc_offset;
+                                d_C = gpu_info->devMem + devASize + bc_offset + b_size;
+                                h_RelativeMap = gpu_info->hostMem + devASize + bc_offset + b_size + c_size;
+                                d_RelativeMap = gpu_info->devMem + devASize + bc_offset + b_size + c_size;
+
+#pragma omp parallel for private(dj,di) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
+                                for ( dj = 0; dj < ndcol; dj++ )
+                                {
+                                    for ( di = 0; di < ndrow - lpos; di++ )
+                                    {
+                                        if (!isComplex)
+                                            ( (Float*) h_B ) [ dj * ( ndrow - lpos ) + di ] = ( Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ];
+                                        else
+                                        {
+                                            ( (Complex*) h_B ) [ dj * ( ndrow - lpos ) + di ].x = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].x;
+                                            ( (Complex*) h_B ) [ dj * ( ndrow - lpos ) + di ].y = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].y;
+                                        }
+                                    }
+                                }
+
+                                for ( di = 0; di < ndrow - lpos; di++ )
+                                {
+                                    h_RelativeMap[di] = Map [ Lsi [ Lsip[d] + lpos + di ] ];
+                                }
+
+                                cudaMemcpyAsync ( d_RelativeMap, h_RelativeMap, ( ndrow - lpos ) * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
+
+                                if (!isComplex)
+                                    cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
+                                else
+                                    cudaMemcpyAsync ( d_B, h_B, ndcol * ( ndrow - lpos ) * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->d_cudaStream[stream_index] );
+
+                                if (!isComplex)
+                                    cublasDsyrk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
+                                else
+                                    cublasZherk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_B, dlda, zero, d_C, dldc);
+
+                                if ( dm > 0 )
+                                {
+                                    if (!isComplex)
+                                        cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, d_B + dn * sizeof(Float), dlda, d_B, dlda, zero, d_C + dn * sizeof(Float), dldc );
+                                    else
+                                        cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, d_B + dn * sizeof(Complex), dlda, d_B, dlda, (Complex*) zero, d_C + dn * sizeof(Complex), dldc );
+                                }
+
+                                cudaStreamWaitEvent ( gpu_info->d_cudaStream[stream_index], gpu_info->s_cudaEvent_onDevice, 0 );
+
+                                mappedSubtract ( TRUE, isComplex, d_A, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[stream_index] );
+
+                                if ( lpos_next < ndrow )
+                                {
+                                    Long dancestor;
+
+                                    dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
+#pragma omp critical (HeadNext)
+                                    {
+                                        Next[d] = Head[dancestor];
+                                        Head[dancestor] = d;
+                                    }
+                                }
+                                Lpos[d] = lpos_next;
+
+                                stream_index = ( stream_index + 1 ) % MAX_D_STREAM;
+                                bc_offset += bc_size;
+                            }
+
+                            if ( small_count > 0 )
+                            {
+#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
+                                for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                    cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+#else
+                                cudaDeviceSynchronize();
+#endif
+                            }
 #endif
                         }
 
