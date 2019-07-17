@@ -137,8 +137,9 @@ struct matrix_info_struct
 struct node_size_struct
 {
     Long node;
-    size_t col;
-    size_t row;
+    size_t n;
+    size_t m;
+    size_t k;
     size_t size;
 };
 
