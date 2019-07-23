@@ -7,6 +7,8 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 
+#include "parameter.h"
+
 struct common_info_struct
 {
     int numCPU;
@@ -143,6 +145,7 @@ struct node_size_struct
     size_t size;
 };
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
 struct cholesky_apply_task_struct
 {
     int dn;
@@ -166,5 +169,6 @@ struct cholesky_solve_task_struct
     Float *d_B;
     Float *d_C;
 };
+#endif
 
 #endif

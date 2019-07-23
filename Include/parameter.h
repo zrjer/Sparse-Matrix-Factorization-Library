@@ -1,6 +1,8 @@
 #ifndef INCLUDE_PARAMETER_H
 #define INCLUDE_PARAMETER_H
 
+#include "macro.h"
+
 //#define PRINT_CALLS
 //#define PRINT_DEBUG
 #define PRINT_INFO
@@ -37,12 +39,34 @@
 #define CUDA_BLOCKDIM_X (16)
 #define CUDA_BLOCKDIM_Y (32)
 
+#define MAX_BATCH (1024)
+
+#define BLAS_THRESHOLD_N (128)
+#define BLAS_THRESHOLD_M (128)
+#define BLAS_THRESHOLD_K (128)
+
 const enum PermMethod perm_method = PERM_METIS;
 
 const double prune_dense = 10.0;
 const double aggressive = 1;
 
-#define RELAX_RATE (0.2)
-#define MIN_SUPERNODE_COLUMN (32)
+#define RELAXED_SUPERNODE
+
+#ifdef RELAXED_SUPERNODE
+int should_relax ( Long col, double rate )
+{
+    const int n_checks = 3;
+    const Long relax_threshold_col[] = { 4, 16, 48 };
+    const double relax_threshold_rate[] = { 0.8, 0.1, 0.05 };
+
+    for ( int k = n_checks - 1; k >= 0; k-- )
+    {
+        if ( col > relax_threshold_col[k] && rate > relax_threshold_rate[k] )
+            return FALSE;
+    }
+
+    return TRUE;
+}
+#endif
 
 #endif
