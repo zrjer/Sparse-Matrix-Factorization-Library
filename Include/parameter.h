@@ -31,7 +31,7 @@
 
 #define MAXMMLINE (1024)
 
-#define A_MULTIPLE (1)
+#define A_MULTIPLE (2)
 #define BC_MULTIPLE (4)
 
 #define MAX_D_STREAM (4)
@@ -56,7 +56,7 @@ const double aggressive = 1;
 int should_relax ( Long col, double rate )
 {
     const int n_checks = 3;
-    const Long relax_threshold_col[] = { 4, 16, 48 };
+    const Long relax_threshold_col[] = { 4, 16, 64 };
     const double relax_threshold_rate[] = { 0.8, 0.1, 0.05 };
 
     for ( int k = n_checks - 1; k >= 0; k-- )
