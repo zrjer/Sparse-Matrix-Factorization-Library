@@ -3,7 +3,7 @@
 
 int main (int argc, char **argv)
 {
-    const int batch = 256, m = 32, n = 32, k = 32;
+    const int batch = BATCH, m = DIM_M, n = DIM_N, k = DIM_K;
     size_t size_A, size_C;
 
     double *A, *h_A, *d_A;

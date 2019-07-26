@@ -9,6 +9,12 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
+#define BATCH 16384
+#define DIM_M 16
+#define DIM_N 16
+#define DIM_K 16
+#define PAD 1
+
 struct syrk_meta
 {
     cublasHandle_t cublasHandle;
