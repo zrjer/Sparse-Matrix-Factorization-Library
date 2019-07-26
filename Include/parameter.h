@@ -34,6 +34,7 @@
 #define A_MULTIPLE (2)
 #define BC_MULTIPLE (4)
 
+#define MAX_D_EVENT (2)
 #define MAX_D_STREAM (4)
 
 #define CUDA_BLOCKDIM_X (16)

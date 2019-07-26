@@ -37,6 +37,9 @@ struct gpu_info_struct
     size_t sharedMemSize;
 
     cudaEvent_t s_cudaEvent_onDevice;
+    cudaEvent_t d_cudaEvent_onDevice[MAX_D_EVENT];
+    cudaEvent_t d_cudaEvent_applied[MAX_D_EVENT];
+    cudaEvent_t d_cudaEvent_assembled[MAX_D_EVENT];
 
     cudaStream_t s_cudaStream;
     cudaStream_t d_cudaStream[MAX_D_STREAM];
@@ -145,7 +148,6 @@ struct node_size_struct
     size_t size;
 };
 
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
 struct cholesky_apply_task_struct
 {
     int dn;
@@ -159,6 +161,7 @@ struct cholesky_apply_task_struct
     Float *d_C;
 };
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
 struct cholesky_solve_task_struct
 {
     int dn;
