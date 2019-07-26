@@ -4,7 +4,7 @@
 __global__ void launch_syrk_kernel ( struct syrk_meta *d_syrk_task )
 {
     __shared__ struct syrk_meta syrk_task;
-    __shared__ double shA[DIM_K][DIM_N];
+    __shared__ double shA[DIM_K][DIM_N+PAD];
     __shared__ double shC[DIM_N][DIM_N+PAD];
 
     int idx;
@@ -52,7 +52,7 @@ __global__ void launch_syrk_kernel ( struct syrk_meta *d_syrk_task )
 __global__ void launch_gemm_kernel ( struct gemm_meta *d_gemm_task )
 {
     __shared__ struct gemm_meta gemm_task;
-    __shared__ double shA[DIM_K][DIM_M], shB[DIM_K][DIM_N];
+    __shared__ double shA[DIM_K][DIM_M+PAD], shB[DIM_K][DIM_N+PAD];
     __shared__ double shC[DIM_N][DIM_M+PAD];
 
     int idx;
@@ -109,8 +109,8 @@ void launch_syrk_gemm ( int batch, struct syrk_meta *d_syrk_task, struct gemm_me
     dim3 thread;
 
     thread.x = 16;
-    thread.y = 32;
+    thread.y = 64;
 
-    launch_syrk_kernel <<<batch, 1, 0, stream>>> ( d_syrk_task );
-    launch_gemm_kernel <<<batch, 1, 0, stream>>> ( d_gemm_task );
+    launch_syrk_kernel <<<batch, thread, 0, stream>>> ( d_syrk_task );
+    launch_gemm_kernel <<<batch, thread, 0, stream>>> ( d_gemm_task );
 }
