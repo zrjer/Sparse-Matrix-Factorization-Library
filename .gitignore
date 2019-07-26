@@ -2,6 +2,7 @@
 
 *.a
 *.bak
+*.log
 *.mtx
 *.o
 *.obj
@@ -11,4 +12,5 @@
 *.so.*
 *.swp
 
-demo
+Demo/demo
+Demo/cublas_demo

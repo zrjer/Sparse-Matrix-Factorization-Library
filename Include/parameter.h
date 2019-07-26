@@ -40,7 +40,7 @@
 #define CUDA_BLOCKDIM_X (16)
 #define CUDA_BLOCKDIM_Y (32)
 
-#define MAX_BATCH (1024)
+#define MAX_BATCH (0)
 
 #define BLAS_THRESHOLD_N (128)
 #define BLAS_THRESHOLD_M (128)
