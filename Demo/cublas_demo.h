@@ -11,7 +11,7 @@
 
 #define BATCH 16384
 #define DIM_M 64
-#define DIM_N 32
+#define DIM_N 64
 #define DIM_K 32
 #define PAD 1
 

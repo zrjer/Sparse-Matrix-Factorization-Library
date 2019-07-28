@@ -5,7 +5,6 @@ __global__ void launch_syrk_kernel ( struct syrk_meta *d_syrk_task )
 {
     __shared__ struct syrk_meta syrk_task;
     __shared__ double shA[DIM_K][DIM_N+PAD];
-    __shared__ double shC[DIM_N][DIM_N+PAD];
 
     int idx;
 
@@ -37,23 +36,19 @@ __global__ void launch_syrk_kernel ( struct syrk_meta *d_syrk_task )
 
     for ( int j = threadIdx.x; j < n; j += blockDim.x )
         for ( int i = threadIdx.y; i < n; i += blockDim.y )
-            shC[j][i] = beta * C [ j * ldc + i ];
-
-    for ( int j = threadIdx.x; j < n; j += blockDim.x )
-        for ( int i = threadIdx.y; i < n; i += blockDim.y )
+        {
+            double regC;
+            regC = beta * C [ j * ldc + i ];
             for ( int kk = 0; kk < k; kk++ )
-                shC[j][i] += ( alpha * shA[kk][i] * shA[kk][j] );
-
-    for ( int j = threadIdx.x; j < n; j += blockDim.x )
-        for ( int i = threadIdx.y; i < n; i += blockDim.y )
-            C[ j * ldc + i ] = shC[j][i];
+                regC += ( alpha * shA[kk][j] * shA[kk][i] );
+            C[ j * ldc + i ] = regC;
+        }
 }
 
 __global__ void launch_gemm_kernel ( struct gemm_meta *d_gemm_task )
 {
     __shared__ struct gemm_meta gemm_task;
     __shared__ double shA[DIM_K][DIM_M+PAD], shB[DIM_K][DIM_N+PAD];
-    __shared__ double shC[DIM_N][DIM_M+PAD];
 
     int idx;
 
@@ -80,8 +75,8 @@ __global__ void launch_gemm_kernel ( struct gemm_meta *d_gemm_task )
     B = gemm_task.B;
     C = gemm_task.C;
 
-    for ( int j = threadIdx.x; j < k; j += blockDim.x )
-        for ( int i = threadIdx.y; i < m; i += blockDim.y )
+    for ( int j = threadIdx.y; j < k; j += blockDim.y )
+        for ( int i = threadIdx.x; i < m; i += blockDim.x )
             shA[j][i] = A [ j * lda + i ];
 
     for ( int j = threadIdx.x; j < k; j += blockDim.x )
@@ -92,16 +87,13 @@ __global__ void launch_gemm_kernel ( struct gemm_meta *d_gemm_task )
 
     for ( int j = threadIdx.x; j < n; j += blockDim.x )
         for ( int i = threadIdx.y; i < m; i += blockDim.y )
-            shC[j][i] = beta * C [ j * ldc + i ];
-
-    for ( int j = threadIdx.x; j < n; j += blockDim.x )
-        for ( int i = threadIdx.y; i < m; i += blockDim.y )
+        {
+            double regC;
+            regC = beta * C [ j * ldc + i ];
             for ( int kk = 0; kk < k; kk++ )
-                shC[j][i] += ( alpha * shA [kk][i] * shB [kk][j] );
-
-    for ( int j = threadIdx.x; j < n; j += blockDim.x )
-        for ( int i = threadIdx.y; i < m; i += blockDim.y )
-            C [ j * ldc + i ] = shC[j][i];
+                regC += ( alpha * shA [kk][i] * shB [kk][j] );
+            C [ j * ldc + i ] = regC;
+        }
 }
 
 void launch_syrk_gemm ( int batch, struct syrk_meta *d_syrk_task, struct gemm_meta *d_gemm_task, cudaStream_t stream )

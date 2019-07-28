@@ -61,24 +61,35 @@ void createRelativeMap_batched ( Long batchSize, Long **d_RelativeMap, Long *di_
 
 __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap )
 {
+    __shared__ Long shRelativeMap_j[CUDA_BLOCKDIM_X];
+    __shared__ Long shRelativeMap_i[CUDA_BLOCKDIM_Y];
+
     Long cj, ci;
 
     cj = cj_offset + blockIdx.x * blockDim.x + threadIdx.x;
     ci = ci_offset + blockIdx.y * blockDim.y + threadIdx.y;
+
+    if ( threadIdx.y == 0 )
+        shRelativeMap_j[threadIdx.x] = d_RelativeMap[cj];
+
+    if ( threadIdx.x == 0 )
+        shRelativeMap_i[threadIdx.y] = d_RelativeMap[ci];
+
+    __syncthreads();
 
     if ( !isAtomic )
     {
         if ( !isComplex )
         {
             if ( cj < nccol && ci < ncrow )
-                ( (Float*) d_A ) [ d_RelativeMap[cj] * lda + d_RelativeMap[ci] ] -= ( (Float*) d_C )  [ cj * ldc + ci ];
+                ( (Float*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] -= ( (Float*) d_C )  [ cj * ldc + ci ];
         }
         else
         {
             if ( cj < nccol && ci < ncrow )
             {
-                ( (Complex*) d_A ) [ d_RelativeMap[cj] * lda + d_RelativeMap[ci] ].x -= ( (Complex*) d_C ) [ cj * ldc + ci ].x;
-                ( (Complex*) d_A ) [ d_RelativeMap[cj] * lda + d_RelativeMap[ci] ].y -= ( (Complex*) d_C ) [ cj * ldc + ci ].y;
+                ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x -= ( (Complex*) d_C ) [ cj * ldc + ci ].x;
+                ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y -= ( (Complex*) d_C ) [ cj * ldc + ci ].y;
             }
         }
     }
@@ -87,14 +98,14 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
         if ( !isComplex )
         {
             if ( cj < nccol && ci < ncrow )
-                atomicAdd ( & ( ( (Float*) d_A ) [ d_RelativeMap[cj] * lda + d_RelativeMap[ci] ] ), - ( (Float*) d_C ) [ cj * ldc + ci ] );
+                atomicAdd ( & ( ( (Float*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] ), - ( (Float*) d_C ) [ cj * ldc + ci ] );
         }
         else
         {
             if ( cj < nccol && ci < ncrow )
             {
-                atomicAdd ( & ( ( (Complex*) d_A ) [ d_RelativeMap[cj] * lda + d_RelativeMap[ci] ].x ), - ( (Complex*) d_C ) [ cj * ldc + ci ].x );
-                atomicAdd ( & ( ( (Complex*) d_A ) [ d_RelativeMap[cj] * lda + d_RelativeMap[ci] ].y ), - ( (Complex*) d_C ) [ cj * ldc + ci ].y );
+                atomicAdd ( & ( ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x ), - ( (Complex*) d_C ) [ cj * ldc + ci ].x );
+                atomicAdd ( & ( ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y ), - ( (Complex*) d_C ) [ cj * ldc + ci ].y );
             }
         }
     }

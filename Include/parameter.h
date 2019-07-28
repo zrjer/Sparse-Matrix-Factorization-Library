@@ -38,7 +38,7 @@
 #define MAX_D_STREAM (4)
 
 #define CUDA_BLOCKDIM_X (16)
-#define CUDA_BLOCKDIM_Y (32)
+#define CUDA_BLOCKDIM_Y (16)
 
 #define MAX_BATCH (0)
 
