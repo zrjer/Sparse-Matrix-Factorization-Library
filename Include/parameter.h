@@ -40,7 +40,9 @@ int should_relax ( Long col, double rate )
     for ( int k = n_checks - 1; k >= 0; k-- )
     {
         if ( col > relax_threshold_col[k] && rate > relax_threshold_rate[k] )
+        {
             return FALSE;
+        }
     }
 
     return TRUE;
