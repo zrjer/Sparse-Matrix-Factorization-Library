@@ -148,30 +148,4 @@ struct node_size_struct
     size_t size;
 };
 
-struct cholesky_apply_task_struct
-{
-    int dn;
-    int dm;
-    int dk;
-    Long slda;
-    Long dlda;
-    Long dldc;
-    Float *d_A;
-    Float *d_B;
-    Float *d_C;
-};
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-struct cholesky_solve_task_struct
-{
-    int dn;
-    int dm;
-    int dk;
-    Long slda;
-    Float *d_A;
-    Float *d_B;
-    Float *d_C;
-};
-#endif
-
 #endif

@@ -1930,18 +1930,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     devASize = AMultiple * devSlotSize;
     devBCSize = BCMultiple * devSlotSize;
 
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-    maxOrphanApplyBatch = devBCSize / 2 / ( sizeof(struct cholesky_apply_task_struct) + ( BLAS_THRESHOLD_N * BLAS_THRESHOLD_M + BLAS_THRESHOLD_N * BLAS_THRESHOLD_K + BLAS_THRESHOLD_M * BLAS_THRESHOLD_K ) * sizeof(Float) );
-    maxApplyBatch = devBCSize / 2 / sizeof(struct cholesky_apply_task_struct);
-    maxSolveBatch = devBCSize / 2 / sizeof(struct cholesky_solve_task_struct);
-
-#if ( MAX_BATCH > 0 )
-    maxOrphanApplyBatch = MIN ( maxOrphanApplyBatch, MAX_BATCH);
-    maxApplyBatch = MIN ( maxApplyBatch, MAX_BATCH);
-    maxSolveBatch = MIN ( maxSolveBatch, MAX_BATCH);
-#endif
-#endif
-
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
 

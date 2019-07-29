@@ -196,7 +196,7 @@ int main (int argc, char **argv)
         clock_gettime ( CLOCK_REALTIME, &tp );
         timeBatch = tp.tv_sec + ( double ) ( tp.tv_nsec ) / 1.0e9 - timestamp;
 
-        printf ("batch: %lf sec\n", timeBatch);
+        printf ("batch : %lf sec rate: %lf\n", timeBatch, timeBatch / timeSingle);
 
         cudaMemcpy ( h_C, d_C, batch * size_C, cudaMemcpyDeviceToHost );
         memcpy ( C, h_C, batch * size_C );
@@ -236,7 +236,7 @@ int main (int argc, char **argv)
         clock_gettime ( CLOCK_REALTIME, &tp );
         timeKernel = tp.tv_sec + ( double ) ( tp.tv_nsec ) / 1.0e9 - timestamp;
 
-        printf ("kernel: %lf sec\n", timeKernel);
+        printf ("kernel: %lf sec rate: %lf\n", timeKernel, timeKernel / timeSingle);
 
         cudaMemcpy ( h_C, d_C, batch * size_C, cudaMemcpyDeviceToHost );
         memcpy ( C, h_C, batch * size_C );
