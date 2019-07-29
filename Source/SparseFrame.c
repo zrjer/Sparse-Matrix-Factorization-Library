@@ -1834,31 +1834,7 @@ int SparseFrame_node_size_cmp ( const void *l, const void *r )
     printf ("\n================SparseFrame_node_size_cmp================\n\n");
 #endif
 
-    l_struct = l;
-    r_struct = r;
-
-    if (
-            ( l_struct->n <= BLAS_THRESHOLD_N && l_struct->m <= BLAS_THRESHOLD_M && l_struct->k <= BLAS_THRESHOLD_K )
-            && ( r_struct->n > BLAS_THRESHOLD_N || r_struct->m > BLAS_THRESHOLD_M || r_struct->k > BLAS_THRESHOLD_K )
-            )
-        return 1;
-    if (
-            ( l_struct->n > BLAS_THRESHOLD_N || l_struct->m > BLAS_THRESHOLD_M || l_struct->k > BLAS_THRESHOLD_K )
-            && ( r_struct->n <= BLAS_THRESHOLD_N && r_struct->m <= BLAS_THRESHOLD_M && r_struct->k <= BLAS_THRESHOLD_K )
-            )
-        return -1;
-
-    if ( l_struct->size < r_struct->size )
-        return 1;
-    if ( l_struct->size > r_struct->size )
-        return -1;
-
-    if ( l_struct->node < r_struct->node )
-        return 1;
-    if ( l_struct->node > r_struct->node )
-        return -1;
-
-    return 0;
+    return ( node_score(r) - node_score(l) );
 }
 
 int SparseFrame_node_size_cmp_reverse ( const void *l, const void *r )
@@ -2563,7 +2539,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
-                            node_size_queue[d_count].size = c_size;
 
                             d_count++;
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
@@ -2981,7 +2956,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
-                            node_size_queue[d_count].size = bc_size;
 
                             d_count++;
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
