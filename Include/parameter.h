@@ -77,7 +77,7 @@ size_t node_score ( const struct node_size_struct *node )
     return ( n + m + k );
 }
 
-#define MAX_BATCH (0)
+#define MAX_BATCH (1024)
 
 #define MAX_D_EVENT (2)
 #define MAX_D_STREAM (4)
