@@ -1852,9 +1852,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     int AMultiple, BCMultiple;
     size_t devSlotSize, devASize, devBCSize;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-    Long maxOrphanApplyBatch, maxApplyBatch, maxSolveBatch;
-#endif
 
     int isComplex;
     Long nrow;
@@ -2476,9 +2473,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Float *d_workspace;
                         int *d_info;
 
-                        Long d_count;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                        Long large_count, small_count;
+                        Long d_count, large_count;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                        Long small_count;
 #endif
                         int stream_index;
                         size_t c_offset;
@@ -2504,8 +2501,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         while ( Head[s] >= 0 )
                         {
-                            size_t c_size;
-
                             Long d;
 
                             Long ndcol, ndrow;
@@ -2526,41 +2521,30 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             dm = ndrow - lpos_next;
                             dk = ndcol;
 
-                            if ( !isComplex )
-                            {
-                                c_size = dn * ( dn + dm ) * sizeof(Float);
-                            }
-                            else
-                            {
-                                c_size = dn * ( dn + dm ) * sizeof(Complex);
-                            }
-
                             node_size_queue[d_count].node = d;
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
 
-                            d_count++;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                            if ( dn > BLAS_THRESHOLD_N || dm > BLAS_THRESHOLD_M || dk > BLAS_THRESHOLD_K )
-                                large_count++;
-                            else
-                                small_count++;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                            if ( node_score ( node_size_queue + d_count ) > dimension_threshold[dimension_n_checks-1] )
 #endif
+                                large_count++;
+                            d_count++;
 
                             Head[s] = Next[d];
                         }
+
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                        small_count = d_count - large_count;
+#endif
 
                         if ( d_count > 0 )
                         {
                             cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
 
                             qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
                             qsort ( node_size_queue, MIN ( large_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
-#else
-                            qsort ( node_size_queue, MIN ( d_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
-#endif
 
                             stream_index = 0;
                             c_offset = 0;
@@ -2856,7 +2840,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Float *d_workspace;
                         int *d_info;
 
-                        Long d_count, large_count, small_count;
+                        Long d_count, large_count;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                        Long small_count;
+#endif
                         int stream_index;
                         size_t bc_offset;
 
@@ -2911,12 +2898,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         d_count = 0;
                         large_count = 0;
-                        small_count = 0;
 
                         while ( Head[s] >= 0 )
                         {
-                            size_t b_size, c_size, map_size, bc_size;
-
                             Long d;
 
                             Long ndcol, ndrow;
@@ -2937,38 +2921,23 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             dm = ndrow - lpos_next;
                             dk = ndcol;
 
-                            if ( !isComplex )
-                            {
-                                b_size = dk * ( dn + dm ) * sizeof(Float);
-                                c_size = dn * ( dn + dm ) * sizeof(Float);
-                                map_size = ( dn + dm ) * sizeof(Long);
-                            }
-                            else
-                            {
-                                b_size = dk * ( dn + dm ) * sizeof(Complex);
-                                c_size = dn * ( dn + dm ) * sizeof(Complex);
-                                map_size = ( dn + dm ) * sizeof(Long);
-                            }
-
-                            bc_size = b_size + c_size + map_size;
-
                             node_size_queue[d_count].node = d;
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
 
-                            d_count++;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                            if ( dn > BLAS_THRESHOLD_N || dm > BLAS_THRESHOLD_M || dk > BLAS_THRESHOLD_K )
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                            if ( node_score ( node_size_queue + d_count ) > dimension_threshold[dimension_n_checks-1] )
 #endif
-                            {
                                 large_count++;
-                            }
+                            d_count++;
 
                             Head[s] = Next[d];
                         }
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                         small_count = d_count - large_count;
+#endif
 
                         if ( d_count > 0 )
                             qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
@@ -3098,7 +3067,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 #endif
                         }
 
-#if ( !defined ( MAX_BATCH ) || ( MAX_BATCH != 0 ) )
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                         if ( small_count > 0 )
                         {
                             stream_index = 0;
