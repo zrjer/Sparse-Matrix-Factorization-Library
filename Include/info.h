@@ -70,6 +70,9 @@ struct matrix_info_struct
 
     int AMultiple;
     int BCMultiple;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+    size_t batchMetaSize;
+#endif
     size_t devSlotSize;
 
     Long *Tj;

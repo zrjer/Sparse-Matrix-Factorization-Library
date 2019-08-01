@@ -1203,6 +1203,9 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
     int AMultiple, BCMultiple;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+    size_t batchMetaSize;
+#endif
     size_t devSlotSize;
 
     int isComplex;
@@ -1262,7 +1265,9 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     matrix_info->BCMultiple = BCMultiple;
 
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-    devSlotSize = ( common_info->minDevMemSize - 3 * MAX_BATCH * sizeof(double*) ) / ( AMultiple + BCMultiple );
+    batchMetaSize = 3 * MAX_BATCH * sizeof(double*);
+    matrix_info->batchMetaSize = batchMetaSize;
+    devSlotSize = ( common_info->minDevMemSize - 2 * batchMetaSize ) / ( AMultiple + BCMultiple );
 #else
     devSlotSize = ( common_info->minDevMemSize ) / ( AMultiple + BCMultiple );
 #endif
@@ -1855,6 +1860,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     int useSubtree, numCPU, numGPU;
 
     int AMultiple, BCMultiple;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+    size_t batchMetaSize;
+#endif
     size_t devSlotSize, devASize, devBCSize;
 
     int isComplex;
@@ -1902,6 +1910,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     AMultiple = matrix_info->AMultiple;
     BCMultiple = matrix_info->BCMultiple;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+    batchMetaSize = matrix_info->batchMetaSize;
+#endif
 
     devSlotSize = matrix_info->devSlotSize;
     devASize = AMultiple * devSlotSize;
