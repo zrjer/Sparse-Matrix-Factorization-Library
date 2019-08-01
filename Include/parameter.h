@@ -34,7 +34,7 @@ const double aggressive = 1;
 int should_relax ( Long col, double rate )
 {
     const int n_checks = 3;
-    const Long relax_threshold_col[] = { 4, 16, 64 };
+    const Long relax_threshold_col[] = { 4, 16, 48 };
     const double relax_threshold_rate[] = { 0.8, 0.1, 0.05 };
 
     for ( int k = n_checks - 1; k >= 0; k-- )
@@ -58,7 +58,8 @@ struct node_size_struct
 };
 
 const int dimension_n_checks = 3;
-const size_t dimension_threshold[] = { 16, 32, 64 };
+const size_t dimension_threshold_x[] = { 24, 48, 96 };
+const size_t dimension_threshold_y[] = { 16, 32, 64 };
 
 size_t node_score ( const struct node_size_struct *node )
 {
@@ -70,21 +71,21 @@ size_t node_score ( const struct node_size_struct *node )
 
     for ( int idx = 0; idx < dimension_n_checks; idx++ )
     {
-        if ( n < dimension_threshold[idx] && m < dimension_threshold[idx] && k < dimension_threshold[idx] )
+        if ( n < dimension_threshold_y[idx] && m < dimension_threshold_y[idx] && k < dimension_threshold_x[idx] )
         {
-            return dimension_threshold[idx];
+            return dimension_threshold_x[idx];
         }
     }
 
     return ( n + m + k );
 }
 
-#define MAX_BATCH (1024)
+#define MAX_BATCH (16384)
 
 #define MAX_D_EVENT (2)
 #define MAX_D_STREAM (4)
 
 #define CUDA_BLOCKDIM_X (16)
-#define CUDA_BLOCKDIM_Y (16)
+#define CUDA_BLOCKDIM_Y (24)
 
 #endif

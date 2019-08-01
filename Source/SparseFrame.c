@@ -2536,11 +2536,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].k = dk;
 
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                            if ( node_score ( node_size_queue + d_count ) > dimension_threshold[dimension_n_checks-1] )
+                            if ( node_score ( node_size_queue + d_count ) > dimension_threshold_x[dimension_n_checks-1] )
                                 large_count++;
                             else
                                 for ( int idx = 0; idx < dimension_n_checks; idx++ )
-                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold[idx] )
+                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold_x[idx] )
                                     {
                                         small_count[idx]++;
                                         break;
@@ -2969,11 +2969,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].k = dk;
 
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                            if ( node_score ( node_size_queue + d_count ) > dimension_threshold[dimension_n_checks-1] )
+                            if ( node_score ( node_size_queue + d_count ) > dimension_threshold_x[dimension_n_checks-1] )
                                 large_count++;
                             else
                                 for ( int idx = 0; idx < dimension_n_checks; idx++ )
-                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold[idx] )
+                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold_x[idx] )
                                     {
                                         small_count[idx]++;
                                         break;
