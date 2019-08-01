@@ -3012,11 +3012,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         void *h_B, *d_B, *d_C;
                                         Long *h_RelativeMap, *d_RelativeMap;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                                        Float **h_Aarray, **d_Aarray;
-                                        Float **h_Barray, **d_Barray;
-                                        Float **h_Carray, **d_Carray;
-#endif
 
                                         event_index = d_index % MAX_D_EVENT;
                                         stream_index = d_index % MAX_D_STREAM;
@@ -3047,15 +3042,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             h_RelativeMap = gpu_info->hostMem + devASize + ( event_index + MAX_D_EVENT ) * devSlotSize + dn * ( dn + dm ) * sizeof(Complex);
                                             d_RelativeMap = gpu_info->devMem + devASize + ( event_index + MAX_D_EVENT ) * devSlotSize + dn * ( dn + dm ) * sizeof(Complex);
                                         }
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                                        h_Aarray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize;
-                                        h_Barray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + MAX_BATCH * sizeof(Float*);
-                                        h_Carray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + 2 * MAX_BATCH * sizeof(Float*);
-                                        d_Aarray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize;
-                                        d_Barray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + MAX_BATCH * sizeof(Float*);
-                                        d_Carray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + 2 * MAX_BATCH * sizeof(Float*);
-#endif
 
                                         cudaEventSynchronize ( gpu_info->d_cudaEvent_onDevice[event_index] );
 
@@ -3143,6 +3129,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             for ( Long d_index = large_count; d_index < d_count; d_index++ )
                             {
+                                int event_index, stream_index;
+
                                 size_t b_size, c_size, map_size, bc_size;
 
                                 Long d, dj, di;
@@ -3153,6 +3141,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 void *h_B, *d_B, *d_C;
                                 Long *h_RelativeMap, *d_RelativeMap;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                                Float **h_Aarray, **d_Aarray;
+                                Float **h_Barray, **d_Barray;
+                                Float **h_Carray, **d_Carray;
+#endif
+
+                                event_index = d_index % MAX_D_EVENT;
+                                stream_index = d_index % MAX_D_STREAM;
 
                                 d = node_size_queue[d_index].node;
 
@@ -3198,6 +3194,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 d_C = gpu_info->devMem + devASize + bc_offset + b_size;
                                 h_RelativeMap = gpu_info->hostMem + devASize + bc_offset + b_size + c_size;
                                 d_RelativeMap = gpu_info->devMem + devASize + bc_offset + b_size + c_size;
+
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                                h_Aarray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize;
+                                h_Barray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + MAX_BATCH * sizeof(Float*);
+                                h_Carray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + 2 * MAX_BATCH * sizeof(Float*);
+                                d_Aarray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize;
+                                d_Barray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + MAX_BATCH * sizeof(Float*);
+                                d_Carray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + event_index * batchMetaSize + 2 * MAX_BATCH * sizeof(Float*);
+#endif
 
 #pragma omp parallel for private(dj,di) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
                                 for ( dj = 0; dj < ndcol; dj++ )

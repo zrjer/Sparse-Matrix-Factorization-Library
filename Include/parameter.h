@@ -25,9 +25,6 @@ const enum PermMethod perm_method = PERM_METIS;
 const double prune_dense = 10.0;
 const double aggressive = 1;
 
-#define A_MULTIPLE (2)
-#define BC_MULTIPLE (4)
-
 #define RELAXED_SUPERNODE
 
 #ifdef RELAXED_SUPERNODE
@@ -84,6 +81,9 @@ size_t node_score ( const struct node_size_struct *node )
 
 #define MAX_D_EVENT (2)
 #define MAX_D_STREAM (4)
+
+#define A_MULTIPLE (2)
+#define BC_MULTIPLE ( 2 * MAX_D_EVENT )
 
 #define CUDA_BLOCKDIM_X (16)
 #define CUDA_BLOCKDIM_Y (24)
