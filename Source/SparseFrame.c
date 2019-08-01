@@ -1261,7 +1261,11 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     matrix_info->AMultiple = AMultiple;
     matrix_info->BCMultiple = BCMultiple;
 
-    devSlotSize = ( common_info->minDevMemSize - nzmax * sizeof(Long) ) / ( AMultiple + BCMultiple );
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+    devSlotSize = ( common_info->minDevMemSize - 3 * MAX_BATCH * sizeof(double*) ) / ( AMultiple + BCMultiple );
+#else
+    devSlotSize = ( common_info->minDevMemSize ) / ( AMultiple + BCMultiple );
+#endif
     devSlotSize = devSlotSize - devSlotSize % 0x400;
     matrix_info->devSlotSize = devSlotSize;
 
@@ -2473,9 +2477,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Float *d_workspace;
                         int *d_info;
 
-                        Long d_count, large_count;
+                        Long d_count;
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                        Long small_count;
+                        Long large_count, small_count[dimension_n_checks];
 #endif
                         int stream_index;
                         size_t c_offset;
@@ -2498,6 +2502,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         h_Map = gpu_info->hostMem + Moffset[s];
 
                         d_count = 0;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                        large_count = 0;
+                        for ( int idx = 0; idx < dimension_n_checks; idx++ )
+                            small_count[idx] = 0;
+#endif
 
                         while ( Head[s] >= 0 )
                         {
@@ -2528,23 +2537,30 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                             if ( node_score ( node_size_queue + d_count ) > dimension_threshold[dimension_n_checks-1] )
-#endif
                                 large_count++;
+                            else
+                                for ( int idx = 0; idx < dimension_n_checks; idx++ )
+                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold[idx] )
+                                    {
+                                        small_count[idx]++;
+                                        break;
+                                    }
+#endif
                             d_count++;
 
                             Head[s] = Next[d];
                         }
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                        small_count = d_count - large_count;
-#endif
 
                         if ( d_count > 0 )
                         {
                             cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
 
                             qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                             qsort ( node_size_queue, MIN ( large_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
+#else
+                            qsort ( node_size_queue, MIN ( d_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
+#endif
 
                             stream_index = 0;
                             c_offset = 0;
@@ -2783,6 +2799,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 Long leafQueueIndex;
                 Long *Map, *RelativeMap;
                 Float *C;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                Float **Aarray, **Barray, **Carray;
+#endif
                 struct node_size_struct *node_size_queue;
 
                 Map = NULL;
@@ -2806,6 +2825,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         C = malloc ( csize * sizeof(Float) );
                     else
                         C = malloc ( csize * sizeof(Complex) );
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                    Aarray = malloc ( nsuper * sizeof(Float*) );
+                    Barray = malloc ( nsuper * sizeof(Float*) );
+                    Carray = malloc ( nsuper * sizeof(Float*) );
+#endif
                     node_size_queue = malloc ( nsuper * sizeof(struct node_size_struct) );
                 }
 
@@ -2835,14 +2859,19 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     if ( gpuIndex < numGPU )
                     {
                         void *h_A, *d_A, *d_A_;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                        Float **h_Aarray, **d_Aarray;
+                        Float **h_Barray, **d_Barray;
+                        Float **h_Carray, **d_Carray;
+#endif
 
                         int devWorkSize;
                         Float *d_workspace;
                         int *d_info;
 
-                        Long d_count, large_count;
+                        Long d_count;
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                        Long small_count;
+                        Long large_count, small_count[dimension_n_checks];
 #endif
                         int stream_index;
                         size_t bc_offset;
@@ -2857,6 +2886,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         h_A = gpu_info->hostMem;
                         d_A = gpu_info->devMem;
                         d_A_ = gpu_info->devMem + devSlotSize;
+
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                        h_Aarray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize;
+                        h_Barray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + MAX_BATCH * sizeof(Float*);
+                        h_Carray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + 2 * MAX_BATCH * sizeof(Float*);
+                        d_Aarray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize;
+                        d_Barray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + MAX_BATCH * sizeof(Float*);
+                        d_Carray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + 2 * MAX_BATCH * sizeof(Float*);
+#endif
 
                         for ( si = 0; si < nsrow; si++ )
                         {
@@ -2897,7 +2935,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         }
 
                         d_count = 0;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                         large_count = 0;
+                        for ( int idx = 0; idx < dimension_n_checks; idx++ )
+                            small_count[idx] = 0;
+#endif
 
                         while ( Head[s] >= 0 )
                         {
@@ -2928,25 +2970,40 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                             if ( node_score ( node_size_queue + d_count ) > dimension_threshold[dimension_n_checks-1] )
-#endif
                                 large_count++;
+                            else
+                                for ( int idx = 0; idx < dimension_n_checks; idx++ )
+                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold[idx] )
+                                    {
+                                        small_count[idx]++;
+                                        break;
+                                    }
+#endif
                             d_count++;
 
                             Head[s] = Next[d];
                         }
 
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                        small_count = d_count - large_count;
-#endif
-
                         if ( d_count > 0 )
                             qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                         if ( large_count > 0 )
+#else
+                        if ( d_count > 0 )
+#endif
                         {
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                             qsort ( node_size_queue, MIN ( large_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
+#else
+                            qsort ( node_size_queue, MIN ( d_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
+#endif
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
                             for ( Long d_index = 0; d_index < large_count; d_index++ )
+#else
+                            for ( Long d_index = 0; d_index < d_count; d_index++ )
+#endif
                             {
                                 int event_index, stream_index;
 
@@ -3068,7 +3125,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         }
 
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                        if ( small_count > 0 )
+                        if ( d_count - large_count > 0 )
                         {
                             stream_index = 0;
                             bc_offset = 0;
@@ -3393,11 +3450,21 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 if ( Map != NULL ) free ( Map );
                 if ( RelativeMap != NULL ) free ( RelativeMap );
                 if ( C != NULL ) free ( C );
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                if ( Aarray != NULL ) free ( Aarray );
+                if ( Barray != NULL ) free ( Barray );
+                if ( Carray != NULL ) free ( Carray );
+#endif
                 if ( node_size_queue != NULL ) free ( node_size_queue );
 
                 Map = NULL;
                 RelativeMap = NULL;
                 C = NULL;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+                Aarray = NULL;
+                Barray = NULL;
+                Carray = NULL;
+#endif
                 node_size_queue = NULL;
             }
         }
