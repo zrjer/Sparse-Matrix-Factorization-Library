@@ -37,9 +37,7 @@ struct gpu_info_struct
     size_t sharedMemSize;
 
     cudaEvent_t s_cudaEvent_onDevice;
-    cudaEvent_t d_cudaEvent_onDevice[MAX_D_EVENT];
-    cudaEvent_t d_cudaEvent_applied[MAX_D_EVENT];
-    cudaEvent_t d_cudaEvent_assembled[MAX_D_EVENT];
+    cudaEvent_t d_cudaEvent_onDevice[MAX_D_STREAM];
 
     cudaStream_t s_cudaStream;
     cudaStream_t d_cudaStream[MAX_D_STREAM];

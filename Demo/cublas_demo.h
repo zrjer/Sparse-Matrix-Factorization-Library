@@ -6,6 +6,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <cblas.h>
+
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
@@ -43,5 +45,9 @@ struct gemm_meta
     double *C;
     int ldc;
 };
+
+extern int dsyrk_(char *uplo, char *trans, int *n, int *k, const double *alpha, double *a, int *lda, const double *beta, double *c, int *ldc);
+
+extern int dgemm_(char *transa, char *transb, int *m, int *n, int *k, const double *alpha, double *a, int *lda, double *b, int *ldb, const double *beta, double *c, int *ldc);
 
 #endif

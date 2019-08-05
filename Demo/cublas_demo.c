@@ -3,7 +3,7 @@
 
 int main (int argc, char **argv)
 {
-    const int batch = BATCH, m = DIM_M, n = DIM_N, k = DIM_K;
+    int batch = BATCH, m = DIM_M, n = DIM_N, k = DIM_K, lda = n + m;
     const double alpha = 1, beta = 0;
     size_t size_A, size_C;
 
@@ -20,7 +20,7 @@ int main (int argc, char **argv)
     cublasHandle_t cublasHandle;
 
     struct timespec tp;
-    double timestamp, timeSingle, timeBatch, timeKernel;
+    double timestamp, timeSingle, timeBatch, timeKernel, timeCPU;
 
     FILE *file;
 
@@ -240,6 +240,45 @@ int main (int argc, char **argv)
 
         cudaMemcpy ( h_C, d_C, batch * size_C, cudaMemcpyDeviceToHost );
         memcpy ( C, h_C, batch * size_C );
+
+        file = fopen ( "cublas_demo_kernel.log", "w" );
+
+        for ( int idx = 0; idx < batch; idx++ )
+        {
+            for ( int j = 0; j < n; j++ )
+            {
+                for ( int i = 0; i < n + m; i++ )
+                    fprintf ( file, "%le", ( j <= i ) ? C [ idx * n * ( n + m ) + j * ( n + m ) + i ] : 0 );
+                fprintf ( file, "\n" );
+            }
+            fprintf ( file, "\n" );
+        }
+
+        fclose ( file );
+    }
+
+    {
+        for ( int idx = 0; idx < batch; idx++ )
+            for ( int j = 0; j < n; j++ )
+                for ( int i = 0; i < n + m; i++ )
+                    C [ idx * n * ( n + m ) + j * ( n + m ) + i ] = 1 / ( j + 1 ) + 1 / ( i + 1 );
+
+        memcpy ( h_C, C, batch * size_C );
+        cudaMemcpy ( d_C, h_C, batch * size_C, cudaMemcpyHostToDevice );
+
+        clock_gettime ( CLOCK_REALTIME, &tp );
+        timestamp = tp.tv_sec + ( double ) ( tp.tv_nsec ) / 1.0e9;
+
+        for ( int idx = 0; idx < batch; idx++ )
+        {
+            dsyrk_ ( "L", "N", &n, &k, &alpha, A + idx * k * ( n + m ), &lda, &beta, C + idx * n * ( n + m ), &lda );
+            dgemm_ ( "N", "T", &m, &n, &k, &alpha, A + idx * k * ( n + m ) + n, &lda, A + idx * k * ( n + m ), &lda, &beta, C + idx * n * ( n + m ) + n, &lda );
+        }
+
+        clock_gettime ( CLOCK_REALTIME, &tp );
+        timeCPU = tp.tv_sec + ( double ) ( tp.tv_nsec ) / 1.0e9 - timestamp;
+
+        printf ("CPU: %lf sec rate: %lf\n", timeCPU, timeCPU / timeSingle);
 
         file = fopen ( "cublas_demo_kernel.log", "w" );
 

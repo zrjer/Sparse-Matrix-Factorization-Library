@@ -49,18 +49,21 @@ int should_relax ( Long col, double rate )
 struct node_size_struct
 {
     Long node;
-    size_t n;
-    size_t m;
-    size_t k;
+    Long n;
+    Long m;
+    Long k;
 };
 
 const int dimension_n_checks = 3;
-const size_t dimension_threshold_x[] = { 24, 48, 96 };
-const size_t dimension_threshold_y[] = { 16, 32, 64 };
+const Long dimension_threshold_x[] = { 24, 48, 96 };
+const Long dimension_threshold_y[] = { 16, 32, 64 };
+const Long dimension_threshold_m = 256;
+const Long dimension_threshold_n = 128;
+const Long dimension_threshold_k = 32;
 
-size_t node_score ( const struct node_size_struct *node )
+Long node_score ( const struct node_size_struct *node )
 {
-    size_t n, m, k;
+    Long n, m, k;
 
     n = node->n;
     m = node->m;
@@ -68,22 +71,23 @@ size_t node_score ( const struct node_size_struct *node )
 
     for ( int idx = 0; idx < dimension_n_checks; idx++ )
     {
-        if ( n < dimension_threshold_y[idx] && m < dimension_threshold_y[idx] && k < dimension_threshold_x[idx] )
+        if ( k <= dimension_threshold_x[idx] && m <= dimension_threshold_y[idx] && n <= dimension_threshold_y[idx] )
         {
             return dimension_threshold_x[idx];
         }
     }
 
-    return ( n + m + k );
+    if ( m < dimension_threshold_m || n < dimension_threshold_n || k < dimension_threshold_k ) return - ( m + n ) * k;
+
+    return ( m + n ) * k;
 }
 
 #define MAX_BATCH (16384)
 
-#define MAX_D_EVENT (2)
 #define MAX_D_STREAM (4)
 
 #define A_MULTIPLE (2)
-#define BC_MULTIPLE ( 2 * MAX_D_EVENT )
+#define BC_MULTIPLE ( 2 * MAX_D_STREAM )
 
 #define CUDA_BLOCKDIM_X (16)
 #define CUDA_BLOCKDIM_Y (24)
