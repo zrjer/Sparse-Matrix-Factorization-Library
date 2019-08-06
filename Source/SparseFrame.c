@@ -19,6 +19,9 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     size_t minDevMemSize;
 
+    int AMultiple, BCMultiple;
+    size_t devSlotSize;
+
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_allocate_gpu================\n\n");
 #endif
@@ -174,6 +177,15 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     }
 
     common_info->minDevMemSize = minDevMemSize;
+
+    AMultiple = A_MULTIPLE;
+    BCMultiple = BC_MULTIPLE;
+    common_info->AMultiple = AMultiple;
+    common_info->BCMultiple = BCMultiple;
+
+    devSlotSize = ( common_info->minDevMemSize ) / ( AMultiple + BCMultiple );
+    devSlotSize = devSlotSize - devSlotSize % 0x400;
+    common_info->devSlotSize = devSlotSize;
 
     for ( int gpuIndex = numGPU; gpuIndex < numGPU + numCPU; gpuIndex++ )
     {
@@ -1188,10 +1200,6 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, struct matrix_info_struct *matrix_info )
 {
-    int AMultiple, BCMultiple;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-    size_t batchMetaSize;
-#endif
     size_t devSlotSize;
 
     int isComplex;
@@ -1240,25 +1248,12 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
 #endif
 
+    devSlotSize = common_info->devSlotSize;
+
     isComplex = matrix_info->isComplex;
 
     nrow = matrix_info->nrow;
     nzmax = matrix_info->nzmax;
-
-    AMultiple = A_MULTIPLE;
-    BCMultiple = BC_MULTIPLE;
-    matrix_info->AMultiple = AMultiple;
-    matrix_info->BCMultiple = BCMultiple;
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-    batchMetaSize = 3 * MAX_BATCH * sizeof(double*);
-    matrix_info->batchMetaSize = batchMetaSize;
-    devSlotSize = ( common_info->minDevMemSize - 2 * batchMetaSize ) / ( AMultiple + BCMultiple );
-#else
-    devSlotSize = ( common_info->minDevMemSize ) / ( AMultiple + BCMultiple );
-#endif
-    devSlotSize = devSlotSize - devSlotSize % 0x400;
-    matrix_info->devSlotSize = devSlotSize;
 
     Up = matrix_info->Up;
     Ui = matrix_info->Ui;
@@ -1992,9 +1987,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     int useSubtree, numCPU, numGPU;
 
     int AMultiple, BCMultiple;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-    size_t batchMetaSize;
-#endif
     size_t devSlotSize, devASize, devBCSize;
 
     int isComplex;
@@ -2040,13 +2032,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     numGPU = common_info->numGPU;
     useSubtree = FALSE;
 
-    AMultiple = matrix_info->AMultiple;
-    BCMultiple = matrix_info->BCMultiple;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-    batchMetaSize = matrix_info->batchMetaSize;
-#endif
+    AMultiple = common_info->AMultiple;
+    BCMultiple = common_info->BCMultiple;
 
-    devSlotSize = matrix_info->devSlotSize;
+    devSlotSize = common_info->devSlotSize;
     devASize = AMultiple * devSlotSize;
     devBCSize = BCMultiple * devSlotSize;
 
@@ -3074,8 +3063,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         if ( cpu_blas_count >= d_count && useCpuPotrf && useCpuTrsm )
                         {
-                            omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
-
                             SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
                         }
                         else
@@ -3427,11 +3414,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         void *h_B, *d_B, *d_C;
                                         Long *h_RelativeMap, *d_RelativeMap;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                                        Float **h_Aarray, **d_Aarray;
-                                        Float **h_Barray, **d_Barray;
-                                        Float **h_Carray, **d_Carray;
-#endif
 
                                         stream_index = d_index % MAX_D_STREAM;
 
@@ -3479,15 +3461,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         d_C = gpu_info->devMem + devASize + bc_offset + b_size;
                                         h_RelativeMap = gpu_info->hostMem + devASize + bc_offset + b_size + c_size;
                                         d_RelativeMap = gpu_info->devMem + devASize + bc_offset + b_size + c_size;
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                                        h_Aarray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + stream_index * batchMetaSize;
-                                        h_Barray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + stream_index * batchMetaSize + MAX_BATCH * sizeof(Float*);
-                                        h_Carray = gpu_info->hostMem + ( AMultiple + BCMultiple ) * devSlotSize + stream_index * batchMetaSize + 2 * MAX_BATCH * sizeof(Float*);
-                                        d_Aarray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + stream_index * batchMetaSize;
-                                        d_Barray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + stream_index * batchMetaSize + MAX_BATCH * sizeof(Float*);
-                                        d_Carray = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + stream_index * batchMetaSize + 2 * MAX_BATCH * sizeof(Float*);
-#endif
 
 #pragma omp parallel for private(dj,di) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
                                         for ( dj = 0; dj < ndcol; dj++ )
@@ -3672,16 +3645,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     }
                                 }
                             }
-
-                            omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
                         }
                     }
                     else
                     {
-                        omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
-
                         SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
                     }
+
+                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
 
                     Lpos[s] = Super[s+1] - Super[s];
 

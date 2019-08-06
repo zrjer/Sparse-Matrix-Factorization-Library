@@ -18,6 +18,10 @@ struct common_info_struct
 
     size_t minDevMemSize;
 
+    int AMultiple;
+    int BCMultiple;
+    size_t devSlotSize;
+
     double allocateTime;
     double computeTime;
     double freeTime;
@@ -65,13 +69,6 @@ struct matrix_info_struct
     Long ncol;
     Long nrow;
     Long nzmax;
-
-    int AMultiple;
-    int BCMultiple;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-    size_t batchMetaSize;
-#endif
-    size_t devSlotSize;
 
     Long *Tj;
     Long *Ti;
