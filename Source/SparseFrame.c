@@ -23,15 +23,24 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     printf ("\n================SparseFrame_allocate_gpu================\n\n");
 #endif
 
-    numCPU = sysconf(_SC_NPROCESSORS_ONLN);
-#if ( defined ( MAX_NUM_CPU ) && ( MAX_NUM_CPU >= 0 ) )
-    numCPU = MIN ( numCPU, MAX_NUM_CPU );
-#endif
-
     numGPU_physical = 0;
     cudaGetDeviceCount ( &numGPU_physical );
 #if ( defined ( MAX_NUM_GPU ) && ( MAX_NUM_GPU >= 0 ) )
     numGPU_physical = MIN ( numGPU_physical, MAX_NUM_GPU );
+#endif
+
+    numSplit = 1;
+#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
+    numSplit = MAX_GPU_SPLIT;
+#endif
+
+    numGPU = numGPU_physical * numSplit;
+
+    common_info->numGPU = numGPU;
+
+    numCPU = sysconf(_SC_NPROCESSORS_ONLN);
+#if ( defined ( MAX_NUM_CPU ) && ( MAX_NUM_CPU >= 0 ) )
+    numCPU = MIN ( MAX ( numCPU - numGPU, 0 ), MAX_NUM_CPU );
 #endif
 
     if ( numCPU <= 0 && numGPU_physical <= 0 )
@@ -43,15 +52,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     printf ( "Num of CPU = %d\n", numCPU );
     printf ( "Num of GPU = %d\n", numGPU_physical );
 #endif
-
-    numSplit = 1;
-#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-    numSplit = MAX_GPU_SPLIT;
-#endif
-
-    numGPU = numGPU_physical * numSplit;
-
-    common_info->numGPU = numGPU;
 
     *gpu_info_list_ptr = malloc ( ( numGPU + numCPU ) * sizeof ( struct gpu_info_struct ) );
 
@@ -3073,7 +3073,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         }
 
                         if ( cpu_blas_count >= d_count && useCpuPotrf && useCpuTrsm )
+                        {
+                            omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
+
                             SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
+                        }
                         else
                         {
                             if ( d_count > 0 )
@@ -3668,12 +3672,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     }
                                 }
                             }
+
+                            omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
                         }
                     }
                     else
-                        SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
+                    {
+                        omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
 
-                    omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
+                        SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
+                    }
 
                     Lpos[s] = Super[s+1] - Super[s];
 
