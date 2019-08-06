@@ -1827,7 +1827,7 @@ int SparseFrame_node_size_cmp ( const void *l, const void *r )
     printf ("\n================SparseFrame_node_size_cmp================\n\n");
 #endif
 
-    return ( node_score(r) - node_score(l) );
+    return ( get_node_score(r) - get_node_score(l) );
 }
 
 int SparseFrame_node_size_cmp_reverse ( const void *l, const void *r )
@@ -1908,6 +1908,81 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
         }
     }
     Lpos[d] = lpos_next;
+
+    return 0;
+}
+
+int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx, Long *SuperMap, Long *Super, Long *Lsip, Long *Lsi, Long *Lsxp, void *Lsx, Long *Head, Long *Next, Long *Lpos, Long *Map, Long *RelativeMap, Long s, void *C )
+{
+    int info;
+
+    Long nscol, nsrow, sn, sm, slda;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_cpuApplyFactorize================\n\n");
+#endif
+
+    nscol = Super[s+1] - Super[s];
+    nsrow = Lsip[s+1] - Lsip[s];
+
+    for ( Long si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
+        Map [ Lsi [ Lsip[s] + si ] ] = si;
+
+    if ( !isComplex )
+        memset ( (Float*) Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Float) );
+    else
+        memset ( (Complex*) Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Complex) );
+
+    for ( Long j = Super[s]; j < Super[s+1]; j++ )
+    {
+        Long sj = j - Super[s];
+        for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
+        {
+            Long i = Li[p];
+            Long si = Map[i];
+            if ( !isComplex )
+                ( (Float*) Lsx ) [ Lsxp[s] + sj * nsrow + si ] = ( (Float*) Lx )[p];
+            else
+            {
+                ( (Complex*) Lsx + Lsxp[s] ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                ( (Complex*) Lsx + Lsxp[s] ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
+            }
+        }
+    }
+
+    while ( Head[s] >= 0 )
+    {
+        Long d;
+        void *A;
+
+        d = Head[s];
+
+        Head[s] = Next[d];
+
+        if ( !isComplex )
+            A = (Float*) Lsx + Lsxp[s];
+        else
+            A = (Complex*) Lsx + Lsxp[s];
+
+        SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, A, d, C );
+    }
+
+    sn = nscol;
+    sm = nsrow - nscol;
+    slda = nsrow;
+
+    if (!isComplex)
+        dpotrf_ ( "L", &sn, (Float*) Lsx + Lsxp[s], &slda, &info );
+    else
+        zpotrf_ ( "L", &sn, (Complex*) Lsx + Lsxp[s], &slda, &info );
+
+    if ( nscol < nsrow )
+    {
+        if (!isComplex)
+            dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, (Float*) Lsx + Lsxp[s], &slda, (Float*) Lsx + Lsxp[s] + nscol, &slda );
+        else
+            ztrsm_ ( "R", "L", "C", "N", &sm, &sn, (Complex*) one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
+    }
 
     return 0;
 }
@@ -2602,15 +2677,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
+                            set_node_score ( node_size_queue + d_count, useSubtree );
 
-                            if ( node_score ( node_size_queue + d_count ) < 0 )
+                            if ( get_node_score ( node_size_queue + d_count ) < 0 )
                                 cpu_blas_count++;
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                            else if ( node_score ( node_size_queue + d_count ) <= dimension_threshold_x[dimension_n_checks-1] )
+                            else if ( get_node_score ( node_size_queue + d_count ) <= dimension_threshold_x[dimension_n_checks-1] )
                             {
                                 for ( int idx = 0; idx < dimension_n_checks; idx++ )
                                 {
-                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold_x[idx] )
+                                    if ( get_node_score ( node_size_queue + d_count ) <= dimension_threshold_x[idx] )
                                     {
                                         gpu_blas_batch_count[idx]++;
                                         break;
@@ -2908,22 +2984,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                 while ( leafQueueIndex < nsuper )
                 {
-                    Long j, i, p;
-
-                    Long s, sj, si, nscol, nsrow;
-
-                    Long sn, sm, slda;
-
                     int gpuIndex;
-                    struct gpu_info_struct *gpu_info;
+
+                    Long s, nscol, nsrow;
+
                     s = LeafQueue[leafQueueIndex];
 
                     nscol = Super[s+1] - Super[s];
                     nsrow = Lsip[s+1] - Lsip[s];
-
-                    sn = nscol;
-                    sm = nsrow - nscol;
-                    slda = sn + sm;
 
                     gpuIndex = 0;
                     while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
@@ -2931,6 +2999,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     if ( gpuIndex < numGPU )
                     {
+                        int useCpuPotrf, useCpuTrsm;
+
+                        struct gpu_info_struct *gpu_info;
+
+                        Long sn, sm, slda;
+
                         void *h_A, *d_A, *d_A_;
 
                         int devWorkSize;
@@ -2943,48 +3017,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 #endif
                         Long d_index_small;
 
-                        gpu_info = gpu_info_list + gpuIndex;
-
-                        cudaSetDevice ( gpu_info->gpuIndex_physical );
-
-                        d_info = gpu_info->devMem + devASize;
-                        d_workspace = gpu_info->devMem + devASize + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
-
-                        h_A = gpu_info->hostMem;
-                        d_A = gpu_info->devMem;
-                        d_A_ = gpu_info->devMem + devSlotSize;
-
-                        for ( si = 0; si < nsrow; si++ )
-                        {
-                            Map [ Lsi [ Lsip[s] + si ] ] = si;
-                        }
-
-                        if ( !isComplex )
-                            cudaMemset ( d_A_, 0, nscol * nsrow * sizeof(Float) );
-                        else
-                            cudaMemset ( d_A_, 0, nscol * nsrow * sizeof(Complex) );
-
-                        if ( !isComplex )
-                            memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
-                        else
-                            memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
-
-                        for ( j = Super[s]; j < Super[s+1]; j++ )
-                        {
-                            sj = j - Super[s];
-                            for ( p = Lp[j]; p < Lp[j+1]; p++ )
-                            {
-                                i = Li[p];
-                                si = Map[i];
-                                if ( !isComplex )
-                                    ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
-                                else
-                                {
-                                    ( (Complex*) h_A ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
-                                    ( (Complex*) h_A ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
-                                }
-                            }
-                        }
+                        set_factorize_location ( nscol, nsrow, &useCpuPotrf, &useCpuTrsm );
 
                         d_count = 0;
                         cpu_blas_count = 0;
@@ -3020,15 +3053,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
+                            set_node_score ( node_size_queue + d_count, useSubtree );
 
-                            if ( node_score ( node_size_queue + d_count ) < 0 )
+                            if ( get_node_score ( node_size_queue + d_count ) < 0 )
                                 cpu_blas_count++;
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
-                            else if ( node_score ( node_size_queue + d_count ) <= dimension_threshold_x[dimension_n_checks-1] )
+                            else if ( get_node_score ( node_size_queue + d_count ) <= dimension_threshold_x[dimension_n_checks-1] )
                             {
                                 for ( int idx = 0; idx < dimension_n_checks; idx++ )
                                 {
-                                    if ( node_score ( node_size_queue + d_count ) <= dimension_threshold_x[idx] )
+                                    if ( get_node_score ( node_size_queue + d_count ) <= dimension_threshold_x[idx] )
                                     {
                                         gpu_blas_batch_count[idx]++;
                                         break;
@@ -3046,6 +3080,53 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         if ( d_count > 0 )
                             qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
+
+                        gpu_info = gpu_info_list + gpuIndex;
+
+                        cudaSetDevice ( gpu_info->gpuIndex_physical );
+
+                        sn = nscol;
+                        sm = nsrow - nscol;
+                        slda = sn + sm;
+
+                        h_A = gpu_info->hostMem;
+                        d_A = gpu_info->devMem;
+                        d_A_ = gpu_info->devMem + devSlotSize;
+
+                        d_info = gpu_info->devMem + devASize;
+                        d_workspace = gpu_info->devMem + devASize + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
+
+                        for ( Long si = 0; si < nsrow; si++ )
+                        {
+                            Map [ Lsi [ Lsip[s] + si ] ] = si;
+                        }
+
+                        if ( !isComplex )
+                            cudaMemset ( d_A_, 0, nscol * nsrow * sizeof(Float) );
+                        else
+                            cudaMemset ( d_A_, 0, nscol * nsrow * sizeof(Complex) );
+
+                        if ( !isComplex )
+                            memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
+                        else
+                            memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
+
+                        for ( Long j = Super[s]; j < Super[s+1]; j++ )
+                        {
+                            Long sj = j - Super[s];
+                            for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
+                            {
+                                Long i = Li[p];
+                                Long si = Map[i];
+                                if ( !isComplex )
+                                    ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
+                                else
+                                {
+                                    ( (Complex*) h_A ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                                    ( (Complex*) h_A ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
+                                }
+                            }
+                        }
 
                         d_index_small = d_count - cpu_blas_count;
 
@@ -3391,10 +3472,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         cudaStreamSynchronize ( gpu_info->s_cudaStream );
 
-#pragma omp parallel for private(sj,si) schedule(guided) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
-                        for ( sj = 0; sj < nscol; sj++ )
+#pragma omp parallel for schedule(guided) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
+                        for ( Long sj = 0; sj < nscol; sj++ )
                         {
-                            for ( si = sj; si < nsrow; si++ )
+                            for ( Long si = sj; si < nsrow; si++ )
                             {
                                 if ( !isComplex )
                                     ( Lsx + Lsxp[s] ) [ sj * nsrow + si ] = ( (Float*) h_A ) [ sj * nsrow + si ];
@@ -3407,121 +3488,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         }
                     }
                     else
-                    {
-                        int info;
-
-                        for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
-                            Map [ Lsi [ Lsip[s] + si ] ] = si;
-
-                        if ( !isComplex )
-                            memset ( Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Float) );
-                        else
-                            memset ( (Complex*) Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Complex) );
-
-                        for ( j = Super[s]; j < Super[s+1]; j++ )
-                        {
-                            sj = j - Super[s];
-                            for ( p = Lp[j]; p < Lp[j+1]; p++ )
-                            {
-                                i = Li[p];
-                                si = Map[i];
-                                if ( !isComplex )
-                                    Lsx [ Lsxp[s] + sj * nsrow + si ] = Lx[p];
-                                else
-                                {
-                                    ( (Complex*) Lsx + Lsxp[s] ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
-                                    ( (Complex*) Lsx + Lsxp[s] ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
-                                }
-                            }
-                        }
-
-                        while ( Head[s] >= 0 )
-                        {
-                            Long d, di;
-                            Long ndcol, ndrow;
-                            Long lpos_next;
-
-                            Long dn, dm, dk, dlda, dldc;
-
-                            Long cj, ci;
-
-                            d = Head[s];
-
-                            ndcol = Super[d+1] - Super[d];
-                            ndrow = Lsip[d+1] - Lsip[d];
-
-                            for ( lpos_next = Lpos[d]; lpos_next < ndrow && Lsi [ Lsip[d] + lpos_next ] < Super[s+1]; lpos_next++ );
-
-                            dn = lpos_next - Lpos[d];
-                            dm = ndrow - Lpos[d] - dn;
-                            dk = ndcol;
-                            dlda = ndrow;
-                            dldc = ndrow - Lpos[d];
-
-                            if (!isComplex)
-                                dsyrk_ ( "L", "N", &dn, &dk, one, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C, &dldc );
-                            else
-                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) Lsx + Lsxp[d] + Lpos[d], &dlda, (Complex*) zero, (Complex*) C, &dldc );
-
-                            if ( dm > 0 )
-                            {
-                                if (!isComplex)
-                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, Lsx + Lsxp[d] + lpos_next, &dlda, Lsx + Lsxp[d] + Lpos[d], &dlda, zero, C + dn, &dldc );
-                                else
-                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*) Lsx + Lsxp[d] + Lpos[d], &dlda, (Complex*) zero, (Complex*) C + dn, &dldc );
-                            }
-
-                            for ( di = 0; di < ndrow - Lpos[d]; di++ )
-                            {
-                                RelativeMap [ di ] = Map [ Lsi [ Lsip[d] + Lpos[d] + di ] ];
-                            }
-
-                            for ( cj = 0; cj < dn; cj++ )
-                            {
-                                for ( ci = cj; ci < dn + dm; ci++ )
-                                {
-                                    if (!isComplex)
-                                        Lsx [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= C [ cj * dldc + ci ];
-                                    else
-                                    {
-                                        ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
-                                        ( (Complex*) Lsx ) [ Lsxp[s] + RelativeMap [cj] * nsrow + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
-                                    }
-                                }
-                            }
-
-                            Head[s] = Next[d];
-                            Lpos[d] = lpos_next;
-                            if ( lpos_next < ndrow )
-                            {
-                                Long dancestor;
-
-                                dancestor = SuperMap [ Lsi [ Lsip[d] + lpos_next ] ];
-#pragma omp critical (HeadNext)
-                                {
-                                    Next[d] = Head[dancestor];
-                                    Head[dancestor] = d;
-                                }
-                            }
-                        }
-
-                        sn = nscol;
-                        sm = nsrow - nscol;
-                        slda = nsrow;
-
-                        if (!isComplex)
-                            dpotrf_ ( "L", &sn, Lsx + Lsxp[s], &slda, &info );
-                        else
-                            zpotrf_ ( "L", &sn, (Complex*) Lsx + Lsxp[s], &slda, &info );
-
-                        if ( nscol < nsrow )
-                        {
-                            if (!isComplex)
-                                dtrsm_ ( "R", "L", "C", "N", &sm, &sn, one, Lsx + Lsxp[s], &slda, Lsx + Lsxp[s] + nscol, &slda );
-                            else
-                                ztrsm_ ( "R", "L", "C", "N", &sm, &sn, (Complex*) one, ( (Complex*) Lsx ) + Lsxp[s], &slda, ( (Complex*) Lsx ) + Lsxp[s] + nscol, &slda );
-                        }
-                    }
+                        SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
 
                     omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
 
