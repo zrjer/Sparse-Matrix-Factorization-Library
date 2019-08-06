@@ -32,9 +32,11 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     numGPU_physical = MIN ( numGPU_physical, MAX_NUM_GPU );
 #endif
 
+    common_info->numGPU_physical = numGPU_physical;
+
     numSplit = 1;
-#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-    numSplit = MAX_GPU_SPLIT;
+#if ( defined ( GPU_SPLIT_LIMIT ) && ( GPU_SPLIT_LIMIT > 1 ) )
+    numSplit = MAX ( ( GPU_SPLIT_LIMIT / numGPU_physical ), 1 );
 #endif
 
     numGPU = numGPU_physical * numSplit;
@@ -1984,7 +1986,7 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
 
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct gpu_info_struct *gpu_info_list, struct matrix_info_struct *matrix_info )
 {
-    int useSubtree, numCPU, numGPU;
+    int useSubtree, numCPU, numGPU, numGPU_physical;
 
     int AMultiple, BCMultiple;
     size_t devSlotSize, devASize, devBCSize;
@@ -2030,6 +2032,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     numCPU = common_info->numCPU;
     numGPU = common_info->numGPU;
+    numGPU_physical = common_info->numGPU_physical;
     useSubtree = FALSE;
 
     AMultiple = common_info->AMultiple;
@@ -2742,12 +2745,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 if ( c_offset + c_size > devBCSize )
                                 {
                                     c_offset = 0;
-#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-                                    for ( int index = 0; index < MAX_D_STREAM; index++ )
-                                        cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
-#else
-                                    cudaDeviceSynchronize();
-#endif
+
+                                    if ( numGPU > numGPU_physical )
+                                    {
+                                        for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                            cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+                                    }
+                                    else
+                                        cudaDeviceSynchronize();
                                 }
 
                                 if ( !isComplex )
@@ -2806,12 +2811,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 c_offset += c_size;
                             }
 
-#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-                            for ( int index = 0; index < MAX_D_STREAM; index++ )
-                                cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
-#else
-                            cudaDeviceSynchronize();
-#endif
+                            if ( numGPU > numGPU_physical )
+                            {
+                                for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                    cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+                            }
+                            else
+                                cudaDeviceSynchronize();
                         }
 
                         if (!isComplex)
@@ -3365,12 +3371,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         }
                                     }
 
-#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-                                    for ( int index = 0; index < MAX_D_STREAM; index++ )
-                                        cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
-#else
-                                    cudaDeviceSynchronize();
-#endif
+                                    if ( numGPU > numGPU_physical )
+                                    {
+                                        for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                            cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+                                    }
+                                    else
+                                        cudaDeviceSynchronize();
                                 }
 
                                 while ( d_index_small <= d_count )
@@ -3448,12 +3455,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         if ( bc_offset + bc_size > devBCSize )
                                         {
                                             bc_offset = 0;
-#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-                                            for ( int index = 0; index < MAX_D_STREAM; index++ )
-                                                cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
-#else
-                                            cudaDeviceSynchronize();
-#endif
+
+                                            if ( numGPU > numGPU_physical )
+                                            {
+                                                for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                                    cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+                                            }
+                                            else
+                                                cudaDeviceSynchronize();
                                         }
 
                                         h_B = gpu_info->hostMem + devASize + bc_offset;
@@ -3521,12 +3530,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         bc_offset += bc_size;
                                     }
 
-#if ( defined ( MAX_GPU_SPLIT ) && ( MAX_GPU_SPLIT > 1 ) )
-                                    for ( int index = 0; index < MAX_D_STREAM; index++ )
-                                        cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
-#else
-                                    cudaDeviceSynchronize();
-#endif
+                                    if ( numGPU > numGPU_physical )
+                                    {
+                                        for ( int index = 0; index < MAX_D_STREAM; index++ )
+                                            cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
+                                    }
+                                    else
+                                        cudaDeviceSynchronize();
                                 }
 #endif
 

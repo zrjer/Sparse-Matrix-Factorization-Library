@@ -16,7 +16,7 @@
 #define MAX_NUM_CPU (0)
 
 #define MAX_NUM_GPU (-1)
-#define MAX_GPU_SPLIT (1)
+#define GPU_SPLIT_LIMIT (4)
 
 #define MAXMMLINE (1024)
 
