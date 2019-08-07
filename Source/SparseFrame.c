@@ -3479,6 +3479,32 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             if ( cpu_blas_count >= d_count )
                             {
+                                if ( d_A__reset )
+                                {
+                                    void *h_A_;
+
+                                    h_A_ = gpu_info->hostMem + devSlotSize;
+
+                                    cudaMemcpyAsync ( h_A_, d_A_, nscol * nsrow * sizeof(Float), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
+
+                                    cudaStreamSynchronize ( gpu_info->s_cudaStream );
+
+#pragma omp parallel for schedule(guided) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
+                                    for ( Long sj = 0; sj < nscol; sj++ )
+                                    {
+                                        for ( Long si = sj; si < nsrow; si++ )
+                                        {
+                                            if ( !isComplex )
+                                                ( (Float*) h_A ) [ sj * nsrow + si ] += ( (Float*) h_A_ ) [ sj * nsrow + si ];
+                                            else
+                                            {
+                                                ( (Complex*) h_A ) [ sj * nsrow + si ].x += ( (Complex*) h_A_ ) [ sj * nsrow + si ].x;
+                                                ( (Complex*) h_A ) [ sj * nsrow + si ].y += ( (Complex*) h_A_ ) [ sj * nsrow + si ].y;
+                                            }
+                                        }
+                                    }
+                                }
+
                                 while ( Head[s] >= 0 )
                                 {
                                     Long d;
