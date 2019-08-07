@@ -51,6 +51,11 @@ struct gpu_info_struct
     cublasHandle_t d_cublasHandle[MAX_D_STREAM];
 
     cusolverDnHandle_t s_cusolverDnHandle;
+
+    void *h_lastMatrix;
+    Long h_lastNode;
+    void *d_lastMatrix;
+    Long d_lastNode;
 };
 
 struct matrix_info_struct
