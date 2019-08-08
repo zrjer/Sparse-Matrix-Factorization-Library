@@ -31,7 +31,7 @@ const double aggressive = 1;
 int should_relax ( Long col, double rate )
 {
     const int n_checks = 3;
-    const Long relax_threshold_col[] = { 4, 16, 48 };
+    const Long relax_threshold_col[] = { 4, 32, 256 };
     const double relax_threshold_rate[] = { 0.8, 0.1, 0.05 };
 
     for ( int k = n_checks - 1; k >= 0; k-- )
@@ -59,7 +59,7 @@ const int dimension_n_checks = 3;
 const Long dimension_threshold_x[] = { 24, 48, 96 };
 const Long dimension_threshold_y[] = { 16, 32, 64 };
 const Long dimension_threshold_mn = 128;
-const Long dimension_threshold_k = 64;
+const Long dimension_threshold_k = 16;
 
 void set_node_score ( struct node_size_struct *node, int useBatch )
 {
@@ -91,8 +91,8 @@ void set_node_score ( struct node_size_struct *node, int useBatch )
 
 void set_factorize_location ( Long nscol, Long nsrow, int *useCpuPotrf, int *useCpuTrsm )
 {
-    const Long potrf_dimension_threshold_n = 64;
-    const Long trsm_dimension_threshold_m = 64;
+    const Long potrf_dimension_threshold_n = 128;
+    const Long trsm_dimension_threshold_m = 128;
 
     *useCpuPotrf = ( nscol < potrf_dimension_threshold_n );
     *useCpuTrsm = *useCpuPotrf && ( nscol == nsrow || ( nsrow - nscol ) < trsm_dimension_threshold_m );
