@@ -14,7 +14,6 @@ struct common_info_struct
     int numCPU;
     int numGPU;
     int numGPU_physical;
-    int numThread;
     int numSparseMatrix;
 
     size_t minDevMemSize;

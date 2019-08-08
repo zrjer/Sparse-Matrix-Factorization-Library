@@ -4330,17 +4330,11 @@ int SparseFrame_factorize ( struct common_info_struct *common_info, struct gpu_i
 {
     double timestamp;
 
-    int numThread;
-
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_factorize================\n\n");
 #endif
 
     timestamp = SparseFrame_time ();
-
-    numThread = common_info->numThread;
-
-    openblas_set_num_threads ( numThread );
 
     SparseFrame_factorize_supernodal ( common_info, gpu_info_list, matrix_info );
 
@@ -4644,7 +4638,7 @@ int SparseFrame ( int argc, char **argv )
 {
     double timestamp;
 
-    int numThread, numSparseMatrix, nextMatrixIndex;
+    int numSparseMatrix, nextMatrixIndex;
     int matrixThreadNum, matrixThreadIndex;
 
     struct common_info_struct common_info_object;
@@ -4665,14 +4659,9 @@ int SparseFrame ( int argc, char **argv )
     numSparseMatrix = argc - 1;
     common_info->numSparseMatrix = numSparseMatrix;
 
-    numThread = omp_get_max_threads();
-    numThread = MIN ( numThread, MAX_NUM_THREAD );
-    common_info->numThread = numThread;
-
     matrixThreadNum = MIN ( MATRIX_THREAD_NUM, numSparseMatrix );
 
 #ifdef PRINT_INFO
-    printf ("Max threads = %d\n", numThread);
     printf ("Num of matrices = %d\n\n", numSparseMatrix);
 #endif
 
