@@ -9,7 +9,7 @@
 
 #define MATRIX_THREAD_NUM (2)
 
-#define MAX_NUM_THREAD (32)
+#define MAX_NUM_THREAD (4)
 #define CP_NUM_THREAD (4)
 #define CP_THREAD_THRESHOLD (256)
 
@@ -105,7 +105,7 @@ Long get_node_score ( const struct node_size_struct *node )
 
 #define MAX_BATCH (16384)
 
-#define MAX_D_STREAM (4) // must be at least 2
+#define MAX_D_STREAM (3) // must be at least 2
 
 #define A_MULTIPLE (2)
 #define BC_MULTIPLE ( 2 * MAX_D_STREAM )
