@@ -10,8 +10,8 @@
 #define MATRIX_THREAD_NUM (2)
 
 #define MAX_NUM_THREAD (32)
-#define CP_NUM_THREAD (8)
-#define CP_THREAD_THRESHOLD (32)
+#define CP_NUM_THREAD (4)
+#define CP_THREAD_THRESHOLD (256)
 
 #define MAX_NUM_CPU (0)
 

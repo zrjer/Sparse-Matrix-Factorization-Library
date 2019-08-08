@@ -1843,13 +1843,9 @@ int SparseFrame_node_size_cmp_reverse ( const void *l, const void *r )
 
 int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsip, Long *Lsi, Long *Lsxp, void *Lsx, Long *Head, Long *Next, Long *Lpos, Long *Map, Long *RelativeMap, Long s, Long nsrow, void *A, Long d, void *C )
 {
-    Long di;
-    Long ndcol, ndrow;
-    Long lpos_next;
-
+    Long ndcol, ndrow, lpos_next;
     Long dn, dm, dk, dlda, dldc;
-
-    Long cj, ci;
+    Long dj, di, cj, ci;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_cpuApply================\n\n");
@@ -1884,6 +1880,7 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
         RelativeMap [ di ] = Map [ Lsi [ Lsip[d] + Lpos[d] + di ] ];
     }
 
+#pragma omp parallel for private(cj,ci) schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
     for ( cj = 0; cj < dn; cj++ )
     {
         for ( ci = cj; ci < dn + dm; ci++ )
@@ -1914,20 +1911,17 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
     return 0;
 }
 
-int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx, Long *SuperMap, Long *Super, Long *Lsip, Long *Lsi, Long *Lsxp, void *Lsx, Long *Head, Long *Next, Long *Lpos, Long *Map, Long *RelativeMap, Long s, void *C )
+int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx, Long *SuperMap, Long *Super, Long *Lsip, Long *Lsi, Long *Lsxp, void *Lsx, Long *Head, Long *Next, Long *Lpos, Long *Map, Long *RelativeMap, Long s, Long nscol, Long nsrow, Long sn, Long sm, Long slda, void *C )
 {
     int info;
 
-    Long nscol, nsrow, sn, sm, slda;
+    Long j, i, p, si, sj;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_cpuApplyFactorize================\n\n");
 #endif
 
-    nscol = Super[s+1] - Super[s];
-    nsrow = Lsip[s+1] - Lsip[s];
-
-    for ( Long si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
+    for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
         Map [ Lsi [ Lsip[s] + si ] ] = si;
 
     if ( !isComplex )
@@ -1935,13 +1929,13 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
     else
         memset ( (Complex*) Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Complex) );
 
-    for ( Long j = Super[s]; j < Super[s+1]; j++ )
+    for ( j = Super[s]; j < Super[s+1]; j++ )
     {
-        Long sj = j - Super[s];
-        for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
+        sj = j - Super[s];
+        for ( p = Lp[j]; p < Lp[j+1]; p++ )
         {
-            Long i = Li[p];
-            Long si = Map[i];
+            i = Li[p];
+            si = Map[i];
             if ( !isComplex )
                 ( (Float*) Lsx ) [ Lsxp[s] + sj * nsrow + si ] = ( (Float*) Lx )[p];
             else
@@ -1968,10 +1962,6 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
 
         SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, A, d, C );
     }
-
-    sn = nscol;
-    sm = nsrow - nscol;
-    slda = nsrow;
 
     if (!isComplex)
         dpotrf_ ( "L", &sn, (Float*) Lsx + Lsxp[s], &slda, &info );
@@ -2001,32 +1991,19 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Long *Lp, *Li;
     Float *Lx;
 
-    Long nsuper;
+    Long nsuper, csize, nsleaf, leafQueueHead, leafQueueTail;
     Long *Super, *SuperMap;
-
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
+    Long *Head, *Next, *Lpos, *Lpos_next, *Lpos_low, *Nschild, *LeafQueue;
 
-    Long *Head, *Next;
-    Long *Nschild;
-
-    Long *Lpos, *Lpos_next, *Lpos_low;
-
-    Long csize;
-
-    Long nsleaf;
-    Long *LeafQueue;
-    Long leafQueueHead, leafQueueTail;
     enum NodeState *nodeState;
 
     size_t *Aoffset, *Coffset, *Moffset;
 
+    Long nsubtree, nstleaf, ST_leafQueueHead, ST_leafQueueTail;
+    Long *ST_Map, *ST_Pointer, *ST_Index, *ST_Parent, *Nstchild, *ST_LeafQueue;
     Long *ST_Head, *ST_Next, *ST_Pointer_Tail;
-    Long *Nstchild;
-
-    Long nsubtree, nstleaf;
-    Long *ST_Map, *ST_Pointer, *ST_Index, *ST_Parent, *ST_LeafQueue;
-    Long ST_leafQueueHead, ST_leafQueueTail;
     enum NodeState *ST_State;
 
     Long *workspace;
@@ -2225,11 +2202,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
-                        Long j, i, p;
-
-                        Long s;
-                        Long nscol, nsrow;
-                        Long sj, si;
+                        Long s, nscol, nsrow;
+                        Long j, i, p, sj, si;
 
                         void *h_A, *d_A;
                         Long *h_Map, *d_Map;
@@ -2305,8 +2279,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                             {
-                                Long d;
-                                Long ndrow;
+                                Long d, ndrow;
                                 Long lpos, lpos_next;
 
                                 d = ST_Index[dpt];
@@ -2320,8 +2293,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                             {
-                                Long d, dj, di;
-                                Long ndcol, ndrow, lpos;
+                                Long d, ndcol, ndrow, lpos;
+                                Long dj, di;
 
                                 void *h_B, *d_B;
 
@@ -2344,7 +2317,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 if ( lpos < ndrow && ST_Map [ SuperMap [ Lsi [ Lsip[d] + lpos ] ] ] == st )
                                 {
-#pragma omp parallel for private(dj,di) schedule(guided) num_threads(CP_NUM_THREAD) if(ndcol>=CP_THREAD_THRESHOLD)
+#pragma omp parallel for private(dj,di) schedule(auto) num_threads(CP_NUM_THREAD) if(ndcol>=CP_THREAD_THRESHOLD)
                                     for ( dj = 0; dj < ndcol; dj++ )
                                     {
                                         for ( di = 0; di < ndrow - lpos; di++ )
@@ -2368,8 +2341,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                             {
-                                Long d;
-                                Long ndrow, lpos;
+                                Long d, ndrow, lpos;
 
                                 d = ST_Index[dpt];
 
@@ -2387,8 +2359,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer[dt+1] && ST_Index[dpt] >= 0; dpt++ )
                             {
-                                Long d;
-                                Long ndcol, ndrow;
+                                Long d, ndcol, ndrow;
                                 Long lpos, lpos_next;
 
                                 void *d_B;
@@ -2460,8 +2431,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 for ( dpt = ST_Pointer[dt]; dpt < ST_Pointer_Tail[dt]; dpt++ )
                                 {
-                                    Long d;
-                                    Long ndrow;
+                                    Long d, ndrow;
                                     Long lpos, lpos_next, lpos_low;
 
                                     d = ST_Index[dpt];
@@ -2602,11 +2572,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     for ( pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
                     {
-                        Long s;
-                        Long nscol, nsrow;
-                        Long sj, si;
-
+                        Long s, nscol, nsrow;
                         Long sn, sm, slda;
+                        Long sj, si;
 
                         void *h_A, *d_A;
                         Long *h_Map;
@@ -2648,9 +2616,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         while ( Head[s] >= 0 )
                         {
-                            Long d;
-
-                            Long ndcol, ndrow;
+                            Long d, ndcol, ndrow;
                             Long lpos, lpos_next;
 
                             Long dn, dm, dk;
@@ -2699,7 +2665,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         if ( d_count > 0 )
                         {
-                            int stream_index;
+                            int stream_index, d_index;
 
                             cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
 
@@ -2709,13 +2675,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             stream_index = 0;
                             c_offset = 0;
 
-                            for ( Long d_index = 0; d_index < d_count; d_index++ )
+                            for ( d_index = 0; d_index < d_count; d_index++ )
                             {
                                 size_t c_size;
 
-                                Long d, di;
-                                Long ndcol, ndrow;
-                                Long lpos, lpos_next;
+                                Long d, ndcol, ndrow, lpos, lpos_next;
+                                Long di;
 
                                 Long dn, dm, dk, dlda, dldc;
 
@@ -2849,7 +2814,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         cudaStreamSynchronize ( gpu_info->s_cudaStream );
 
-#pragma omp parallel for private(sj,si) schedule(guided) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
+#pragma omp parallel for private(sj,si) schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
                         for ( sj = 0; sj < nscol; sj++ )
                         {
                             for ( si = sj; si < nsrow; si++ )
@@ -2985,11 +2950,17 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     int gpuIndex;
 
                     Long s, nscol, nsrow;
+                    Long sn, sm, slda;
+                    Long j, i, p, sj, si;
 
                     s = LeafQueue[leafQueueIndex];
 
                     nscol = Super[s+1] - Super[s];
                     nsrow = Lsip[s+1] - Lsip[s];
+
+                    sn = nscol;
+                    sm = nsrow - nscol;
+                    slda = sn + sm;
 
                     gpuIndex = 0;
                     while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
@@ -3062,13 +3033,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         if ( cpu_blas_count >= d_count && useCpuPotrf && useCpuTrsm )
                         {
-                            SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
+                            SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nscol, nsrow, sn, sm, slda, C );
                         }
                         else
                         {
                             struct gpu_info_struct *gpu_info;
-
-                            Long sn, sm, slda;
 
                             Long d_dlast, h_dlast;
                             Long d_dlast_score, h_dlast_score;
@@ -3093,10 +3062,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 if ( gpu_info->h_lastMatrix == matrix_info && gpu_info->h_lastNode >= 0 && SuperMap [ Lsi [ Lsip [ gpu_info->h_lastNode ] + Lpos [ gpu_info->h_lastNode ] ] ]  == s )
                                     h_dlast = gpu_info->h_lastNode;
 
-                            sn = nscol;
-                            sm = nsrow - nscol;
-                            slda = sn + sm;
-
                             h_A = gpu_info->hostMem;
                             d_A = gpu_info->devMem;
                             d_A_ = gpu_info->devMem + devSlotSize;
@@ -3105,7 +3070,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             d_info = gpu_info->devMem + devASize;
                             d_workspace = gpu_info->devMem + devASize + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
 
-                            for ( Long si = 0; si < nsrow; si++ )
+                            for ( si = 0; si < nsrow; si++ )
                             {
                                 Map [ Lsi [ Lsip[s] + si ] ] = si;
                             }
@@ -3216,13 +3181,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             else
                                 memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
 
-                            for ( Long j = Super[s]; j < Super[s+1]; j++ )
+                            for ( j = Super[s]; j < Super[s+1]; j++ )
                             {
-                                Long sj = j - Super[s];
-                                for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
+                                sj = j - Super[s];
+                                for ( p = Lp[j]; p < Lp[j+1]; p++ )
                                 {
-                                    Long i = Li[p];
-                                    Long si = Map[i];
+                                    i = Li[p];
+                                    si = Map[i];
                                     if ( !isComplex )
                                         ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
                                     else
@@ -3237,6 +3202,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             {
                                 Long d, ndcol, ndrow, lpos, lpos_next;
                                 Long dn, dm, dk, dlda, dldc;
+                                Long di, cj, ci;
                                 void *h_B, *d_B, *h_C, *d_C;
                                 Long *h_RelativeMap, *d_RelativeMap;
 
@@ -3269,7 +3235,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     d_RelativeMap = (void*) d_B + ndcol * ( ndrow - lpos ) * sizeof(Complex);
                                 }
 
-                                for ( Long di = 0; di < ndrow - lpos; di++ )
+                                for ( di = 0; di < ndrow - lpos; di++ )
                                 {
                                     h_RelativeMap[di] = Map [ Lsi [ Lsip[d] + lpos + di ] ];
                                 }
@@ -3296,9 +3262,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) h_C + dn, &dldc );
                                     }
 
-                                    for ( Long cj = 0; cj < dn; cj++ )
+#pragma omp parallel for private(cj,ci) schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
+                                    for ( cj = 0; cj < dn; cj++ )
                                     {
-                                        for ( Long ci = cj; ci < dn + dm; ci++ )
+                                        for ( ci = cj; ci < dn + dm; ci++ )
                                         {
                                             if (!isComplex)
                                                 ( (Float*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ] -= ( (Float*) h_C ) [ cj * dldc + ci ];
@@ -3358,6 +3325,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             {
                                 Long d, ndcol, ndrow, lpos, lpos_next;
                                 Long dn, dm, dk, dlda, dldc;
+                                Long di, cj, ci;
                                 void *h_B, *d_B, *h_C, *d_C;
                                 Long *h_RelativeMap, *d_RelativeMap;
 
@@ -3390,7 +3358,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     d_RelativeMap = (void*) d_B + ndcol * ( ndrow - lpos ) * sizeof(Complex);
                                 }
 
-                                for ( Long di = 0; di < ndrow - lpos; di++ )
+                                for ( di = 0; di < ndrow - lpos; di++ )
                                 {
                                     h_RelativeMap[di] = Map [ Lsi [ Lsip[d] + lpos + di ] ];
                                 }
@@ -3410,9 +3378,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) h_C + dn, &dldc );
                                     }
 
-                                    for ( Long cj = 0; cj < dn; cj++ )
+#pragma omp parallel for private(cj,ci) schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
+                                    for ( cj = 0; cj < dn; cj++ )
                                     {
-                                        for ( Long ci = cj; ci < dn + dm; ci++ )
+                                        for ( ci = cj; ci < dn + dm; ci++ )
                                         {
                                             if (!isComplex)
                                                 ( (Float*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ] -= ( (Float*) h_C ) [ cj * dldc + ci ];
@@ -3489,10 +3458,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                     cudaStreamSynchronize ( gpu_info->s_cudaStream );
 
-#pragma omp parallel for schedule(guided) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
-                                    for ( Long sj = 0; sj < nscol; sj++ )
+#pragma omp parallel for private(sj,si) schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
+                                    for ( sj = 0; sj < nscol; sj++ )
                                     {
-                                        for ( Long si = sj; si < nsrow; si++ )
+                                        for ( si = sj; si < nsrow; si++ )
                                         {
                                             if ( !isComplex )
                                                 ( (Float*) h_A ) [ sj * nsrow + si ] += ( (Float*) h_A_ ) [ sj * nsrow + si ];
@@ -3652,12 +3621,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         {
                                             int stream_index;
 
-                                            Long d;
-
-                                            Long ndcol, ndrow;
-                                            Long lpos, lpos_next;
-
+                                            Long d, ndcol, ndrow ,lpos, lpos_next;
                                             Long dn, dm, dk, dlda, dldc;
+                                            Long dj, di;
 
                                             void *h_B, *d_B, *d_C;
                                             Long *h_RelativeMap, *d_RelativeMap;
@@ -3691,10 +3657,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                                 d_RelativeMap = (void*) d_B + ndcol * ( ndrow - lpos ) * sizeof(Complex);
                                             }
 
-#pragma omp parallel for schedule(guided) num_threads(CP_NUM_THREAD) if(ndcol>=CP_THREAD_THRESHOLD)
-                                            for ( Long dj = 0; dj < ndcol; dj++ )
+#pragma omp parallel for private(dj,di) schedule(auto) num_threads(CP_NUM_THREAD) if(ndcol>=CP_THREAD_THRESHOLD)
+                                            for ( dj = 0; dj < ndcol; dj++ )
                                             {
-                                                for ( Long di = 0; di < ndrow - lpos; di++ )
+                                                for ( di = 0; di < ndrow - lpos; di++ )
                                                 {
                                                     if (!isComplex)
                                                         ( (Float*) h_B ) [ dj * ( ndrow - lpos ) + di ] = ( Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ];
@@ -3706,7 +3672,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                                 }
                                             }
 
-                                            for ( Long di = 0; di < ndrow - lpos; di++ )
+                                            for ( di = 0; di < ndrow - lpos; di++ )
                                             {
                                                 h_RelativeMap[di] = Map [ Lsi [ Lsip[d] + lpos + di ] ];
                                             }
@@ -3814,11 +3780,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         size_t b_size, c_size, map_size, bc_size;
 
-                                        Long d, dj, di;
-                                        Long ndcol, ndrow;
-                                        Long lpos, lpos_next;
-
+                                        Long d, ndcol, ndrow, lpos, lpos_next;
                                         Long dn, dm, dk, dlda, dldc;
+                                        Long dj, di;
 
                                         void *h_B, *d_B, *d_C;
                                         Long *h_RelativeMap, *d_RelativeMap;
@@ -3872,7 +3836,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         h_RelativeMap = gpu_info->hostMem + devASize + bc_offset + b_size + c_size;
                                         d_RelativeMap = gpu_info->devMem + devASize + bc_offset + b_size + c_size;
 
-#pragma omp parallel for private(dj,di) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
+#pragma omp parallel for private(dj,di) schedule(auto) num_threads(CP_NUM_THREAD) if(ndcol>CP_THREAD_THRESHOLD)
                                         for ( dj = 0; dj < ndcol; dj++ )
                                         {
                                             for ( di = 0; di < ndrow - lpos; di++ )
@@ -4051,10 +4015,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 }
                             }
 
-#pragma omp parallel for schedule(guided) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
-                            for ( Long sj = 0; sj < nscol; sj++ )
+#pragma omp parallel for private(sj,si) schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
+                            for ( sj = 0; sj < nscol; sj++ )
                             {
-                                for ( Long si = sj; si < nsrow; si++ )
+                                for ( si = sj; si < nsrow; si++ )
                                 {
                                     if ( !isComplex )
                                         ( Lsx + Lsxp[s] ) [ sj * nsrow + si ] = ( (Float*) h_A ) [ sj * nsrow + si ];
@@ -4069,7 +4033,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     }
                     else
                     {
-                        SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, C );
+                        SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nscol, nsrow, sn, sm, slda, C );
                     }
 
                     omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
@@ -4193,17 +4157,14 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
 
     for ( s = 0; s < nsuper; s++ )
     {
-        Long j, i;
-
         Long nscol, nsrow;
-        Long sj, si;
 
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
-        for ( sj = 0; sj < nscol; sj++ )
+        for ( Long sj = 0; sj < nscol; sj++ )
         {
-            j = Lsi [ Lsip[s] + sj ];
+            Long j = Lsi [ Lsip[s] + sj ];
 
             if ( !isComplex )
                 Xx[j] /= Lsx [ Lsxp[s] + sj * nsrow + sj ];
@@ -4212,9 +4173,9 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
                 // TODO
             }
 
-            for ( si = sj + 1; si < nsrow; si++ )
+            for ( Long si = sj + 1; si < nsrow; si++ )
             {
-                i = Lsi [ Lsip[s] + si ];
+                Long i = Lsi [ Lsip[s] + si ];
 
                 if ( !isComplex )
                     Xx[i] -= ( Lsx [ Lsxp[s] + sj * nsrow + si ] * Xx[j] );
@@ -4228,21 +4189,18 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
 
     for ( s = nsuper - 1; s >= 0; s-- )
     {
-        Long j, i;
-
         Long nscol, nsrow;
-        Long sj, si;
 
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
-        for ( sj = nscol - 1; sj >= 0; sj-- )
+        for ( Long sj = nscol - 1; sj >= 0; sj-- )
         {
-            j = Lsi [ Lsip[s] + sj ];
+            Long j = Lsi [ Lsip[s] + sj ];
 
-            for ( si = sj + 1; si < nsrow; si++ )
+            for ( Long si = sj + 1; si < nsrow; si++ )
             {
-                i = Lsi [ Lsip[s] + si ];
+                Long i = Lsi [ Lsip[s] + si ];
 
                 if ( !isComplex )
                     Xx[j] -= ( Lsx [ Lsxp[s] + sj * nsrow + si ] * Xx[i] );
@@ -4499,7 +4457,7 @@ int SparseFrame ( int argc, char **argv )
 
     nextMatrixIndex = 0;
 
-#pragma omp parallel for schedule(guided) num_threads(matrixThreadNum)
+#pragma omp parallel for schedule(auto) num_threads(matrixThreadNum)
     for ( matrixThreadIndex = 0; matrixThreadIndex < matrixThreadNum; matrixThreadIndex++ )
     {
         int matrixIndex;
