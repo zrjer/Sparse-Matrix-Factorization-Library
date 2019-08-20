@@ -1211,7 +1211,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     int isComplex;
 
-    Long j, i, k, p, nrow, nzmax;
+    Long j, i, k, p, nrow;
 
     Long *Up, *Ui;
 
@@ -1260,7 +1260,6 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     isComplex = matrix_info->isComplex;
 
     nrow = matrix_info->nrow;
-    nzmax = matrix_info->nzmax;
 
     Up = matrix_info->Up;
     Ui = matrix_info->Ui;
@@ -1845,7 +1844,7 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
 {
     Long ndcol, ndrow, lpos_next;
     Long dn, dm, dk, dlda, dldc;
-    Long dj, di, cj, ci;
+    Long di, cj, ci;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_cpuApply================\n\n");
