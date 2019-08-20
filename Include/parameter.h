@@ -102,7 +102,7 @@ Long get_node_score ( const struct node_size_struct *node )
     return node->score;
 }
 
-#define MAX_BATCH (16384)
+#define MAX_BATCH (256)
 
 #define MAX_D_STREAM (3) // must be at least 2
 
