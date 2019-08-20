@@ -34,28 +34,28 @@ int main (int argc, char **argv)
     cublasSetStream ( cublasHandle, cudaStream );
 
     A = malloc ( batch * size_A );
-    cudaMallocHost ( &(void*)h_A, batch * size_A );
-    cudaMalloc ( &(void*)d_A, batch * size_A );
+    cudaMallocHost ( (void**)&h_A, batch * size_A );
+    cudaMalloc ( (void**)&d_A, batch * size_A );
 
     C = malloc ( batch * size_C );
-    cudaMallocHost ( &(void*)h_C, batch * size_C );
-    cudaMalloc ( &(void*)d_C, batch * size_C );
+    cudaMallocHost ( (void**)&h_C, batch * size_C );
+    cudaMalloc ( (void**)&d_C, batch * size_C );
 
     Aarray = malloc ( batch * sizeof ( double* ) );
-    cudaMallocHost ( &(void*)h_Aarray, batch * sizeof ( double* ) );
-    cudaMalloc ( &(void*)d_Aarray, batch * sizeof ( double* ) );
+    cudaMallocHost ( (void**)&h_Aarray, batch * sizeof ( double* ) );
+    cudaMalloc ( (void**)&d_Aarray, batch * sizeof ( double* ) );
 
     Barray = malloc ( batch * sizeof ( double* ) );
-    cudaMallocHost ( &(void*)h_Barray, batch * sizeof ( double* ) );
-    cudaMalloc ( &(void*)d_Barray, batch * sizeof ( double* ) );
+    cudaMallocHost ( (void**)&h_Barray, batch * sizeof ( double* ) );
+    cudaMalloc ( (void**)&d_Barray, batch * sizeof ( double* ) );
 
     Carray = malloc ( batch * sizeof ( double* ) );
-    cudaMallocHost ( &(void*)h_Carray, batch * sizeof ( double* ) );
-    cudaMalloc ( &(void*)d_Carray, batch * sizeof ( double* ) );
+    cudaMallocHost ( (void**)&h_Carray, batch * sizeof ( double* ) );
+    cudaMalloc ( (void**)&d_Carray, batch * sizeof ( double* ) );
 
     Darray = malloc ( batch * sizeof ( double* ) );
-    cudaMallocHost ( &(void*)h_Darray, batch * sizeof ( double* ) );
-    cudaMalloc ( &(void*)d_Darray, batch * sizeof ( double* ) );
+    cudaMallocHost ( (void**)&h_Darray, batch * sizeof ( double* ) );
+    cudaMalloc ( (void**)&d_Darray, batch * sizeof ( double* ) );
 
     for ( int idx = 0; idx < batch; idx++ )
     {
@@ -78,12 +78,12 @@ int main (int argc, char **argv)
     cudaMemcpy ( d_Darray, h_Darray, batch * sizeof ( double* ), cudaMemcpyHostToDevice );
 
     syrk_task = malloc ( batch * sizeof ( struct syrk_meta ) );
-    cudaMallocHost ( &(void*)h_syrk_task, batch * sizeof ( struct syrk_meta ) );
-    cudaMalloc ( &(void*)d_syrk_task, batch * sizeof ( struct syrk_meta ) );
+    cudaMallocHost ( (void**)&h_syrk_task, batch * sizeof ( struct syrk_meta ) );
+    cudaMalloc ( (void**)&d_syrk_task, batch * sizeof ( struct syrk_meta ) );
 
     gemm_task = malloc ( batch * sizeof ( struct gemm_meta ) );
-    cudaMallocHost ( &(void*)h_gemm_task, batch * sizeof ( struct gemm_meta ) );
-    cudaMalloc ( &(void*)d_gemm_task, batch * sizeof ( struct gemm_meta ) );
+    cudaMallocHost ( (void**)&h_gemm_task, batch * sizeof ( struct gemm_meta ) );
+    cudaMalloc ( (void**)&d_gemm_task, batch * sizeof ( struct gemm_meta ) );
 
     for ( int idx = 0; idx < batch; idx++ )
     {
