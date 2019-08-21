@@ -55,8 +55,8 @@ struct node_size_struct
 };
 
 const int dimension_n_checks = 3;
-const Long dimension_threshold_x[] = { 24, 48, 96 };
-const Long dimension_threshold_y[] = { 16, 32, 64 };
+const Long dimension_threshold_x[] = { 16, 32, 64 };
+const Long dimension_threshold_y[] = { 24, 48, 96 };
 const Long dimension_threshold_mn = 128;
 const Long dimension_threshold_k = 16;
 
@@ -90,8 +90,8 @@ void set_node_score ( struct node_size_struct *node, int useBatch )
 
 void set_factorize_location ( Long nscol, Long nsrow, int *useCpuPotrf, int *useCpuTrsm )
 {
-    const Long potrf_dimension_threshold_n = 128;
-    const Long trsm_dimension_threshold_m = 128;
+    const Long potrf_dimension_threshold_n = 64;
+    const Long trsm_dimension_threshold_m = 64;
 
     *useCpuPotrf = ( nscol < potrf_dimension_threshold_n );
     *useCpuTrsm = *useCpuPotrf && ( nscol == nsrow || ( nsrow - nscol ) < trsm_dimension_threshold_m );
