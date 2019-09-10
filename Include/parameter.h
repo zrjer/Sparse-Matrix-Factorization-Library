@@ -96,6 +96,9 @@ int set_factorize_location ( Long nscol, Long nsrow )
     return ( nscol < potrf_dimension_threshold_n && ( nsrow - nscol ) < trsm_dimension_threshold_m );
 }
 
+const Long potrf_split_threshold = 1024;
+const Long potrf_split_block = 256;
+
 Long get_node_score ( const struct node_size_struct *node )
 {
     return node->score;
