@@ -3248,6 +3248,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             else
                                 memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
 
+#pragma omp parallel for private(j, i, p, sj,si) schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
                             for ( j = Super[s]; j < Super[s+1]; j++ )
                             {
                                 sj = j - Super[s];
@@ -3894,9 +3895,9 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
     double timestamp;
 
     int isComplex;
-    Long nrow;
-
-    Long s, nsuper;
+    Long j, i, nrow;
+    Long s, sj, si, nscol, nsrow;
+    Long nsuper;
     Long *Super;
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
@@ -3930,14 +3931,12 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
 
     for ( s = 0; s < nsuper; s++ )
     {
-        Long nscol, nsrow;
-
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
-        for ( Long sj = 0; sj < nscol; sj++ )
+        for ( sj = 0; sj < nscol; sj++ )
         {
-            Long j = Lsi [ Lsip[s] + sj ];
+            j = Lsi [ Lsip[s] + sj ];
 
             if ( !isComplex )
                 Xx[j] /= Lsx [ Lsxp[s] + sj * nsrow + sj ];
@@ -3946,9 +3945,9 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
                 // TODO
             }
 
-            for ( Long si = sj + 1; si < nsrow; si++ )
+            for ( si = sj + 1; si < nsrow; si++ )
             {
-                Long i = Lsi [ Lsip[s] + si ];
+                i = Lsi [ Lsip[s] + si ];
 
                 if ( !isComplex )
                     Xx[i] -= ( Lsx [ Lsxp[s] + sj * nsrow + si ] * Xx[j] );
@@ -3962,18 +3961,16 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
 
     for ( s = nsuper - 1; s >= 0; s-- )
     {
-        Long nscol, nsrow;
-
         nscol = Super[s+1] - Super[s];
         nsrow = Lsip[s+1] - Lsip[s];
 
-        for ( Long sj = nscol - 1; sj >= 0; sj-- )
+        for ( sj = nscol - 1; sj >= 0; sj-- )
         {
-            Long j = Lsi [ Lsip[s] + sj ];
+            j = Lsi [ Lsip[s] + sj ];
 
-            for ( Long si = sj + 1; si < nsrow; si++ )
+            for ( si = sj + 1; si < nsrow; si++ )
             {
-                Long i = Lsi [ Lsip[s] + si ];
+                i = Lsi [ Lsip[s] + si ];
 
                 if ( !isComplex )
                     Xx[j] -= ( Lsx [ Lsxp[s] + sj * nsrow + si ] * Xx[i] );
