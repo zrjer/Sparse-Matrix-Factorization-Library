@@ -2670,7 +2670,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         int *d_info;
 
                         Long d_count, cpu_blas_count, gpu_blas_single_count;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
                         Long gpu_blas_batch_count[dimension_n_checks];
 #endif
                         size_t c_offset;
@@ -2695,7 +2695,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         d_count = 0;
                         cpu_blas_count = 0;
                         gpu_blas_single_count = 0;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
                         for ( int idx = 0; idx < dimension_n_checks; idx++ )
                             gpu_blas_batch_count[idx] = 0;
 #endif
@@ -2728,7 +2728,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             if ( get_node_score ( node_size_queue + d_count ) < 0 )
                                 cpu_blas_count++;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH > 0 ) )
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
                             else if ( get_node_score ( node_size_queue + d_count ) <= dimension_threshold_x[dimension_n_checks-1] )
                             {
                                 for ( int idx = 0; idx < dimension_n_checks; idx++ )

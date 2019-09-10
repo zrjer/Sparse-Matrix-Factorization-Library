@@ -54,9 +54,13 @@ struct node_size_struct
     Long score;
 };
 
+#define MAX_BATCH (256)
+
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
 const int dimension_n_checks = 3;
 const Long dimension_threshold_x[] = { 16, 32, 64 };
 const Long dimension_threshold_y[] = { 24, 48, 96 };
+#endif
 const Long dimension_threshold_mn = 64;
 const Long dimension_threshold_k = 16;
 
@@ -68,6 +72,7 @@ void set_node_score ( struct node_size_struct *node, int useBatch )
     m = node->m;
     k = node->k;
 
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
     if ( useBatch )
     {
         for ( int idx = 0; idx < dimension_n_checks; idx++ )
@@ -79,6 +84,7 @@ void set_node_score ( struct node_size_struct *node, int useBatch )
             }
         }
     }
+#endif
 
     if ( m + n >= dimension_threshold_mn && k >= dimension_threshold_k ) 
         node->score = ( m + n ) * k;
@@ -103,8 +109,6 @@ Long get_node_score ( const struct node_size_struct *node )
 {
     return node->score;
 }
-
-#define MAX_BATCH (256)
 
 #define MAX_D_STREAM (2) // must be at least 2
 
