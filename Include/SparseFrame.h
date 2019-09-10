@@ -12,6 +12,9 @@
 #include <omp.h>
 
 #include <amd.h>
+#include <camd.h>
+#include <colamd.h>
+#include <ccolamd.h>
 #include <metis.h>
 
 #include <cuda_runtime.h>

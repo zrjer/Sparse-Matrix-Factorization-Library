@@ -615,7 +615,7 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->workSize
         = MAX (
                 MAX (
-                    ( 8 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(Long),
+                    ( 10 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(Long),
                     ( 3 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(idx_t)
                     ),
                 12 * matrix_info->nrow * sizeof(Long) + 3 * matrix_info->nrow * sizeof(size_t)
@@ -655,15 +655,15 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 
     workspace = matrix_info->workspace;
 
-    Head   = workspace + 0 * nrow;
-    Next   = workspace + 1 * nrow;
-    Len    = workspace + 2 * nrow;
-    Nv     = workspace + 3 * nrow;
-    Elen   = workspace + 4 * nrow;
-    Degree = workspace + 5 * nrow;
-    Wi     = workspace + 6 * nrow;
-    Ap     = workspace + 7 * nrow;
-    Ai     = workspace + 8 * nrow + 1;
+    Head      = workspace +  0 * nrow;
+    Next      = workspace +  1 * nrow;
+    Len       = workspace +  2 * nrow;
+    Nv        = workspace +  3 * nrow;
+    Elen      = workspace +  4 * nrow;
+    Degree    = workspace +  5 * nrow;
+    Wi        = workspace +  8 * nrow;
+    Ap        = workspace +  9 * nrow;
+    Ai        = workspace + 10 * nrow + 1;
 
     memset ( Ap, 0, ( nrow + 1 ) * sizeof(Long) );
 
@@ -709,6 +709,93 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
     Control[AMD_AGGRESSIVE] = aggressive;
 
     amd_l2 ( nrow, Ap, Ai, Len, anz, Ap[nrow], Nv, Next, Perm, Head, Elen, Degree, Wi, Control, Info );
+
+    return 0;
+}
+
+int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
+{
+    Long j, i, p, ncol, nrow;
+    Long *Cp, *Ci;
+    Long *Head, *Next, *Perm;
+
+    Long *workspace;
+    Long anz;
+    Long *Ap, *Ai, *Len, *Nv, *Elen, *Degree, *Wi;
+    Long *Cmember, *BucketSet;
+
+    double Control[AMD_CONTROL], Info[AMD_INFO];
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_camd================\n\n");
+#endif
+
+    ncol = matrix_info->ncol;
+    nrow = matrix_info->nrow;
+
+    Cp = matrix_info->Cp;
+    Ci = matrix_info->Ci;
+
+    Perm = matrix_info->Perm;
+
+    workspace = matrix_info->workspace;
+
+    Head      = workspace +  0 * nrow;
+    Next      = workspace +  1 * nrow;
+    Len       = workspace +  2 * nrow;
+    Nv        = workspace +  3 * nrow;
+    Elen      = workspace +  4 * nrow;
+    Degree    = workspace +  5 * nrow;
+    Cmember   = workspace +  6 * nrow;
+    BucketSet = workspace +  7 * nrow;
+    Wi        = workspace +  8 * nrow;
+    Ap        = workspace +  9 * nrow;
+    Ai        = workspace + 10 * nrow + 1;
+
+    memset ( Ap, 0, ( nrow + 1 ) * sizeof(Long) );
+
+    for ( j = 0; j < ncol; j++ )
+    {
+        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        {
+            i = Ci[p];
+            if (i > j)
+            {
+                Ap[i+1]++;
+                Ap[j+1]++;
+            }
+        }
+    }
+
+    for ( j = 0; j < nrow; j++)
+    {
+        Ap[j+1] += Ap[j];
+    }
+
+    anz = Ap[nrow];
+
+    memcpy ( workspace, Ap, nrow * sizeof(Long) ); // Be careful of overwriting Ap
+
+    for ( j = 0; j < ncol; j++ )
+    {
+        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        {
+            i = Ci[p];
+            if (i > j)
+            {
+                Ai [ workspace[i]++ ] = j;
+                Ai [ workspace[j]++ ] = i;
+            }
+        }
+    }
+
+    for ( j = 0; j < matrix_info->nrow; j++ )
+        Len[j] = Ap[j+1] - Ap[j];
+
+    Control[AMD_DENSE] = prune_dense;
+    Control[AMD_AGGRESSIVE] = aggressive;
+
+    camd_l2 ( nrow, Ap, Ai, Len, anz, Ap[nrow], Nv, Next, Perm, Head, Elen, Degree, Wi, Control, Info, Cmember, BucketSet );
 
     return 0;
 }
@@ -1775,10 +1862,9 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
     matrix_info->Perm = malloc ( nrow * sizeof(Long) );
     matrix_info->Pinv = malloc ( nrow * sizeof(Long) );
 
-    if ( sizeof(idx_t) < sizeof(Long) )
-        SparseFrame_amd ( matrix_info );
-    else
-        SparseFrame_metis ( matrix_info );
+    //SparseFrame_amd ( matrix_info );
+    //SparseFrame_camd ( matrix_info );
+    SparseFrame_metis ( matrix_info );
 
     matrix_info->Lp = malloc ( ( nrow + 1 ) * sizeof(Long) );
     matrix_info->Li = malloc ( nzmax * sizeof(Long) );
