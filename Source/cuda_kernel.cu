@@ -69,10 +69,10 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
     cj = cj_offset + blockIdx.x * blockDim.x + threadIdx.x;
     ci = ci_offset + blockIdx.y * blockDim.y + threadIdx.y;
 
-    if ( threadIdx.y == 0 )
+    if ( threadIdx.y == 0 && cj < nccol )
         shRelativeMap_j[threadIdx.x] = d_RelativeMap[cj];
 
-    if ( threadIdx.x == 0 )
+    if ( threadIdx.x == 0 && ci < ncrow )
         shRelativeMap_i[threadIdx.y] = d_RelativeMap[ci];
 
     __syncthreads();

@@ -3133,11 +3133,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             d_info = gpu_info->devMem + devASize;
                             d_workspace = gpu_info->devMem + devASize + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
 
-                            for ( si = 0; si < nsrow; si++ )
-                            {
-                                Map [ Lsi [ Lsip[s] + si ] ] = si;
-                            }
-
                             d_dlast_score = 0;
                             h_dlast_score = 0;
                             if ( d_dlast >= 0 || h_dlast >= 0 )
@@ -3247,6 +3242,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
                             else
                                 memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
+
+                            for ( si = 0; si < nsrow; si++ )
+                            {
+                                Map [ Lsi [ Lsip[s] + si ] ] = si;
+                            }
 
 #pragma omp parallel for private(j, i, p, sj,si) schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
                             for ( j = Super[s]; j < Super[s+1]; j++ )
