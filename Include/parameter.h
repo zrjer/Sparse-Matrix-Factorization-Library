@@ -64,9 +64,9 @@ const Long dimension_threshold_y[] = { 24, 48, 96 };
 const Long dimension_threshold_mn = 64;
 const Long dimension_threshold_k = 16;
 
-void set_node_score ( struct node_size_struct *node, int useBatch )
+Long set_node_score ( struct node_size_struct *node, int useBatch )
 {
-    Long n, m, k;
+    Long n, m, k, score;
 
     n = node->n;
     m = node->m;
@@ -75,23 +75,25 @@ void set_node_score ( struct node_size_struct *node, int useBatch )
 #if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
     if ( useBatch )
     {
-        for ( int idx = 0; idx < dimension_n_checks; idx++ )
+        for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
         {
-            if ( k <= dimension_threshold_x[idx] && m <= dimension_threshold_y[idx] && n <= dimension_threshold_y[idx] )
+            if ( k <= dimension_threshold_x[gpu_blas_batch_loop_idx] && m <= dimension_threshold_y[gpu_blas_batch_loop_idx] && n <= dimension_threshold_y[gpu_blas_batch_loop_idx] )
             {
-                node->score = dimension_threshold_x[idx];
-                return;
+                score = dimension_threshold_x[gpu_blas_batch_loop_idx];
+                node->score = score;
+                return score;
             }
         }
     }
 #endif
 
     if ( m + n >= dimension_threshold_mn && k >= dimension_threshold_k ) 
-        node->score = ( m + n ) * k;
+        score = ( m + n ) * k;
     else
-        node->score = - ( m + n ) * k;
+        score = - ( m + n ) * k;
 
-    return;
+    node->score = score;
+    return score;
 }
 
 int set_factorize_location ( Long nscol, Long nsrow )

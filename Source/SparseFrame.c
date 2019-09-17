@@ -3050,6 +3050,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         int useCpuPotrf;
 
                         Long d_count, cpu_blas_count, gpu_blas_single_count;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
+                        Long gpu_blas_batch_count[dimension_n_checks];
+#endif
                         Long d_index_small;
 
                         useCpuPotrf = set_factorize_location ( nscol, nsrow );
@@ -3057,6 +3060,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         d_count = 0;
                         cpu_blas_count = 0;
                         gpu_blas_single_count = 0;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
+                        for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
+                            gpu_blas_batch_count[gpu_blas_batch_loop_idx] = 0;
+#endif
 
                         for ( Long d = Head[s]; d >= 0; d = Next[d] )
                         {
@@ -3064,6 +3071,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             Long lpos, lpos_next;
 
                             Long dn, dm, dk;
+
+                            Long score;
 
                             ndcol = Super[d+1] - Super[d];
                             ndrow = Lsip[d+1] - Lsip[d];
@@ -3080,10 +3089,18 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
-                            set_node_score ( node_size_queue + d_count, FALSE );
+                            score = set_node_score ( node_size_queue + d_count, FALSE );
 
-                            if ( get_node_score ( node_size_queue + d_count ) < 0 )
+                            if ( score < 0 )
                                 cpu_blas_count++;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
+                            else if ( score <= dimension_threshold_x[dimension_n_checks-1] )
+                            {
+                                for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
+                                    if ( score <= dimension_threshold_x[gpu_blas_batch_loop_idx] )
+                                        gpu_blas_batch_count[gpu_blas_batch_loop_idx]++;
+                            }
+#endif
                             else
                                 gpu_blas_single_count++;
 
@@ -3145,12 +3162,20 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         if ( d_dlast_score < 0 )
                                             cpu_blas_count--;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
+                                        else if ( d_dlast_score <= dimension_threshold_x[dimension_n_checks-1] )
+                                        {
+                                            for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
+                                                if ( d_dlast_score <= dimension_threshold_x[gpu_blas_batch_loop_idx] )
+                                                    gpu_blas_batch_count[gpu_blas_batch_loop_idx]--;
+                                        }
+#endif
                                         else
                                             gpu_blas_single_count--;
 
-                                        node_size_queue[idx] = node_size_queue[d_count-1];
-
                                         d_count--;
+
+                                        node_size_queue[idx] = node_size_queue[d_count];
                                     }
                                     if ( node_size_queue[idx].node == h_dlast )
                                     {
@@ -3158,12 +3183,20 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         if ( h_dlast_score < 0 )
                                             cpu_blas_count--;
+#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
+                                        else if ( h_dlast_score <= dimension_threshold_x[dimension_n_checks-1] )
+                                        {
+                                            for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
+                                                if ( h_dlast_score <= dimension_threshold_x[gpu_blas_batch_loop_idx] )
+                                                    gpu_blas_batch_count[gpu_blas_batch_loop_idx]--;
+                                        }
+#endif
                                         else
                                             gpu_blas_single_count--;
 
-                                        node_size_queue[idx] = node_size_queue[d_count-1];
-
                                         d_count--;
+
+                                        node_size_queue[idx] = node_size_queue[d_count];
                                     }
                                 }
                             }
@@ -4337,44 +4370,44 @@ int SparseFrame ( int argc, char **argv )
         while ( matrixIndex < numSparseMatrix )
         {
             // Initialize
-            SparseFrame_initialize_matrix ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_initialize_matrix ( matrix_info_list + matrixIndex );
 
             // Read matrices
 
             path = argv [ 1 + matrixIndex ];
-            ( matrix_info_list + matrixThreadIndex )->path = path;
+            ( matrix_info_list + matrixIndex )->path = path;
 
-            SparseFrame_read_matrix ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_read_matrix ( matrix_info_list + matrixIndex );
 
             // Analyze
 
-            SparseFrame_analyze ( common_info, matrix_info_list + matrixThreadIndex );
+            SparseFrame_analyze ( common_info, matrix_info_list + matrixIndex );
 
             // Factorize
 
             cudaProfilerStart();
 
-            SparseFrame_factorize ( common_info, gpu_info_list, matrix_info_list + matrixThreadIndex );
+            SparseFrame_factorize ( common_info, gpu_info_list, matrix_info_list + matrixIndex );
 
             cudaProfilerStop();
 
             // Validate
 
-            SparseFrame_validate ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_validate ( matrix_info_list + matrixIndex );
 
             // Cleanup
 
-            SparseFrame_cleanup_matrix ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_cleanup_matrix ( matrix_info_list + matrixIndex );
 
             // Output
 
 #ifdef PRINT_INFO
             printf ( "Matrix name:    %s\n", basename ( (char*) path ) );
-            printf ( "Read time:      %lf\n", (matrix_info_list+matrixThreadIndex)->readTime );
-            printf ( "Analyze time:   %lf\n", (matrix_info_list+matrixThreadIndex)->analyzeTime );
-            printf ( "Factorize time: %lf\n", (matrix_info_list+matrixThreadIndex)->factorizeTime );
-            printf ( "Solve time:     %lf\n", (matrix_info_list+matrixThreadIndex)->solveTime );
-            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info_list+matrixThreadIndex)->residual );
+            printf ( "Read time:      %lf\n", (matrix_info_list+matrixIndex)->readTime );
+            printf ( "Analyze time:   %lf\n", (matrix_info_list+matrixIndex)->analyzeTime );
+            printf ( "Factorize time: %lf\n", (matrix_info_list+matrixIndex)->factorizeTime );
+            printf ( "Solve time:     %lf\n", (matrix_info_list+matrixIndex)->solveTime );
+            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info_list+matrixIndex)->residual );
 #endif
 
 #pragma omp critical ( nextMatrixIndex )
