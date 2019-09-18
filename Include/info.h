@@ -14,9 +14,11 @@ struct common_info_struct
     int numCPU;
     int numGPU;
     int numGPU_physical;
-    int numSparseMatrix;
-
     size_t minDevMemSize;
+
+    int matrixThreadNum;
+
+    int numSparseMatrix;
 
     int AMultiple;
     int BCMultiple;
@@ -51,14 +53,16 @@ struct gpu_info_struct
 
     cusolverDnHandle_t s_cusolverDnHandle;
 
-    void *h_lastMatrix;
+    int h_lastMatrix;
     Long h_lastNode;
-    void *d_lastMatrix;
+    int d_lastMatrix;
     Long d_lastNode;
 };
 
 struct matrix_info_struct
 {
+    int serial;
+
     const char *path;
 
     FILE *file;

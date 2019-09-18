@@ -176,9 +176,9 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 #endif
             }
 
-            (*gpu_info_list_ptr)[gpuIndex].h_lastMatrix = NULL;
+            (*gpu_info_list_ptr)[gpuIndex].h_lastMatrix = -1;
             (*gpu_info_list_ptr)[gpuIndex].h_lastNode = -1;
-            (*gpu_info_list_ptr)[gpuIndex].d_lastMatrix = NULL;
+            (*gpu_info_list_ptr)[gpuIndex].d_lastMatrix = -1;
             (*gpu_info_list_ptr)[gpuIndex].d_lastNode = -1;
         }
     }
@@ -309,15 +309,15 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
 
 int SparseFrame_allocate_matrix ( struct common_info_struct *common_info, struct matrix_info_struct **matrix_info_list_ptr )
 {
-    int numSparseMatrix;
+    int matrixThreadNum;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_allocate_matrix================\n\n");
 #endif
 
-    numSparseMatrix = common_info->numSparseMatrix;
+    matrixThreadNum = common_info->matrixThreadNum;
 
-    *matrix_info_list_ptr = malloc ( numSparseMatrix * sizeof ( struct matrix_info_struct ) );
+    *matrix_info_list_ptr = malloc ( matrixThreadNum * sizeof ( struct matrix_info_struct ) );
 
     if ( *matrix_info_list_ptr == NULL ) return 1;
 
@@ -3132,10 +3132,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             d_dlast = -1;
                             h_dlast = -1;
                             if ( cpu_blas_count < d_count )
-                                if ( gpu_info->d_lastMatrix == matrix_info && gpu_info->d_lastNode >= 0 && SuperMap [ Lsi [ Lsip [ gpu_info->d_lastNode ] + Lpos [ gpu_info->d_lastNode ] ] ]  == s )
+                                if ( gpu_info->d_lastMatrix == matrix_info->serial && gpu_info->d_lastNode >= 0 && SuperMap [ Lsi [ Lsip [ gpu_info->d_lastNode ] + Lpos [ gpu_info->d_lastNode ] ] ]  == s )
                                     d_dlast = gpu_info->d_lastNode;
                             if ( gpu_info->h_lastNode != d_dlast )
-                                if ( gpu_info->h_lastMatrix == matrix_info && gpu_info->h_lastNode >= 0 && SuperMap [ Lsi [ Lsip [ gpu_info->h_lastNode ] + Lpos [ gpu_info->h_lastNode ] ] ]  == s )
+                                if ( gpu_info->h_lastMatrix == matrix_info->serial && gpu_info->h_lastNode >= 0 && SuperMap [ Lsi [ Lsip [ gpu_info->h_lastNode ] + Lpos [ gpu_info->h_lastNode ] ] ]  == s )
                                     h_dlast = gpu_info->h_lastNode;
 
                             if ( !isComplex )
@@ -3534,7 +3534,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             if ( d_count > 0 )
                                 qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
 
-                            gpu_info->h_lastMatrix = matrix_info;
+                            gpu_info->h_lastMatrix = matrix_info->serial;
                             gpu_info->h_lastNode = s;
 
                             if ( cpu_blas_count >= d_count )
@@ -3808,7 +3808,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             }
                             else
                             {
-                                gpu_info->d_lastMatrix = matrix_info;
+                                gpu_info->d_lastMatrix = matrix_info->serial;
                                 gpu_info->d_lastNode = s;
 
                                 if ( nscol < potrf_split_threshold )
@@ -4333,6 +4333,7 @@ int SparseFrame ( int argc, char **argv )
     common_info->numSparseMatrix = numSparseMatrix;
 
     matrixThreadNum = MIN ( MATRIX_THREAD_NUM, numSparseMatrix );
+    common_info->matrixThreadNum = matrixThreadNum;
 
 #ifdef PRINT_INFO
     printf ("Num of matrices = %d\n\n", numSparseMatrix);
@@ -4370,44 +4371,45 @@ int SparseFrame ( int argc, char **argv )
         while ( matrixIndex < numSparseMatrix )
         {
             // Initialize
-            SparseFrame_initialize_matrix ( matrix_info_list + matrixIndex );
+            matrix_info_list[matrixThreadIndex].serial = matrixIndex;
+            SparseFrame_initialize_matrix ( matrix_info_list + matrixThreadIndex );
 
             // Read matrices
 
             path = argv [ 1 + matrixIndex ];
-            ( matrix_info_list + matrixIndex )->path = path;
+            ( matrix_info_list + matrixThreadIndex )->path = path;
 
-            SparseFrame_read_matrix ( matrix_info_list + matrixIndex );
+            SparseFrame_read_matrix ( matrix_info_list + matrixThreadIndex );
 
             // Analyze
 
-            SparseFrame_analyze ( common_info, matrix_info_list + matrixIndex );
+            SparseFrame_analyze ( common_info, matrix_info_list + matrixThreadIndex );
 
             // Factorize
 
             cudaProfilerStart();
 
-            SparseFrame_factorize ( common_info, gpu_info_list, matrix_info_list + matrixIndex );
+            SparseFrame_factorize ( common_info, gpu_info_list, matrix_info_list + matrixThreadIndex );
 
             cudaProfilerStop();
 
             // Validate
 
-            SparseFrame_validate ( matrix_info_list + matrixIndex );
+            SparseFrame_validate ( matrix_info_list + matrixThreadIndex );
 
             // Cleanup
 
-            SparseFrame_cleanup_matrix ( matrix_info_list + matrixIndex );
+            SparseFrame_cleanup_matrix ( matrix_info_list + matrixThreadIndex );
 
             // Output
 
 #ifdef PRINT_INFO
             printf ( "Matrix name:    %s\n", basename ( (char*) path ) );
-            printf ( "Read time:      %lf\n", (matrix_info_list+matrixIndex)->readTime );
-            printf ( "Analyze time:   %lf\n", (matrix_info_list+matrixIndex)->analyzeTime );
-            printf ( "Factorize time: %lf\n", (matrix_info_list+matrixIndex)->factorizeTime );
-            printf ( "Solve time:     %lf\n", (matrix_info_list+matrixIndex)->solveTime );
-            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info_list+matrixIndex)->residual );
+            printf ( "Read time:      %lf\n", (matrix_info_list+matrixThreadIndex)->readTime );
+            printf ( "Analyze time:   %lf\n", (matrix_info_list+matrixThreadIndex)->analyzeTime );
+            printf ( "Factorize time: %lf\n", (matrix_info_list+matrixThreadIndex)->factorizeTime );
+            printf ( "Solve time:     %lf\n", (matrix_info_list+matrixThreadIndex)->solveTime );
+            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info_list+matrixThreadIndex)->residual );
 #endif
 
 #pragma omp critical ( nextMatrixIndex )
