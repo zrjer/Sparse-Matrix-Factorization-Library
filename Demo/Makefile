@@ -18,7 +18,7 @@ demo: demo.c
 cublas_demo_kernel.o: cublas_demo_kernel.cu
 	$(NVCC) $(NVCCFLAGS) $(I) -c $< -o $@
 
-cublas_demo.o: cublas_demo.c 
+cublas_demo.o: cublas_demo.c
 	$(CC) $(CFLAGS) $(LDFLAGS) $(I) -c $< -o $@
 
 cublas_demo: cublas_demo_kernel.o cublas_demo.o
