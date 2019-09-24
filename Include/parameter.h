@@ -54,39 +54,16 @@ struct node_size_struct
     Long score;
 };
 
-#define MAX_BATCH (256)
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-const int dimension_n_checks = 3;
-const Long cublasBatched_threshold_n[] = { 24, 48, 96 };
-const Long cublasBatched_threshold_m[] = { 24, 48, 96 };
-const Long cublasBatched_threshold_k[] = { 16, 32, 64 };
-#endif
 const Long dimension_threshold_row = 64;
 const Long dimension_threshold_col = 16;
 
-Long set_node_score ( struct node_size_struct *node, int useBatch )
+Long set_node_score ( struct node_size_struct *node )
 {
     Long n, m, k, score;
 
     n = node->n;
     m = node->m;
     k = node->k;
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-    if ( useBatch )
-    {
-        for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
-        {
-            if ( n <= cublasBatched_threshold_n[gpu_blas_batch_loop_idx] && m <= cublasBatched_threshold_m[gpu_blas_batch_loop_idx] && k <= cublasBatched_threshold_k[gpu_blas_batch_loop_idx] )
-            {
-                score = cublasBatched_threshold_k[gpu_blas_batch_loop_idx];
-                node->score = score;
-                return score;
-            }
-        }
-    }
-#endif
 
     if ( m + n >= dimension_threshold_row && k >= dimension_threshold_col )
         score = ( m + n ) * k;

@@ -2669,10 +2669,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Float *d_workspace;
                         int *d_info;
 
-                        Long d_count, cpu_blas_count, gpu_blas_single_count;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                        Long gpu_blas_batch_count[dimension_n_checks];
-#endif
+                        Long d_count, cpu_blas_count, gpu_blas_count;
                         size_t c_offset;
 
                         d_info = gpu_info->devMem + devASize;
@@ -2694,11 +2691,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         d_count = 0;
                         cpu_blas_count = 0;
-                        gpu_blas_single_count = 0;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                        for ( int idx = 0; idx < dimension_n_checks; idx++ )
-                            gpu_blas_batch_count[idx] = 0;
-#endif
+                        gpu_blas_count = 0;
 
                         while ( Head[s] >= 0 )
                         {
@@ -2724,25 +2717,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
-                            set_node_score ( node_size_queue + d_count, TRUE );
+                            set_node_score ( node_size_queue + d_count );
 
                             if ( get_node_score ( node_size_queue + d_count ) < 0 )
                                 cpu_blas_count++;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                            else if ( get_node_score ( node_size_queue + d_count ) <= cublasBatched_threshold_k[dimension_n_checks-1] )
-                            {
-                                for ( int idx = 0; idx < dimension_n_checks; idx++ )
-                                {
-                                    if ( get_node_score ( node_size_queue + d_count ) <= cublasBatched_threshold_k[idx] )
-                                    {
-                                        gpu_blas_batch_count[idx]++;
-                                        break;
-                                    }
-                                }
-                            }
-#endif
                             else
-                                gpu_blas_single_count++;
+                                gpu_blas_count++;
 
                             d_count++;
 
@@ -2756,7 +2736,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
 
                             qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
-                            qsort ( node_size_queue, MIN ( gpu_blas_single_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
+                            qsort ( node_size_queue, MIN ( gpu_blas_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
 
                             stream_index = 0;
                             c_offset = 0;
@@ -3049,21 +3029,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     {
                         int useCpuPotrf;
 
-                        Long d_count, cpu_blas_count, gpu_blas_single_count;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                        Long gpu_blas_batch_count[dimension_n_checks];
-#endif
+                        Long d_count, cpu_blas_count, gpu_blas_count;
                         Long d_index_small;
 
                         useCpuPotrf = set_factorize_location ( nscol, nsrow );
 
                         d_count = 0;
                         cpu_blas_count = 0;
-                        gpu_blas_single_count = 0;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                        for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
-                            gpu_blas_batch_count[gpu_blas_batch_loop_idx] = 0;
-#endif
+                        gpu_blas_count = 0;
 
                         for ( Long d = Head[s]; d >= 0; d = Next[d] )
                         {
@@ -3089,20 +3062,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             node_size_queue[d_count].n = dn;
                             node_size_queue[d_count].m = dm;
                             node_size_queue[d_count].k = dk;
-                            score = set_node_score ( node_size_queue + d_count, FALSE );
+                            score = set_node_score ( node_size_queue + d_count );
 
                             if ( score < 0 )
                                 cpu_blas_count++;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                            else if ( score <= cublasBatched_threshold_k[dimension_n_checks-1] )
-                            {
-                                for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
-                                    if ( score <= cublasBatched_threshold_k[gpu_blas_batch_loop_idx] )
-                                        gpu_blas_batch_count[gpu_blas_batch_loop_idx]++;
-                            }
-#endif
                             else
-                                gpu_blas_single_count++;
+                                gpu_blas_count++;
 
                             d_count++;
                         }
@@ -3162,16 +3127,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         if ( d_dlast_score < 0 )
                                             cpu_blas_count--;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                                        else if ( d_dlast_score <= cublasBatched_threshold_k[dimension_n_checks-1] )
-                                        {
-                                            for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
-                                                if ( d_dlast_score <= cublasBatched_threshold_k[gpu_blas_batch_loop_idx] )
-                                                    gpu_blas_batch_count[gpu_blas_batch_loop_idx]--;
-                                        }
-#endif
                                         else
-                                            gpu_blas_single_count--;
+                                            gpu_blas_count--;
 
                                         d_count--;
 
@@ -3183,16 +3140,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         if ( h_dlast_score < 0 )
                                             cpu_blas_count--;
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                                        else if ( h_dlast_score <= cublasBatched_threshold_k[dimension_n_checks-1] )
-                                        {
-                                            for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
-                                                if ( h_dlast_score <= cublasBatched_threshold_k[gpu_blas_batch_loop_idx] )
-                                                    gpu_blas_batch_count[gpu_blas_batch_loop_idx]--;
-                                        }
-#endif
                                         else
-                                            gpu_blas_single_count--;
+                                            gpu_blas_count--;
 
                                         d_count--;
 
@@ -3600,11 +3549,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 d_index_small = d_count - cpu_blas_count;
 
-                                if ( gpu_blas_single_count > 0 )
+                                if ( gpu_blas_count > 0 )
                                 {
-                                    qsort ( node_size_queue, MIN ( gpu_blas_single_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
+                                    qsort ( node_size_queue, MIN ( gpu_blas_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
 
-                                    for ( Long d_index = 0; d_index < gpu_blas_single_count; d_index++ )
+                                    for ( Long d_index = 0; d_index < gpu_blas_count; d_index++ )
                                     {
                                         int stream_offset;
                                         cudaError_t cudaError;
@@ -3740,103 +3689,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     else
                                         cudaDeviceSynchronize();
                                 }
-
-#if ( defined ( MAX_BATCH ) && ( MAX_BATCH != 0 ) )
-                                if ( gpu_blas_single_count + cpu_blas_count < d_count )
-                                {
-                                    Long d_index_l, d_index_h;
-
-                                    d_index_l = gpu_blas_single_count;
-
-                                    for ( int gpu_blas_batch_loop_idx = 0; gpu_blas_batch_loop_idx < dimension_n_checks; gpu_blas_batch_loop_idx++ )
-                                    {
-                                        if ( gpu_blas_batch_count[gpu_blas_batch_loop_idx] )
-                                        {
-                                            int dn, dm, dk;
-                                            size_t syrk_pace, gemm_pace;
-                                            Long syrk_batch_size, gemm_batch_size;
-                                            Long d_index;
-
-                                            d_index_h = d_index_l + gpu_blas_batch_count[gpu_blas_batch_loop_idx];
-
-                                            dn = cublasBatched_threshold_n[gpu_blas_batch_loop_idx];
-                                            dm = cublasBatched_threshold_m[gpu_blas_batch_loop_idx];
-                                            dk = cublasBatched_threshold_k[gpu_blas_batch_loop_idx];
-
-                                            if ( !isComplex )
-                                                syrk_pace = ( dn * dk ) * sizeof(Float) + dn * sizeof(Long);
-                                            else
-                                                syrk_pace = ( dn * dk ) * sizeof(Complex) + dn * sizeof(Long);
-
-                                            if ( !isComplex )
-                                                gemm_pace = ( ( dn + dm ) * dk ) * sizeof(Float) + ( dn + dm ) * sizeof(Long);
-                                            else
-                                                gemm_pace = ( ( dn + dm ) * dk ) * sizeof(Complex) + ( dn + dm ) * sizeof(Long);
-
-                                            syrk_batch_size = devSlotSize / syrk_pace;
-                                            gemm_batch_size = devSlotSize / gemm_pace;
-#if ( MAX_BATCH > 0 )
-                                            syrk_batch_size = MIN ( syrk_batch_size, MAX_BATCH );
-                                            gemm_batch_size = MIN ( gemm_batch_size, MAX_BATCH );
-#endif
-
-                                            d_index = d_index_l;
-
-                                            while ( d_index < d_index_h )
-                                            {
-                                                int stream_offset;
-                                                cudaError_t cudaError;
-
-                                                for ( stream_offset = 0; stream_offset < MAX_D_STREAM && ( cudaError = cudaEventQuery ( gpu_info->d_cudaEvent_onDevice[ ( d_index + stream_offset ) % MAX_D_STREAM ] ) ) != cudaSuccess; stream_offset++ );
-
-                                                if ( cudaError == cudaSuccess )
-                                                {
-                                                    int stream_index;
-                                                    Long batch_size;
-
-                                                    stream_index = ( d_index + stream_offset ) % MAX_D_STREAM;
-
-                                                    batch_size = 0;
-
-                                                    while ( d_index < d_index_h && batch_size < syrk_batch_size )
-                                                    {
-                                                        Long d;
-
-                                                        d = node_size_queue[d_index_small].node;
-
-                                                        batch_size++;
-                                                        d_index++;
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    if ( d_index_small <= d_count )
-                                                    {
-                                                        if ( d_index_small < d_count )
-                                                        {
-                                                            Long d;
-
-                                                            d = node_size_queue[d_index_small].node;
-                                                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, C );
-                                                        }
-                                                        else if ( d_index_small == d_count )
-                                                        {
-                                                            if ( !isComplex )
-                                                                cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                                                            else
-                                                                cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                                                        }
-
-                                                        d_index_small++;
-                                                    }
-                                                }
-                                            }
-
-                                            d_index_l = d_index_h;
-                                        }
-                                    }
-                                }
-#endif
 
                                 while ( d_index_small <= d_count )
                                 {
