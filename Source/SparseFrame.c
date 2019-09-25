@@ -1391,8 +1391,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Nchild = workspace + 2 * nrow;
     Nscol = workspace + 3 * nrow;
     Scolcount = workspace + 4 * nrow;
-#ifdef RELAXED_SUPERNODE
     Nschild = Nchild; // use Nchild
+#ifdef RELAXED_SUPERNODE
     Nsz = workspace + 5 * nrow;
     Merge = workspace + 6 * nrow;
 #endif
@@ -1661,33 +1661,6 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     }
     matrix_info->csize = csize;
 
-    LeafQueue = calloc ( nsuper, sizeof(Long) );
-    for ( s = 0; s < nsuper; s++ )
-    {
-        Long sparent;
-        Long nscol, nsrow;
-
-        nscol = Super[s+1] - Super[s];
-        nsrow = Lsip[s+1] - Lsip[s];
-
-        if ( nscol < nsrow )
-        {
-            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-            LeafQueue[sparent] = 1;
-        }
-    }
-
-    nsleaf = 0;
-    for ( s = 0; s < nsuper; s++ )
-        if ( LeafQueue[s] == 0 )
-            LeafQueue[nsleaf++] = s;
-
-    for ( s = nsleaf; s < nsuper; s++ )
-        LeafQueue[s] = -1;
-
-    matrix_info->nsleaf = nsleaf;
-    matrix_info->LeafQueue = LeafQueue;
-
     ST_Map = malloc ( nsuper * sizeof(Long) );
 
     for ( s = 0; s < nsuper; s++ )
@@ -1830,6 +1803,38 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     for ( st = nstleaf; st < nsubtree; st++ )
         ST_LeafQueue[st] = -1;
+
+    memset ( Nschild, 0, nsuper * sizeof(Long) );
+    for ( s = 0; s < nsuper; s++ )
+    {
+        Long sparent;
+        Long nscol, nsrow;
+
+        nscol = Super[s+1] - Super[s];
+        nsrow = Lsip[s+1] - Lsip[s];
+
+        if ( nscol < nsrow )
+        {
+            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
+            Nschild[sparent] = 1;
+        }
+    }
+
+    LeafQueue = malloc ( nsuper * sizeof(Long) );
+
+    nsleaf = 0;
+    for ( Long sp = 0; sp < nsuper; sp++ )
+    {
+        s = ST_Index[sp];
+        if ( Nschild[s] == 0 )
+            LeafQueue[nsleaf++] = s;
+    }
+
+    for ( s = nsleaf; s < nsuper; s++ )
+        LeafQueue[s] = -1;
+
+    matrix_info->nsleaf = nsleaf;
+    matrix_info->LeafQueue = LeafQueue;
 
     matrix_info->ST_Parent = ST_Parent;
     matrix_info->nstleaf = nstleaf;
