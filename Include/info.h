@@ -117,6 +117,15 @@ struct matrix_info_struct
     Long nsleaf;
     Long *LeafQueue;
 
+    Long isize;
+    Long xsize;
+    Long *Lsip;
+    Long *Lsxp;
+    Long *Lsi;
+    Float *Lsx;
+
+    Long csize;
+
     Long nsubtree;
     Long *ST_Map;
     Long *ST_Pointer;
@@ -126,14 +135,9 @@ struct matrix_info_struct
     Long nstleaf;
     Long *ST_LeafQueue;
 
-    Long isize;
-    Long xsize;
-    Long *Lsip;
-    Long *Lsxp;
-    Long *Lsi;
-    Float *Lsx;
-
-    Long csize;
+    size_t *Aoffset;
+    size_t *Moffset;
+    size_t *Coffset;
 
     void *workspace;
     size_t workSize;

@@ -1298,7 +1298,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     int isComplex;
 
-    Long j, i, k, p, nrow;
+    Long nrow;
 
     Long *Up, *Ui;
 
@@ -1309,15 +1309,11 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Long *InvPost;
     Long *Bperm, *Bparent, *Bcolcount;
 
-    Long parent, s, sdescendant, nfsuper, nsuper;
+    Long nfsuper, nsuper;
     Long *Super, *SuperMap, *Sparent;
     Long *Nchild, *Nscol, *Scolcount;
 #ifdef RELAXED_SUPERNODE
-    Long smerge;
     Long *Nschild, *Nsz, *Merge;
-    Long s_ncol, s_colcount, s_zero;
-    Long p_ncol, p_colcount, p_zero;
-    Long new_zero, total_zero;
 #endif
     Long *Lsip_copy, *Marker;
 
@@ -1332,11 +1328,13 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Long *Head, *Next;
 
-    Long st, nsubtree, nstleaf;
+    Long nsubtree, nstleaf;
     Long *ST_Map, *ST_Pointer, *ST_Index, *ST_Parent, *ST_LeafQueue;
 
     Long *ST_Head, *ST_Next;
     Long *ST_Asize, *ST_Csize, *ST_Msize;
+
+    size_t *Aoffset, *Moffset, *Coffset;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
@@ -1369,15 +1367,16 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Bparent = workspace + 4 * nrow;
     Bcolcount = workspace + 5 * nrow;
 
-    for (k = 0; k < nrow; k++)
+    for ( Long k = 0; k < nrow; k++ )
     {
         InvPost [ Post [k] ] = k;
     }
 
-    for (k = 0; k < nrow; k++)
+    for ( Long k = 0; k < nrow; k++ )
     {
+        Long parent = Parent [ Post [ k ] ];
+
         Bperm[k] = Perm [ Post [ k ] ];
-        parent = Parent [ Post [ k ] ];
         Bparent[k] = ( parent < 0 ) ? -1 : InvPost[parent];
         Bcolcount[k] = ColCount [ Post [ k ] ];
     }
@@ -1404,9 +1403,9 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     memset ( Nchild, 0, nrow * sizeof(Long) );
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
-        parent = Parent[j];
+        Long parent = Parent[j];
         if ( parent >= 0 && parent < nrow )
             Nchild[parent]++;
     }
@@ -1414,7 +1413,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     nfsuper = ( nrow > 0 ) ? 1 : 0;
     Super[0] = 0;
 
-    for ( j = 1; j < nrow; j++ )
+    for ( Long j = 1; j < nrow; j++ )
     {
         if (
                 ( Parent[j-1] != j || ColCount[j-1] != ColCount[j] + 1 || Nchild[j] > 1 )
@@ -1444,58 +1443,58 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     }
     Super[nfsuper] = nrow;
 
-    for ( s = 0; s < nfsuper; s++ )
+    for ( Long s = 0; s < nfsuper; s++ )
     {
         Nscol[s] = Super[s+1] - Super[s];
         Scolcount[s] = ColCount [ Super [ s ] ];
     }
 
-    for ( s = 0; s < nfsuper; s++ )
+    for ( Long s = 0; s < nfsuper; s++ )
     {
-        for ( j = Super[s]; j < Super[s+1]; j++ )
+        for ( Long j = Super[s]; j < Super[s+1]; j++ )
             SuperMap[j] = s;
     }
 
-    for ( s = 0; s < nfsuper; s++ )
+    for ( Long s = 0; s < nfsuper; s++ )
     {
-        j = Super[s+1] - 1;
-        parent = Parent[j];
+        Long j = Super[s+1] - 1;
+        Long parent = Parent[j];
+
         Sparent[s] = ( parent < 0 ) ? -1 : SuperMap[parent];
     }
 
 #ifdef RELAXED_SUPERNODE
     {
-        Long sparent;
-
         memset ( Nschild, 0, nfsuper * sizeof(Long) );
 
-        for ( s = 0; s < nfsuper; s++ )
+        for ( Long s = 0; s < nfsuper; s++ )
         {
-            sparent = Sparent[s];
+            Long sparent = Sparent[s];
             if ( sparent >= 0 && sparent < nfsuper )
                 Nschild[sparent]++;
         }
 
-        for ( s = 0; s < nfsuper; s++ )
+        for ( Long s = 0; s < nfsuper; s++ )
         {
             Merge[s] = s;
         }
 
-        for ( s = 0; s < nfsuper; s++ )
+        for ( Long s = 0; s < nfsuper; s++ )
         {
             Nsz[s] = 0;
         }
 
-        for ( s = nfsuper - 2; s >= 0; s-- )
+        for ( Long s = nfsuper - 2; s >= 0; s-- )
         {
-            sparent = Sparent[s];
+            Long sparent = Sparent[s];
             if ( sparent >= 0 && sparent < nfsuper && Merge[s+1] == Merge[sparent] )
             {
-                smerge = Merge[sparent];
-                s_ncol = Nscol[s];
-                p_ncol = Nscol[smerge];
-                s_colcount = Scolcount[s];
-                p_colcount = Scolcount[smerge];
+                Long smerge = Merge[sparent];
+                Long s_ncol = Nscol[s];
+                Long p_ncol = Nscol[smerge];
+                Long s_colcount = Scolcount[s];
+                Long p_colcount = Scolcount[smerge];
+
                 if (
                         (
                          !isComplex &&
@@ -1516,10 +1515,11 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                         )
                    )
                 {
-                    s_zero = Nsz[s];
-                    p_zero = Nsz[smerge];
-                    new_zero = s_ncol * ( s_ncol + p_colcount - s_colcount );
-                    total_zero = s_zero + p_zero + new_zero;
+                    Long s_zero = Nsz[s];
+                    Long p_zero = Nsz[smerge];
+                    Long new_zero = s_ncol * ( s_ncol + p_colcount - s_colcount );
+                    Long total_zero = s_zero + p_zero + new_zero;
+
                     if ( should_relax ( s_ncol + p_ncol, (double)total_zero / ( ( s_ncol + p_ncol ) * ( s_ncol + p_ncol + 1 ) / 2 + ( s_ncol + p_ncol ) * ( p_colcount - p_ncol ) ) ) )
                     {
                         Nscol[smerge] = s_ncol + p_ncol;
@@ -1536,7 +1536,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Super[0] = 0;
 
-    for ( s = 0; s < nfsuper; s++ )
+    for ( Long s = 0; s < nfsuper; s++ )
     {
         if ( Merge[s] == s )
         {
@@ -1549,16 +1549,17 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Super[nsuper] = nrow;
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
-        for ( j = Super[s]; j < Super[s+1]; j++ )
+        for ( Long j = Super[s]; j < Super[s+1]; j++ )
             SuperMap[j] = s;
     }
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
-        j = Super[s+1] - 1;
-        parent = Parent[j];
+        Long j = Super[s+1] - 1;
+        Long parent = Parent[j];
+
         Sparent[s] = ( parent < 0 ) ? -1 : SuperMap[parent];
     }
 #else
@@ -1576,7 +1577,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Lsip[0] = 0;
     Lsxp[0] = 0;
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         Lsip[s+1] = Lsip[s] + Scolcount[s];
         Lsxp[s+1] = Lsxp[s] + Nscol[s] * Scolcount[s];
@@ -1603,27 +1604,27 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     memcpy ( Lsip_copy, Lsip, nsuper * sizeof(Long) );
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         Marker[s] = Super[s+1];
     }
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
-        for ( k = Super[s]; k < Super[s+1]; k++ )
+        for ( Long k = Super[s]; k < Super[s+1]; k++ )
         {
             Lsi [ Lsip_copy[s]++ ] = k;
         }
     }
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
-        for ( j = Super[s]; j < Super[s+1]; j++ )
+        for ( Long j = Super[s]; j < Super[s+1]; j++ )
         {
-            for ( p = Up[j]; p < Up[j+1]; p++ )
+            for ( Long p = Up[j]; p < Up[j+1]; p++ )
             {
-                i = Ui[p];
-                for ( sdescendant = SuperMap[i]; sdescendant >= 0 && Marker[sdescendant] <= j; sdescendant = Sparent[sdescendant] )
+                Long i = Ui[p];
+                for ( Long sdescendant = SuperMap[i]; sdescendant >= 0 && Marker[sdescendant] <= j; sdescendant = Sparent[sdescendant] )
                 {
                     Lsi [ Lsip_copy[sdescendant]++ ] = j;
                     Marker[sdescendant] = j+1;
@@ -1633,14 +1634,13 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     }
 
     csize = 0;
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         Long sparent, sparent_last;
-        Long nscol, nsrow;
         Long si, si_last;
 
-        nscol = Super[s+1] - Super[s];
-        nsrow = Lsip[s+1] - Lsip[s];
+        Long nscol = Super[s+1] - Super[s];
+        Long nsrow = Lsip[s+1] - Lsip[s];
 
         if ( nscol < nsrow )
         {
@@ -1663,7 +1663,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     ST_Map = malloc ( nsuper * sizeof(Long) );
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         ST_Head[s] = -1;
         ST_Next[s] = -1;
@@ -1675,8 +1675,10 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     nsubtree = ( nsuper > 0 ) ? 1 : 0;
 
-    for ( s = nsuper - 1; s >= 0; s-- )
+    for ( Long s = nsuper - 1; s >= 0; s-- )
     {
+        Long st;
+
         if ( Sparent[s] >= 0 )
         {
             st = ST_Map [ Sparent[s] ];
@@ -1752,7 +1754,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
         }
     }
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         ST_Map[s] = nsubtree - 1 - ST_Map[s];
     }
@@ -1760,15 +1762,15 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     ST_Pointer = calloc ( nsubtree + 1, sizeof(Long) );
     ST_Index = malloc ( nsuper * sizeof(Long) );
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
         ST_Pointer [ ST_Map[s] + 1 ] ++;
 
-    for ( st = 0; st < nsubtree; st++ )
+    for ( Long st = 0; st < nsubtree; st++ )
         ST_Pointer[st+1] += ST_Pointer[st];
 
     memcpy ( workspace, ST_Pointer, nsubtree * sizeof(Long) );
 
-    for ( s = 0; s < nsuper; s++ )
+    for ( Long s = 0; s < nsuper; s++ )
     {
         ST_Index [ workspace [ ST_Map[s] ] ++ ] = s;
     }
@@ -1781,7 +1783,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     ST_Parent = malloc ( nsubtree * sizeof(Long) );
     ST_LeafQueue = calloc ( nsubtree, sizeof(Long) );
 
-    for ( st = 0; st < nsubtree; st++ )
+    for ( Long st = 0; st < nsubtree; st++ )
     {
         Long sparent;
 
@@ -1797,27 +1799,25 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     }
 
     nstleaf = 0;
-    for ( st = 0; st < nsubtree; st++ )
+    for ( Long st = 0; st < nsubtree; st++ )
         if ( ST_LeafQueue[st] == 0 )
             ST_LeafQueue[nstleaf++] = st;
 
-    for ( st = nstleaf; st < nsubtree; st++ )
+    for ( Long st = nstleaf; st < nsubtree; st++ )
         ST_LeafQueue[st] = -1;
 
-    memset ( Nschild, 0, nsuper * sizeof(Long) );
-    for ( s = 0; s < nsuper; s++ )
-    {
-        Long sparent;
-        Long nscol, nsrow;
+    matrix_info->ST_Parent = ST_Parent;
+    matrix_info->nstleaf = nstleaf;
+    matrix_info->ST_LeafQueue = ST_LeafQueue;
 
-        nscol = Super[s+1] - Super[s];
-        nsrow = Lsip[s+1] - Lsip[s];
+    memset ( Nschild, 0, nsuper * sizeof(Long) );
+    for ( Long s = 0; s < nsuper; s++ )
+    {
+        Long nscol = Super[s+1] - Super[s];
+        Long nsrow = Lsip[s+1] - Lsip[s];
 
         if ( nscol < nsrow )
-        {
-            sparent = SuperMap [ Lsi [ Lsip[s] + nscol ] ];
-            Nschild[sparent] = 1;
-        }
+            Nschild [ SuperMap [ Lsi [ Lsip[s] + nscol ] ] ] = 1;
     }
 
     LeafQueue = malloc ( nsuper * sizeof(Long) );
@@ -1825,20 +1825,50 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     nsleaf = 0;
     for ( Long sp = 0; sp < nsuper; sp++ )
     {
-        s = ST_Index[sp];
+        Long s = ST_Index[sp];
+
         if ( Nschild[s] == 0 )
             LeafQueue[nsleaf++] = s;
     }
 
-    for ( s = nsleaf; s < nsuper; s++ )
+    for ( Long s = nsleaf; s < nsuper; s++ )
         LeafQueue[s] = -1;
 
     matrix_info->nsleaf = nsleaf;
     matrix_info->LeafQueue = LeafQueue;
 
-    matrix_info->ST_Parent = ST_Parent;
-    matrix_info->nstleaf = nstleaf;
-    matrix_info->ST_LeafQueue = ST_LeafQueue;
+    Aoffset = malloc ( nsuper * sizeof(size_t) );
+    Moffset = malloc ( nsuper * sizeof(size_t) );
+    Coffset = malloc ( nsuper * sizeof(size_t) );
+
+    for ( Long st = 0; st < nsubtree; st++ )
+    {
+        size_t Asize, Msize, Csize;
+
+        Asize = 0;
+        Msize = 0;
+        Csize = 0;
+
+        for ( Long pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
+        {
+            Long s = ST_Index[pt];
+
+            Long nscol = Super[s+1] - Super[s];
+            Long nsrow = Lsip[s+1] - Lsip[s];
+
+            Aoffset[s] = Asize;
+            if ( !isComplex )
+                Asize += nscol * nsrow * sizeof(Float);
+            else
+                Asize += nscol * nsrow * sizeof(Complex);
+
+            Moffset[s] = Msize;
+            Msize += nsrow * sizeof(Long);
+        }
+
+        for ( Long pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
+            Moffset [ ST_Index[pt] ] += Asize;
+    }
 
 #ifdef PRINT_INFO
     printf ("nrow = %ld nfsuper = %ld nsuper = %ld nsubtree = %ld\n", nrow, nfsuper, nsuper, nsubtree);
