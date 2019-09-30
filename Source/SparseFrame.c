@@ -235,7 +235,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_info_struct **gpu_info_list_ptr )
 {
     int numGPU;
-    int gpuIndex;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_free_gpu================\n\n");
@@ -245,11 +244,9 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
 
     numGPU = common_info->numGPU;
 
-    for ( gpuIndex = 0; gpuIndex < numGPU; gpuIndex++ )
+    for ( int gpuIndex = 0; gpuIndex < numGPU; gpuIndex++ )
     {
-        int gpuIndex_physical;
-
-        gpuIndex_physical = (*gpu_info_list_ptr)[gpuIndex].gpuIndex_physical;
+        int gpuIndex_physical = (*gpu_info_list_ptr)[gpuIndex].gpuIndex_physical;
 
         if ( gpuIndex_physical >= 0 )
             cudaSetDevice ( gpuIndex_physical );
@@ -390,7 +387,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 
     n_scanned = sscanf ( *buf_ptr, "%ld %ld %ld\n", &nrow, &ncol, &nzmax );
 
-    if (n_scanned != 3)
+    if ( n_scanned != 3 )
     {
         printf ("Matrix format error\n\n");
         matrix_info->ncol = 0;
@@ -458,9 +455,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
 {
     int isComplex;
-    Long j, ncol;
-    Long nz, nzmax;
-    Long p;
+    Long ncol, nzmax;
     Long *Tj, *Ti, *Cp, *Ci;
     Float *Tx, *Cx;
 
@@ -491,17 +486,17 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
 
     workspace = matrix_info->workspace;
 
-    for ( nz = 0; nz < nzmax; nz++ )
+    for ( Long nz = 0; nz < nzmax; nz++ )
         Cp[ Tj[nz] + 1 ] ++;
 
-    for ( j = 0; j < ncol; j++ )
+    for ( Long j = 0; j < ncol; j++ )
         Cp[j+1] += Cp[j];
 
     memcpy ( workspace, Cp, ncol * sizeof(Long) );
 
-    for ( nz = 0; nz < nzmax; nz++ )
+    for ( Long nz = 0; nz < nzmax; nz++ )
     {
-        p = workspace [ Tj [ nz ] ] ++;
+        Long p = workspace [ Tj [ nz ] ] ++;
         Ci [p] = Ti[nz];
         if ( !isComplex )
             Cx [p] = Tx[nz];
@@ -575,6 +570,9 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->nstleaf = 0;
     matrix_info->ST_LeafQueue = NULL;
 
+    matrix_info->Aoffset = 0;
+    matrix_info->Moffset = 0;
+
     matrix_info->workSize = 0;
     matrix_info->workspace = NULL;
 
@@ -631,7 +629,7 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, p, ncol, nrow;
+    Long ncol, nrow;
     Long *Cp, *Ci;
     Long *Head, *Next, *Perm;
 
@@ -667,11 +665,11 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 
     memset ( Ap, 0, ( nrow + 1 ) * sizeof(Long) );
 
-    for ( j = 0; j < ncol; j++ )
+    for ( Long j = 0; j < ncol; j++ )
     {
-        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
-            i = Ci[p];
+            Long i = Ci[p];
             if (i > j)
             {
                 Ap[i+1]++;
@@ -680,7 +678,7 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    for ( j = 0; j < nrow; j++)
+    for ( Long j = 0; j < nrow; j++)
     {
         Ap[j+1] += Ap[j];
     }
@@ -689,11 +687,11 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 
     memcpy ( workspace, Ap, nrow * sizeof(Long) ); // Be careful of overwriting Ap
 
-    for ( j = 0; j < ncol; j++ )
+    for ( Long j = 0; j < ncol; j++ )
     {
-        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
-            i = Ci[p];
+            Long i = Ci[p];
             if (i > j)
             {
                 Ai [ workspace[i]++ ] = j;
@@ -702,7 +700,7 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    for ( j = 0; j < matrix_info->nrow; j++ )
+    for ( Long j = 0; j < matrix_info->nrow; j++ )
         Len[j] = Ap[j+1] - Ap[j];
 
     Control[AMD_DENSE] = prune_dense;
@@ -715,7 +713,7 @@ int SparseFrame_amd ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, p, ncol, nrow;
+    Long ncol, nrow;
     Long *Cp, *Ci;
     Long *Head, *Next, *Perm;
 
@@ -754,11 +752,11 @@ int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
 
     memset ( Ap, 0, ( nrow + 1 ) * sizeof(Long) );
 
-    for ( j = 0; j < ncol; j++ )
+    for ( Long j = 0; j < ncol; j++ )
     {
-        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
-            i = Ci[p];
+            Long i = Ci[p];
             if (i > j)
             {
                 Ap[i+1]++;
@@ -767,7 +765,7 @@ int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    for ( j = 0; j < nrow; j++)
+    for ( Long j = 0; j < nrow; j++)
     {
         Ap[j+1] += Ap[j];
     }
@@ -776,11 +774,11 @@ int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
 
     memcpy ( workspace, Ap, nrow * sizeof(Long) ); // Be careful of overwriting Ap
 
-    for ( j = 0; j < ncol; j++ )
+    for ( Long j = 0; j < ncol; j++ )
     {
-        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
-            i = Ci[p];
+            Long i = Ci[p];
             if (i > j)
             {
                 Ai [ workspace[i]++ ] = j;
@@ -789,7 +787,7 @@ int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    for ( j = 0; j < matrix_info->nrow; j++ )
+    for ( Long j = 0; j < matrix_info->nrow; j++ )
         Len[j] = Ap[j+1] - Ap[j];
 
     Control[AMD_DENSE] = prune_dense;
@@ -802,7 +800,7 @@ int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, p, ncol, nrow;
+    Long ncol, nrow;
     Long *Cp, *Ci;
     Long *Perm;
 
@@ -834,11 +832,11 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 
     memset ( Mp, 0, ( nrow + 1 ) * sizeof(idx_t) );
 
-    for ( j = 0; j < ncol; j++ )
+    for ( Long j = 0; j < ncol; j++ )
     {
-        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
-            i = Ci[p];
+            Long i = Ci[p];
             if (i > j)
             {
                 Mp[i+1]++;
@@ -847,7 +845,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
         }
     }
 
-    for ( j = 0; j < nrow; j++)
+    for ( Long j = 0; j < nrow; j++)
     {
         Mp[j+1] += Mp[j];
     }
@@ -856,11 +854,11 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 
     memcpy ( Mworkspace, Mp, nrow * sizeof(idx_t) ); // Be careful of overwriting Mp
 
-    for ( j = 0; j < ncol; j++ )
+    for ( Long j = 0; j < ncol; j++ )
     {
-        for ( p = Cp[j]; p < Cp[j+1]; p++ )
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
-            i = Ci[p];
+            Long i = Ci[p];
             if (i > j)
             {
                 Mi [ Mworkspace[i]++ ] = j;
@@ -871,7 +869,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 
     if ( mnz == 0 )
     {
-        for ( i = 0; i < nrow; i++ )
+        for ( Long i = 0; i < nrow; i++ )
         {
             Mperm[i] = i;
         }
@@ -883,7 +881,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 
     if ( sizeof(idx_t) != sizeof(Long) )
     {
-        for ( i = 0; i < nrow; i++ )
+        for ( Long i = 0; i < nrow; i++ )
         {
             Perm[i] = Mperm[i];
         }
@@ -895,8 +893,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
 {
     int isComplex;
-    Long j, i, lp, up, nrow;
-    Long jold, iold, pold;
+    Long lp, up, nrow;
     Long *Cp, *Ci;
     Float *Cx;
     Long *Lp, *Li;
@@ -936,34 +933,35 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     memset ( Lp, 0, ( nrow + 1 ) * sizeof(Long) );
     memset ( Up, 0, ( nrow + 1 ) * sizeof(Long) );
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
         Pinv[j] = -1;
     }
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
-        jold = Perm[j];
+        Long jold = Perm[j];
         if ( jold >= 0 )
             Pinv[ jold ] = j;
     }
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
-        jold = Perm[j];
+        Long jold = Perm[j];
         if ( jold >= 0 )
         {
-            for ( pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
+            for ( Long pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
             {
-                iold = Ci[pold];
-                i = Pinv[iold];
+                Long iold = Ci[pold];
+                Long i = Pinv[iold];
+
                 Lp [ MIN (i, j) + 1 ] ++;
                 Up [ MAX (i, j) + 1 ] ++;
             }
         }
     }
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
         Lp[j+1] += Lp[j];
         Up[j+1] += Up[j];
@@ -972,15 +970,17 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     memcpy ( Lworkspace, Lp, nrow * sizeof(Long) );
     memcpy ( Uworkspace, Up, nrow * sizeof(Long) );
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
-        jold = Perm[j];
+        Long jold = Perm[j];
         if ( jold >= 0 )
         {
-            for ( pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
+            for ( Long pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
             {
-                iold = Ci[pold];
-                i = Pinv[iold];
+                Long lp, up;
+
+                Long iold = Ci[pold];
+                Long i = Pinv[iold];
 
                 lp = Lworkspace [ MIN(i, j) ] ++;
                 Li[lp] = MAX(i, j);
@@ -1005,11 +1005,10 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, p, nrow;
+    Long nrow;
     Long *Up, *Ui;
     Long *Parent;
 
-    Long ancestor;
     Long *workspace;
     Long *Ancestor;
 
@@ -1028,19 +1027,20 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     Ancestor = workspace;
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
         Parent[j] = -1;
         Ancestor[j] = -1;
     }
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
-        for ( p = Up[j]; p < Up[j+1]; p++ )
+        for ( Long p = Up[j]; p < Up[j+1]; p++ )
         {
-            i = Ui[p];
+            Long i = Ui[p];
             if ( i < j )
             {
+                Long ancestor;
                 do
                 {
                     ancestor = Ancestor[i];
@@ -1066,13 +1066,12 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 {
-    Long j, k, p, nrow;
+    Long nrow;
     Long *Head, *Next;
     Long *Post, *Parent, *ColCount;
 
     Long *workspace;
-    Long child;
-    Long w, jnext, top;
+    Long top, k;
     Long *Whead, *Stack;
 
 #ifdef PRINT_CALLS
@@ -1091,7 +1090,7 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
     Head = workspace + 0 * nrow;
     Next = workspace + 1 * nrow;
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
         Head[j] = -1;
         Next[j] = -1;
@@ -1099,9 +1098,9 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 
     if ( ColCount == NULL )
     {
-        for ( j = nrow - 1; j >= 0; j-- )
+        for ( Long j = nrow - 1; j >= 0; j-- )
         {
-            p = Parent[j];
+            Long p = Parent[j];
             if ( p >= 0 && p < nrow )
             {
                 Next[j] = Head[p];
@@ -1112,25 +1111,25 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
     else
     {
         Whead = workspace + 2 * nrow;
-        for ( j = 0; j < nrow; j++ )
+        for ( Long j = 0; j < nrow; j++ )
             Whead[j] = -1;
-        for ( j = 0; j < nrow; j++ )
+        for ( Long j = 0; j < nrow; j++ )
         {
-            p = Parent[j];
+            Long p = Parent[j];
             if ( p >= 0 )
             {
-                w = ColCount[j];
+                Long w = ColCount[j];
                 Next[j] = Whead[w];
                 Whead[w] = j;
             }
         }
-        for ( w = nrow - 1; w >= 0; w-- )
+        for ( Long w = nrow - 1; w >= 0; w-- )
         {
-            j = Whead[w];
+            Long j = Whead[w];
             while ( j >= 0 )
             {
-                jnext = Next[j];
-                p = Parent[j];
+                Long jnext = Next[j];
+                Long p = Parent[j];
                 Next[j] = Head[p];
                 Head[p] = j;
                 j = jnext;
@@ -1141,9 +1140,9 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
     Stack = workspace + 2 * nrow;
     top = -1;
 
-    for ( j = nrow - 1; j >= 0; j-- )
+    for ( Long j = nrow - 1; j >= 0; j-- )
     {
-        p = Parent[j];
+        Long p = Parent[j];
         if ( p < 0 )
         {
             top++;
@@ -1155,8 +1154,8 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 
     while ( top >= 0 )
     {
-        j = Stack[top];
-        child = Head[j];
+        Long j = Stack[top];
+        Long child = Head[j];
         if ( child >= 0 && child < nrow )
         {
             top++;
@@ -1176,13 +1175,11 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 {
-    Long j, i, k, p, q, nrow;
+    Long nrow;
     Long *Lp, *Li;
     Long *Post, *Parent, *ColCount, *RowCount;
 
     Long *workspace;
-    Long prevleaf;
-    Long s;
     Long *Level, *First, *SetParent, *PrevLeaf, *PrevNbr;
 
 #ifdef PRINT_CALLS
@@ -1208,59 +1205,60 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     PrevLeaf = workspace + 3 * nrow;
     PrevNbr = workspace + 4 * nrow;
 
-    for ( k = nrow - 1; k >= 0; k-- )
+    for ( Long k = nrow - 1; k >= 0; k-- )
     {
-        j = Post[k];
-        p = Parent[j];
+        Long j = Post[k];
+        Long p = Parent[j];
         if ( p < 0 )
             Level[j] = 0;
         else
             Level[j] = Level[p] + 1;
     }
 
-    for ( j = 0; j < nrow; j++ )
+    for ( Long j = 0; j < nrow; j++ )
     {
         First[j] = -1;
     }
 
-    for ( k = 0; k < nrow; k++ )
+    for ( Long k = 0; k < nrow; k++ )
     {
-        j = Post[k];
-        for ( p = j; p >= 0 && First[p] < 0; p = Parent[p] )
+        Long j = Post[k];
+        for ( Long p = j; p >= 0 && First[p] < 0; p = Parent[p] )
         {
             First[p] = k;
         }
     }
 
-    for ( k = 0; k < nrow; k++ )
+    for ( Long k = 0; k < nrow; k++ )
     {
-        j = Post[k];
+        Long j = Post[k];
         ColCount[j] = 0;
         RowCount[j] = 1;
     }
 
-    for ( k = 0; k < nrow; k++ )
+    for ( Long k = 0; k < nrow; k++ )
     {
-        j = Post[k];
+        Long j = Post[k];
         SetParent[j] = j;
         PrevLeaf[j] = j;
         PrevNbr[j] = -1;
     }
 
-    for ( k = 0; k < nrow; k++ )
+    for ( Long k = 0; k < nrow; k++ )
     {
-        j = Post[k];
+        Long j = Post[k];
         PrevNbr[j] = k;
-        for ( p = Lp[j]; p < Lp[j+1]; p++ )
+        for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
         {
-            i = Li[p];
+            Long i = Li[p];
             if ( i > j )
             {
                 if ( First[j] > PrevNbr[i] )
                 {
-                    prevleaf = PrevLeaf[i];
+                    Long q;
+                    Long prevleaf = PrevLeaf[i];
                     for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
-                    for ( s = prevleaf; s != q; s = SetParent[s] )
+                    for ( Long s = prevleaf; s != q; s = SetParent[s] )
                     {
                         SetParent[s] = q;
                     }
@@ -1275,17 +1273,17 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
         SetParent[j] = Parent[j];
     }
 
-    for ( k = 0; k < nrow; k++ )
+    for ( Long k = 0; k < nrow; k++ )
     {
-        j = Post[k];
-        p = Parent[j];
+        Long j = Post[k];
+        Long p = Parent[j];
         if ( p >= 0 )
             ColCount[p] += ColCount[j];
     }
 
-    for ( k = 0; k < nrow; k++ )
+    for ( Long k = 0; k < nrow; k++ )
     {
-        j = Post[k];
+        Long j = Post[k];
         ColCount[j]++;
     }
 
@@ -1334,7 +1332,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Long *ST_Head, *ST_Next;
     Long *ST_Asize, *ST_Csize, *ST_Msize;
 
-    size_t *Aoffset, *Moffset, *Coffset;
+    size_t *Aoffset, *Moffset;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_analyze_supernodal================\n\n");
@@ -1839,15 +1837,13 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Aoffset = malloc ( nsuper * sizeof(size_t) );
     Moffset = malloc ( nsuper * sizeof(size_t) );
-    Coffset = malloc ( nsuper * sizeof(size_t) );
 
     for ( Long st = 0; st < nsubtree; st++ )
     {
-        size_t Asize, Msize, Csize;
+        size_t Asize, Msize;
 
         Asize = 0;
         Msize = 0;
-        Csize = 0;
 
         for ( Long pt = ST_Pointer[st]; pt < ST_Pointer[st+1]; pt++ )
         {
@@ -1965,7 +1961,6 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
 {
     Long ndcol, ndrow, lpos_next;
     Long dn, dm, dk, dlda, dldc;
-    Long di, cj, ci;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_cpuApply================\n\n");
@@ -1995,15 +1990,15 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
             zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) Lsx + Lsxp[d] + lpos_next, &dlda, (Complex*) Lsx + Lsxp[d] + Lpos[d], &dlda, (Complex*) zero, (Complex*) C + dn, &dldc );
     }
 
-    for ( di = 0; di < ndrow - Lpos[d]; di++ )
+    for ( Long di = 0; di < ndrow - Lpos[d]; di++ )
     {
         RelativeMap [ di ] = Map [ Lsi [ Lsip[d] + Lpos[d] + di ] ];
     }
 
-#pragma omp parallel for private(cj,ci) schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
-    for ( cj = 0; cj < dn; cj++ )
+#pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
+    for ( Long cj = 0; cj < dn; cj++ )
     {
-        for ( ci = cj; ci < dn + dm; ci++ )
+        for ( Long ci = cj; ci < dn + dm; ci++ )
         {
             if (!isComplex)
                 ( (Float*) A ) [ RelativeMap [cj] * nsrow + RelativeMap[ci] ] -= ( (Float*) C ) [ cj * dldc + ci ];
@@ -2035,13 +2030,11 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
 {
     int info;
 
-    Long j, i, p, si, sj;
-
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_cpuApplyFactorize================\n\n");
 #endif
 
-    for ( si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
+    for ( Long si = 0; si < Lsip[s+1] - Lsip[s]; si++ )
         Map [ Lsi [ Lsip[s] + si ] ] = si;
 
     if ( !isComplex )
@@ -2049,13 +2042,13 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
     else
         memset ( (Complex*) Lsx + Lsxp[s], 0, nscol * nsrow * sizeof(Complex) );
 
-    for ( j = Super[s]; j < Super[s+1]; j++ )
+    for ( Long j = Super[s]; j < Super[s+1]; j++ )
     {
-        sj = j - Super[s];
-        for ( p = Lp[j]; p < Lp[j+1]; p++ )
+        Long sj = j - Super[s];
+        for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
         {
-            i = Li[p];
-            si = Map[i];
+            Long i = Li[p];
+            Long si = Map[i];
             if ( !isComplex )
                 ( (Float*) Lsx ) [ Lsxp[s] + sj * nsrow + si ] = ( (Float*) Lx )[p];
             else
