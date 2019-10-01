@@ -137,7 +137,6 @@ struct matrix_info_struct
 
     size_t *Aoffset;
     size_t *Moffset;
-    size_t *Coffset;
 
     void *workspace;
     size_t workSize;
