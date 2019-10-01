@@ -17,9 +17,9 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 {
     int numCPU, numGPU, numGPU_physical, numSplit;
 
-    size_t minDevMemSize;
+    size_t minDevMemSize, minHostMemSize;
 
-    int AMultiple, BCMultiple;
+    int AMultiple, BMultiple, BCMultiple;
     size_t devSlotSize;
 
 #ifdef PRINT_CALLS
@@ -62,7 +62,15 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     if ( *gpu_info_list_ptr == NULL ) return 1;
 
+    AMultiple = A_MULTIPLE;
+    BMultiple = B_MULTIPLE;
+    BCMultiple = BC_MULTIPLE;
+    common_info->AMultiple = AMultiple;
+    common_info->BMultiple = BMultiple;
+    common_info->BCMultiple = BCMultiple;
+
     minDevMemSize = ( numGPU_physical > 0 ) ? SIZE_MAX : 0;
+    minHostMemSize = ( numGPU_physical > 0 ) ? SIZE_MAX : 0;
 
     for ( int gpuIndex_physical = 0; gpuIndex_physical < numGPU_physical; gpuIndex_physical++ )
     {
@@ -81,7 +89,10 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
         devMemSize = prop.totalGlobalMem;
         devMemSize = ( size_t ) ( ( ( double ) devMemSize - 64 * ( 0x400 * 0x400 ) ) * 0.9 );
         devMemSize /= numSplit;
+        devMemSize /= ( AMultiple + BCMultiple );
         devMemSize = devMemSize - devMemSize % ( 0x400 * 0x400 ); // align to 1 MB
+        hostMemSize = devMemSize * ( AMultiple + BMultiple );
+        devMemSize = devMemSize * ( AMultiple + BCMultiple );
 
         for ( int gpuIndex = gpuIndex_physical; gpuIndex < numGPU; gpuIndex += numGPU_physical )
         {
@@ -90,7 +101,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
             if ( cudaStatus == cudaSuccess )
             {
-                hostMemSize = devMemSize;
                 cudaStatus = cudaMallocHost ( &( (*gpu_info_list_ptr)[gpuIndex].hostMem ), hostMemSize );
 
                 if ( cudaStatus == cudaSuccess )
@@ -119,6 +129,9 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
                     if ( minDevMemSize > devMemSize )
                         minDevMemSize = devMemSize;
+
+                    if ( minHostMemSize > hostMemSize )
+                        minHostMemSize = hostMemSize;
 
 #ifdef PRINT_INFO
                     printf ( "GPU %d device handler %d device memory size = %lf GiB host memory size = %lf GiB shared memory size per block = %ld KiB\n",
@@ -184,14 +197,9 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     }
 
     common_info->minDevMemSize = minDevMemSize;
-
-    AMultiple = A_MULTIPLE;
-    BCMultiple = BC_MULTIPLE;
-    common_info->AMultiple = AMultiple;
-    common_info->BCMultiple = BCMultiple;
+    common_info->minHostMemSize = minHostMemSize;
 
     devSlotSize = ( common_info->minDevMemSize ) / ( AMultiple + BCMultiple );
-    devSlotSize = devSlotSize - devSlotSize % 0x400;
     common_info->devSlotSize = devSlotSize;
 
     for ( int gpuIndex = numGPU; gpuIndex < numGPU + numCPU; gpuIndex++ )
@@ -222,7 +230,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     }
 
 #ifdef PRINT_INFO
-    printf ( "Minimum device memory size = %lf GiB\n", ( double ) minDevMemSize / ( 0x400 * 0x400 * 0x400 ) );
+    printf ( "Minimum device memory size = %lf GiB, pinned host memory size = %lf\n", ( double ) minDevMemSize / ( 0x400 * 0x400 * 0x400 ), ( double ) minHostMemSize / ( 0x400 * 0x400 * 0x400 ) );
 #endif
 
 #ifdef PRINT_INFO
@@ -2262,6 +2270,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         {
             Map = malloc ( nrow * sizeof(Long) );
             RelativeMap = malloc ( nrow * sizeof(Long) );
+            if (!isComplex)
+                C = malloc ( csize * sizeof(Float) );
+            else
+                C = malloc ( csize * sizeof(Complex) );
             node_size_queue = malloc ( nsuper * sizeof(struct node_size_struct) );
         }
 
@@ -2334,13 +2346,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                 if ( cpu_blas_count >= d_count && useCpuPotrf )
                 {
-                    if ( C == NULL )
-                    {
-                        if (!isComplex)
-                            C = malloc ( csize * sizeof(Float) );
-                        else
-                            C = malloc ( csize * sizeof(Complex) );
-                    }
                     SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nscol, nsrow, sn, sm, slda, C );
                 }
                 else
@@ -2520,7 +2525,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     {
                         Long d, ndcol, ndrow, lpos, lpos_next;
                         Long dn, dm, dk, dlda, dldc;
-                        void *h_B, *d_B, *h_C, *d_C;
+                        void *h_B, *d_B, *d_C;
                         Long *h_RelativeMap, *d_RelativeMap;
 
                         d = d_dlast;
@@ -2538,7 +2543,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         h_B = gpu_info->hostMem + devASize;
                         d_B = gpu_info->devMem + devASize;
-                        h_C = gpu_info->hostMem + devASize + MAX_D_STREAM  * devSlotSize;
                         d_C = gpu_info->devMem + devASize + MAX_D_STREAM  * devSlotSize;
 
                         if ( !isComplex )
@@ -2562,16 +2566,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             cudaStreamSynchronize ( gpu_info->s_cudaStream );
 
                             if (!isComplex)
-                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) h_B, &dlda, zero, (Float*) h_C, &dldc );
+                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) h_B, &dlda, zero, (Float*) C, &dldc );
                             else
-                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) h_C, &dldc );
+                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C, &dldc );
 
                             if ( dm > 0 )
                             {
                                 if (!isComplex)
-                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) h_B + dn, &dlda, (Float*) h_B, &dlda, zero, (Float*) h_C + dn, &dldc );
+                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) h_B + dn, &dlda, (Float*) h_B, &dlda, zero, (Float*) C + dn, &dldc );
                                 else
-                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) h_C + dn, &dldc );
+                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C + dn, &dldc );
                             }
 
 #pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
@@ -2580,11 +2584,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 for ( Long ci = cj; ci < dn + dm; ci++ )
                                 {
                                     if (!isComplex)
-                                        ( (Float*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ] -= ( (Float*) h_C ) [ cj * dldc + ci ];
+                                        ( (Float*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ] -= ( (Float*) C ) [ cj * dldc + ci ];
                                     else
                                     {
-                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].x -= ( (Complex*) h_C ) [ cj * dldc + ci ].x;
-                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].y -= ( (Complex*) h_C ) [ cj * dldc + ci ].y;
+                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
+                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
                                     }
                                 }
                             }
@@ -2637,7 +2641,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     {
                         Long d, ndcol, ndrow, lpos, lpos_next;
                         Long dn, dm, dk, dlda, dldc;
-                        void *h_B, *d_B, *h_C, *d_C;
+                        void *h_B, *d_B, *d_C;
                         Long *h_RelativeMap, *d_RelativeMap;
 
                         d = h_dlast;
@@ -2655,7 +2659,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         h_B = gpu_info->hostMem + devASize + devSlotSize;
                         d_B = gpu_info->devMem + devASize + devSlotSize;
-                        h_C = gpu_info->hostMem + devASize + ( 1 + MAX_D_STREAM ) * devSlotSize;
                         d_C = gpu_info->devMem + devASize + ( 1 + MAX_D_STREAM ) * devSlotSize;
 
                         if ( !isComplex )
@@ -2677,16 +2680,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         if ( h_dlast_score < 0 )
                         {
                             if (!isComplex)
-                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) h_B, &dlda, zero, (Float*) h_C, &dldc );
+                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) h_B, &dlda, zero, (Float*) C, &dldc );
                             else
-                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) h_C, &dldc );
+                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C, &dldc );
 
                             if ( dm > 0 )
                             {
                                 if (!isComplex)
-                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) h_B + dn, &dlda, (Float*) h_B, &dlda, zero, (Float*) h_C + dn, &dldc );
+                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) h_B + dn, &dlda, (Float*) h_B, &dlda, zero, (Float*) C + dn, &dldc );
                                 else
-                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) h_C + dn, &dldc );
+                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C + dn, &dldc );
                             }
 
 #pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
@@ -2695,11 +2698,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 for ( Long ci = cj; ci < dn + dm; ci++ )
                                 {
                                     if (!isComplex)
-                                        ( (Float*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ] -= ( (Float*) h_C ) [ cj * dldc + ci ];
+                                        ( (Float*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ] -= ( (Float*) C ) [ cj * dldc + ci ];
                                     else
                                     {
-                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].x -= ( (Complex*) h_C ) [ cj * dldc + ci ].x;
-                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].y -= ( (Complex*) h_C ) [ cj * dldc + ci ].y;
+                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].x -= ( (Complex*) C ) [ cj * dldc + ci ].x;
+                                        ( (Complex*) h_A ) [ h_RelativeMap [cj] * nsrow + h_RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
                                     }
                                 }
                             }
@@ -2783,13 +2786,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         while ( Head[s] >= 0 )
                         {
                             Long d;
-                            void *h_C;
 
                             d = Head[s];
                             Head[s] = Next[d];
-                            h_C = gpu_info->hostMem + devASize + MAX_D_STREAM * devSlotSize;
 
-                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, h_C );
+                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, C );
                         }
 
                         if ( !useCpuPotrf )
@@ -2930,12 +2931,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         if ( d_index_small < d_count )
                                         {
                                             Long d;
-                                            void *h_C;
 
                                             d = node_size_queue[d_index_small].node;
-                                            h_C = gpu_info->hostMem + devASize + MAX_D_STREAM * devSlotSize;
 
-                                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, h_C );
+                                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, C );
                                         }
                                         else if ( d_index_small == d_count )
                                         {
@@ -2964,12 +2963,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             if ( d_index_small < d_count )
                             {
                                 Long d;
-                                void *h_C;
 
                                 d = node_size_queue[d_index_small].node;
-                                h_C = gpu_info->hostMem + devASize + MAX_D_STREAM * devSlotSize;
 
-                                SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, h_C );
+                                SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, C );
                             }
                             else if ( d_index_small == d_count )
                             {
@@ -3174,13 +3171,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             }
             else
             {
-                if ( C == NULL )
-                {
-                    if (!isComplex)
-                        C = malloc ( csize * sizeof(Float) );
-                    else
-                        C = malloc ( csize * sizeof(Complex) );
-                }
                 SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nscol, nsrow, sn, sm, slda, C );
             }
 

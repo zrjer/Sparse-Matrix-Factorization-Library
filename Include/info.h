@@ -15,12 +15,14 @@ struct common_info_struct
     int numGPU;
     int numGPU_physical;
     size_t minDevMemSize;
+    size_t minHostMemSize;
 
     int matrixThreadNum;
 
     int numSparseMatrix;
 
     int AMultiple;
+    int BMultiple;
     int BCMultiple;
     size_t devSlotSize;
 
