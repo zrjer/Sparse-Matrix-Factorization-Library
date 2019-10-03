@@ -134,9 +134,6 @@ struct matrix_info_struct
     Long *ST_Index;
     Long *ST_Parent;
 
-    Long nstleaf;
-    Long *ST_LeafQueue;
-
     size_t *Aoffset;
     size_t *Moffset;
 

@@ -573,10 +573,6 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->ST_Map = NULL;
     matrix_info->ST_Pointer = NULL;
     matrix_info->ST_Index = NULL;
-    matrix_info->ST_Parent = NULL;
-
-    matrix_info->nstleaf = 0;
-    matrix_info->ST_LeafQueue = NULL;
 
     matrix_info->Aoffset = 0;
     matrix_info->Moffset = 0;
@@ -620,11 +616,8 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
 
     matrix_info->workSize
         = MAX (
-                MAX (
-                    ( 10 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(Long),
-                    ( 3 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(idx_t)
-                    ),
-                12 * matrix_info->nrow * sizeof(Long) + 3 * matrix_info->nrow * sizeof(size_t)
+                ( 10 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(Long),
+                ( 3 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(idx_t)
               );
     matrix_info->workspace = malloc ( matrix_info->workSize );
 
@@ -1334,8 +1327,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Long *Head, *Next;
 
-    Long nsubtree, nstleaf;
-    Long *ST_Map, *ST_Pointer, *ST_Index, *ST_Parent, *ST_LeafQueue;
+    Long nsubtree;
+    Long *ST_Map, *ST_Pointer, *ST_Index;
 
     Long *ST_Head, *ST_Next;
     Long *ST_Asize, *ST_Csize, *ST_Msize;
@@ -1785,36 +1778,6 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     matrix_info->ST_Pointer = ST_Pointer;
     matrix_info->ST_Index = ST_Index;
 
-    ST_Parent = malloc ( nsubtree * sizeof(Long) );
-    ST_LeafQueue = calloc ( nsubtree, sizeof(Long) );
-
-    for ( Long st = 0; st < nsubtree; st++ )
-    {
-        Long sparent;
-
-        for ( sparent = ST_Index [ ST_Pointer[st] ]; sparent >= 0 && ST_Map[sparent] == st; sparent = Sparent[sparent] );
-
-        if ( sparent < 0 )
-            ST_Parent[st] = -1;
-        else
-        {
-            ST_Parent[st] = ST_Map[sparent];
-            ST_LeafQueue[ ST_Map[sparent] ] = 1;
-        }
-    }
-
-    nstleaf = 0;
-    for ( Long st = 0; st < nsubtree; st++ )
-        if ( ST_LeafQueue[st] == 0 )
-            ST_LeafQueue[nstleaf++] = st;
-
-    for ( Long st = nstleaf; st < nsubtree; st++ )
-        ST_LeafQueue[st] = -1;
-
-    matrix_info->ST_Parent = ST_Parent;
-    matrix_info->nstleaf = nstleaf;
-    matrix_info->ST_LeafQueue = ST_LeafQueue;
-
     memset ( Nschild, 0, nsuper * sizeof(Long) );
     for ( Long s = 0; s < nsuper; s++ )
     {
@@ -2106,8 +2069,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 {
     int numCPU, numGPU, numGPU_physical;
 
-    int AMultiple, BCMultiple;
-    size_t devSlotSize, devASize, devBCSize;
+    int AMultiple;
+    size_t devSlotSize, devASize;
 
     int isComplex;
     Long nrow;
@@ -2118,16 +2081,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Long *Super, *SuperMap;
     Long *Lsip, *Lsxp, *Lsi;
     Float *Lsx;
-    Long *Head, *Next, *Lpos, *Lpos_next, *Lpos_low, *Nschild, *LeafQueue;
+    Long *Head, *Next, *Lpos, *Lpos_next, *Nschild, *LeafQueue;
 
-    enum NodeState *nodeState;
+    Long nsubtree;
+
+    Long *GPUSerial, *NodeSTPass, *STPass;
 
     size_t *Aoffset, *Moffset;
 
-    Long nsubtree, nstleaf, ST_leafQueueHead, ST_leafQueueTail;
-    Long *ST_Map, *ST_Pointer, *ST_Index, *ST_Parent, *Nstchild, *ST_LeafQueue;
-    Long *ST_Head, *ST_Next, *ST_Pointer_Tail;
-    enum NodeState *ST_State;
+    Long *ST_Map, *ST_Pointer, *ST_Index;
 
     Long *workspace;
 
@@ -2140,11 +2102,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     numGPU_physical = common_info->numGPU_physical;
 
     AMultiple = common_info->AMultiple;
-    BCMultiple = common_info->BCMultiple;
 
     devSlotSize = common_info->devSlotSize;
     devASize = AMultiple * devSlotSize;
-    devBCSize = BCMultiple * devSlotSize;
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
@@ -2168,12 +2128,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     LeafQueue = matrix_info->LeafQueue;
 
     nsubtree = matrix_info->nsubtree;
-    nstleaf = matrix_info->nstleaf;
+
     ST_Map = matrix_info->ST_Map;
     ST_Pointer = matrix_info->ST_Pointer;
     ST_Index = matrix_info->ST_Index;
-    ST_Parent = matrix_info->ST_Parent;
-    ST_LeafQueue = matrix_info->ST_LeafQueue;
 
     Aoffset = matrix_info->Aoffset;
     Moffset = matrix_info->Moffset;
@@ -2182,22 +2140,17 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     Lpos = workspace + 0 * nsuper;
     Lpos_next = workspace + 1 * nsuper;
-    Lpos_low = workspace + 2 * nsuper;
-    Head = workspace + 3 * nsuper;
-    Next = workspace + 4 * nsuper;
-    ST_Head = workspace + 5 * nsuper;
-    ST_Next = workspace + 6 * nsuper;
-    ST_Pointer_Tail = workspace + 7 * nsuper;
-    Nschild = workspace + 8 * nsuper;
-    Nstchild = workspace + 9 * nsuper;
-    nodeState = (enum NodeState*) ( workspace + 10 * nsuper );
-    ST_State = (enum NodeState*) ( workspace + 11 * nsuper );
+    Head = workspace + 2 * nsuper;
+    Next = workspace + 3 * nsuper;
+    Nschild = workspace + 4 * nsuper;
+    GPUSerial = workspace + 5 * nsuper;
+    NodeSTPass = workspace + 6 * nsuper;
+    STPass = workspace + 7 * nsuper;
 
     for ( Long s = 0; s < nsuper; s++ )
     {
         Head[s] = -1;
         Next[s] = -1;
-        nodeState[s] = NODE_STATE_INITIAL;
     }
 
     memset ( (void*) Nschild, 0, nsuper * sizeof(Long) );
@@ -2218,33 +2171,20 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     for ( Long s = 0; s < nsuper; s++ )
     {
+        GPUSerial[s] = -1;
+        NodeSTPass[s] = -1;
+    }
+
+    for ( Long st = 0; st < nsubtree; st++ )
+        STPass[st] = 0;
+
+    for ( Long s = 0; s < nsuper; s++ )
+    {
         Lpos[s] = 0;
-    }
-
-    for ( Long st = 0; st < nsubtree; st++ )
-    {
-        ST_Head[st] = -1;
-        ST_Next[st] = -1;
-        ST_Pointer_Tail[st] = ST_Pointer[st+1];
-        ST_State[st] = NODE_STATE_INITIAL;
-    }
-
-    memset ( Nstchild, 0, nsubtree * sizeof(Long) );
-
-    for ( Long st = 0; st < nsubtree; st++ )
-    {
-        Long stparent;
-
-        stparent = ST_Parent[st];
-        if ( stparent >= 0 )
-            Nstchild[stparent]++;
     }
 
     leafQueueHead = 0;
     leafQueueTail = nsleaf;
-
-    ST_leafQueueHead = 0;
-    ST_leafQueueTail = nstleaf;
 
 #pragma omp parallel num_threads( numGPU + numCPU )
     {
@@ -2283,6 +2223,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
             Long s, nscol, nsrow;
             Long sn, sm, slda;
+            Long st;
 
             s = LeafQueue[leafQueueIndex];
 
@@ -2292,6 +2233,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             sn = nscol;
             sm = nsrow - nscol;
             slda = sn + sm;
+
+            st = ST_Map[s];
 
             gpuIndex = 0;
             while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
@@ -3508,8 +3451,6 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->ST_Map != NULL ) free ( matrix_info->ST_Map );
     if ( matrix_info->ST_Pointer != NULL ) free ( matrix_info->ST_Pointer );
     if ( matrix_info->ST_Index != NULL ) free ( matrix_info->ST_Index );
-    if ( matrix_info->ST_Parent != NULL ) free ( matrix_info->ST_Parent );
-    if ( matrix_info->ST_LeafQueue != NULL ) free ( matrix_info->ST_LeafQueue );
 
     if ( matrix_info->Aoffset != NULL ) free ( matrix_info->Aoffset );
     if ( matrix_info->Moffset != NULL ) free ( matrix_info->Moffset );
