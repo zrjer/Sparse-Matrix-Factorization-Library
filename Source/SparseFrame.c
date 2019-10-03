@@ -2256,6 +2256,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 Long d_count, cpu_blas_count, gpu_blas_count;
                 Long d_index_small;
 
+                GPUSerial[s] = gpuIndex;
+
                 useCpuPotrf = set_factorize_location ( nscol, nsrow );
 
                 d_count = 0;
