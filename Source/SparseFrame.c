@@ -2085,7 +2085,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     Long nsubtree;
 
-    Long *GPUSerial, *NodeSTPass, *STPass;
+    Long *GPUSerial, *NodeSTPass;
 
     size_t *Aoffset, *Moffset;
 
@@ -2145,7 +2145,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Nschild = workspace + 4 * nsuper;
     GPUSerial = workspace + 5 * nsuper;
     NodeSTPass = workspace + 6 * nsuper;
-    STPass = workspace + 7 * nsuper;
 
     for ( Long s = 0; s < nsuper; s++ )
     {
@@ -2175,9 +2174,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         NodeSTPass[s] = -1;
     }
 
-    for ( Long st = 0; st < nsubtree; st++ )
-        STPass[st] = 0;
-
     for ( Long s = 0; s < nsuper; s++ )
     {
         Lpos[s] = 0;
@@ -2192,6 +2188,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         Long *Map, *RelativeMap;
         Float *C;
         struct node_size_struct *node_size_queue;
+
+        Long st_last, stPass;
 
         Map = NULL;
         RelativeMap = NULL;
@@ -2217,6 +2215,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             node_size_queue = malloc ( nsuper * sizeof(struct node_size_struct) );
         }
 
+        st_last = -1;
+        stPass = -1;
+
         while ( leafQueueIndex < nsuper )
         {
             int gpuIndex;
@@ -2235,6 +2236,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             slda = sn + sm;
 
             st = ST_Map[s];
+
+            if ( st != st_last )
+            {
+                st_last = st;
+                stPass++;
+            }
+
+            NodeSTPass[s] = stPass;
 
             gpuIndex = 0;
             while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
