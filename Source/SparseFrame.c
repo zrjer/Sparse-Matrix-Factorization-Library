@@ -2238,10 +2238,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             st = ST_Map[s];
 
             if ( st != st_last )
-            {
-                st_last = st;
                 stPass++;
-            }
 
             NodeSTPass[s] = stPass;
 
@@ -2376,38 +2373,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         }
                     }
 
-                    if ( d_dlast >= 0 )
-                    {
-                        Long d, ndcol, ndrow, lpos;
-                        void *h_B, *d_B, *d_R;
-
-                        d = d_dlast;
-
-                        ndcol = Super[d+1] - Super[d];
-                        ndrow = Lsip[d+1] - Lsip[d];
-                        lpos = Lpos[d];
-
-                        h_B = gpu_info->hostMem + devASize;
-                        d_B = gpu_info->devMem + devASize;
-                        d_R = gpu_info->devMem + Aoffset[d];
-
-                        if ( d_dlast_score < 0 )
-                        {
-                            if ( !isComplex )
-                                cudaMemcpy2DAsync ( h_B, ( ndrow - lpos ) * sizeof(Float), d_R + lpos * sizeof(Float), ndrow * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
-                            else
-                                cudaMemcpy2DAsync ( h_B, ( ndrow - lpos ) * sizeof(Complex), d_R + lpos * sizeof(Complex), ndrow * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
-                        }
-                        else
-                        {
-                            if ( !isComplex )
-                                cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Float), d_R + lpos * sizeof(Float), ndrow * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyDeviceToDevice, gpu_info->s_cudaStream );
-                            else
-                                cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Complex), d_R + lpos * sizeof(Complex), ndrow * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyDeviceToDevice, gpu_info->s_cudaStream );
-                        }
-                    }
-
-                    if ( h_dlast >= 0)
+                    if ( h_dlast >= 0 && h_dlast_score > 0 )
                     {
                         Long d, ndcol, ndrow, lpos;
                         void *h_B, *d_B, *h_R;
@@ -2422,29 +2388,33 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         d_B = gpu_info->devMem + devASize + MAX_D_STREAM * devSlotSize;
                         h_R = gpu_info->hostMem + Aoffset[d];
 
-                        if ( h_dlast_score < 0 )
-                        {
-                            for ( Long dj = 0; dj < ndcol; dj++ )
-                                for ( Long di = 0; di < ndrow - lpos; di++ )
-                                {
-                                    if ( !isComplex )
-                                        ( (Float*) h_B ) [ dj * (ndrow - lpos) + di ] = ( (Float*) h_R + lpos ) [ dj * ndrow + di ];
-                                    else
-                                    {
-                                        ( (Complex*) h_B ) [ dj * (ndrow - lpos) + di ].x = ( (Complex*) h_R + lpos ) [ dj * ndrow + di ].x;
-                                        ( (Complex*) h_B ) [ dj * (ndrow - lpos) + di ].y = ( (Complex*) h_R + lpos ) [ dj * ndrow + di ].y;
-                                    }
-                                }
-                        }
+                        if ( !isComplex )
+                            cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Float), h_R + lpos * sizeof(Float), ndrow * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                         else
-                        {
-                            if ( !isComplex )
-                                cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Float), h_R + lpos * sizeof(Float), ndrow * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                            else
-                                cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Complex), h_R + lpos * sizeof(Complex), ndrow * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                            cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Complex), h_R + lpos * sizeof(Complex), ndrow * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
 
-                            cudaStreamSynchronize ( gpu_info->s_cudaStream );
-                        }
+                        cudaStreamSynchronize ( gpu_info->s_cudaStream );
+                    }
+
+                    if ( d_dlast >= 0 && d_dlast_score > 0 )
+                    {
+                        Long d, ndcol, ndrow, lpos;
+                        void *h_B, *d_B, *d_R;
+
+                        d = d_dlast;
+
+                        ndcol = Super[d+1] - Super[d];
+                        ndrow = Lsip[d+1] - Lsip[d];
+                        lpos = Lpos[d];
+
+                        h_B = gpu_info->hostMem + devASize;
+                        d_B = gpu_info->devMem + devASize;
+                        d_R = gpu_info->devMem + Aoffset[d];
+
+                        if ( !isComplex )
+                            cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Float), d_R + lpos * sizeof(Float), ndrow * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyDeviceToDevice, gpu_info->s_cudaStream );
+                        else
+                            cudaMemcpy2DAsync ( d_B, ( ndrow - lpos ) * sizeof(Complex), d_R + lpos * sizeof(Complex), ndrow * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyDeviceToDevice, gpu_info->s_cudaStream );
                     }
 
                     if ( !isComplex )
@@ -2475,7 +2445,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         }
                     }
 
-                    if ( d_dlast >= 0)
+                    if ( d_dlast >= 0 )
                     {
                         Long d, ndcol, ndrow, lpos, lpos_next;
                         Long dn, dm, dk, dlda, dldc;
@@ -2520,16 +2490,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             cudaStreamSynchronize ( gpu_info->s_cudaStream );
 
                             if (!isComplex)
-                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) h_B, &dlda, zero, (Float*) C, &dldc );
+                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) Lsx + Lsxp[d] + lpos, &ndrow, zero, (Float*) C, &dldc );
                             else
-                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C, &dldc );
+                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) Lsx + Lsxp[d] + lpos, &ndrow, (Complex*) zero, (Complex*) C, &dldc );
 
                             if ( dm > 0 )
                             {
                                 if (!isComplex)
-                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) h_B + dn, &dlda, (Float*) h_B, &dlda, zero, (Float*) C + dn, &dldc );
+                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) Lsx + Lsxp[d] + lpos + dn, &ndrow, (Float*) Lsx + Lsxp[d] + lpos, &ndrow, zero, (Float*) C + dn, &dldc );
                                 else
-                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C + dn, &dldc );
+                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) Lsx + Lsxp[d] + lpos + dn, &ndrow, (Complex*) Lsx + Lsxp[d] + lpos + dn, &ndrow, (Complex*) zero, (Complex*) C + dn, &dldc );
                             }
 
 #pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
@@ -2591,7 +2561,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Lpos[d] = lpos_next;
                     }
 
-                    if ( h_dlast >= 0)
+                    if ( h_dlast >= 0 )
                     {
                         Long d, ndcol, ndrow, lpos, lpos_next;
                         Long dn, dm, dk, dlda, dldc;
@@ -2634,16 +2604,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         if ( h_dlast_score < 0 )
                         {
                             if (!isComplex)
-                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) h_B, &dlda, zero, (Float*) C, &dldc );
+                                dsyrk_ ( "L", "N", &dn, &dk, one, (Float*) Lsx + Lsxp[d] + lpos, &ndrow, zero, (Float*) C, &dldc );
                             else
-                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C, &dldc );
+                                zherk_ ( "L", "N", &dn, &dk, (Complex*) one, (Complex*) Lsx + Lsxp[d] + lpos, &ndrow, (Complex*) zero, (Complex*) C, &dldc );
 
                             if ( dm > 0 )
                             {
                                 if (!isComplex)
-                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) h_B + dn, &dlda, (Float*) h_B, &dlda, zero, (Float*) C + dn, &dldc );
+                                    dgemm_ ( "N", "C", &dm, &dn, &dk, one, (Float*) Lsx + Lsxp[d] + lpos + dn, &ndrow, (Float*) Lsx + Lsxp[d] + lpos, &ndrow, zero, (Float*) C + dn, &dldc );
                                 else
-                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) h_B + dn, &dlda, (Complex*) h_B, &dlda, (Complex*) zero, (Complex*) C + dn, &dldc );
+                                    zgemm_ ( "N", "C", &dm, &dn, &dk, (Complex*) one, (Complex*) Lsx + Lsxp[d] + lpos + dn, &ndrow, (Complex*) Lsx + Lsxp[d] + lpos, &ndrow, (Complex*) zero, (Complex*) C + dn, &dldc );
                             }
 
 #pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(dn>=CP_THREAD_THRESHOLD)
@@ -3157,6 +3127,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 else
                     leafQueueIndex = leafQueueHead++;
             }
+
+            st_last = st;
         }
 
         if ( Map != NULL ) free ( Map );
