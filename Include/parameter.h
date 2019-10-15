@@ -57,6 +57,14 @@ struct node_size_struct
 const Long dimension_threshold_row = 64;
 const Long dimension_threshold_col = 16;
 
+Long get_node_score_from_dimension ( Long m, Long k )
+{
+    if ( m >= dimension_threshold_row && k >= dimension_threshold_col )
+        return ( m * k );
+    else
+        return ( - m * k );
+}
+
 Long set_node_score ( struct node_size_struct *node )
 {
     Long n, m, k, score;
@@ -65,12 +73,10 @@ Long set_node_score ( struct node_size_struct *node )
     m = node->m;
     k = node->k;
 
-    if ( m + n >= dimension_threshold_row && k >= dimension_threshold_col )
-        score = ( m + n ) * k;
-    else
-        score = - ( m + n ) * k;
+    score = get_node_score_from_dimension ( n + m, k );
 
     node->score = score;
+
     return score;
 }
 

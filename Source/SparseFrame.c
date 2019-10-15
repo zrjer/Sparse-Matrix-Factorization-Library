@@ -2335,20 +2335,18 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     if ( d_dlast >= 0 )
                     {
-                        for ( Long idx = 0; idx < d_count; idx++ )
+                        Long d_dlast_index;
+
+                        for ( d_dlast_index = 0; d_dlast_index < d_count && node_size_queue[d_dlast_index].node != d_dlast; d_dlast_index++ );
+
+                        if ( d_dlast_index < d_count && get_node_score ( node_size_queue + d_dlast_index ) > 0 )
                         {
-                            if ( node_size_queue[idx].node == d_dlast )
-                            {
-                                if ( get_node_score ( node_size_queue + idx ) > 0 )
-                                {
-                                    gpu_blas_count--;
-                                    d_count--;
-                                    node_size_queue[idx] = node_size_queue[d_count];
-                                }
-                                else
-                                    d_dlast = -1;
-                            }
+                            gpu_blas_count--;
+                            d_count--;
+                            node_size_queue[d_dlast_index] = node_size_queue[d_count];
                         }
+                        else
+                            d_dlast = -1;
                     }
 
                     if ( d_dlast >= 0 )
@@ -2668,7 +2666,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                         d_index_small++;
                                     }
+                                    else if ( d_index_small == d_count )
+                                    {
+                                        if ( !isComplex )
+                                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                                        else
+                                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
 
+                                        d_index_small++;
+                                    }
                                 }
                             }
 
@@ -2692,10 +2698,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             d_index_small++;
                         }
 
-                        if ( !isComplex )
-                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                        else
-                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                        if ( d_index_small == d_count )
+                        {
+                            if ( !isComplex )
+                                cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                            else
+                                cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+
+                            d_index_small++;
+                        }
 
 
                         if ( d_A__reset )
