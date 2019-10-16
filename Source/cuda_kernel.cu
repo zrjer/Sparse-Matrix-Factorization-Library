@@ -175,7 +175,7 @@ void mappedSubtract_batched ( Long batchSize, int isAtomic, int isComplex, void 
     mappedSubtract_batched_kernel <<< block, thread, 0, stream >>> ( isAtomic, isComplex, d_A, lda, d_C, cj_offset, ci_offset, nccol, ncrow, ldc, d_RelativeMap );
 }
 
-__global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_A_, Long nscol, Long nsrow )
+__global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow )
 {
     Long sj, si;
 
@@ -185,19 +185,19 @@ __global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_A_, Long ns
     if ( !isComplex )
     {
         if ( sj < nscol && si < nsrow )
-            ( (Float*) d_A ) [ sj * nsrow + si ] += ( (Float*) d_A_ )  [ sj * nsrow + si ];
+            ( (Float*) d_A ) [ sj * nsrow + si ] = ( (Float*) d_B )  [ sj * nsrow + si ] + ( (Float*) d_C )  [ sj * nsrow + si ];
     }
     else
     {
         if ( sj < nscol && si < nsrow )
         {
-            ( (Complex*) d_A ) [ sj * nsrow + si ].x += ( (Complex*) d_A_ ) [ sj * nsrow + si ].x;
-            ( (Complex*) d_A ) [ sj * nsrow + si ].y += ( (Complex*) d_A_ ) [ sj * nsrow + si ].y;
+            ( (Complex*) d_A ) [ sj * nsrow + si ].x = ( (Complex*) d_B ) [ sj * nsrow + si ].x + ( (Complex*) d_C ) [ sj * nsrow + si ].x;
+            ( (Complex*) d_A ) [ sj * nsrow + si ].y = ( (Complex*) d_B ) [ sj * nsrow + si ].y + ( (Complex*) d_C ) [ sj * nsrow + si ].y;
         }
     }
 }
 
-void deviceSum ( int isComplex, void *d_A, void *d_A_, Long nscol, Long nsrow, cudaStream_t stream )
+void deviceSum ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow, cudaStream_t stream )
 {
     dim3 block, thread;
 
@@ -206,5 +206,5 @@ void deviceSum ( int isComplex, void *d_A, void *d_A_, Long nscol, Long nsrow, c
     block.x = ( nscol + thread.x - 1 ) / thread.x;
     block.y = ( nsrow + thread.y - 1 ) / thread.y;
 
-    deviceSum_kernel <<< block, thread, 0, stream >>> ( isComplex, d_A, d_A_, nscol, nsrow );
+    deviceSum_kernel <<< block, thread, 0, stream >>> ( isComplex, d_A, d_B, d_C, nscol, nsrow );
 }
