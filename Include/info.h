@@ -75,8 +75,6 @@ struct matrix_info_struct
 
     int isSymmetric;
 
-    enum MatrixState state;
-
     Long ncol;
     Long nrow;
     Long nzmax;
@@ -128,7 +126,7 @@ struct matrix_info_struct
 
     Long csize;
 
-    Long nsubtree;
+    Long nstage;
     Long *ST_Map;
     Long *ST_Pointer;
     Long *ST_Index;

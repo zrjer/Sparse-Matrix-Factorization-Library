@@ -569,7 +569,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
 
     matrix_info->csize = 0;
 
-    matrix_info->nsubtree = 0;
+    matrix_info->nstage = 0;
     matrix_info->ST_Map = NULL;
     matrix_info->ST_Pointer = NULL;
     matrix_info->ST_Index = NULL;
@@ -1327,7 +1327,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Long *Head, *Next;
 
-    Long nsubtree;
+    Long nstage;
     Long *ST_Map, *ST_Pointer, *ST_Index;
 
     Long *ST_Head, *ST_Next;
@@ -1671,7 +1671,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
         ST_Map[s] = -1;
     }
 
-    nsubtree = ( nsuper > 0 ) ? 1 : 0;
+    nstage = ( nsuper > 0 ) ? 1 : 0;
 
     for ( Long s = nsuper - 1; s >= 0; s-- )
     {
@@ -1734,46 +1734,46 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
         if ( st < 0 )
         {
-            ST_Map[s] = nsubtree;
-            ST_Asize[nsubtree] = ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
-            ST_Csize[nsubtree] = ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
-            ST_Msize[nsubtree] = ( Lsip[s+1] - Lsip[s] );
+            ST_Map[s] = nstage;
+            ST_Asize[nstage] = ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+            ST_Csize[nstage] = ( ( Lsip[s+1] - Lsip[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+            ST_Msize[nstage] = ( Lsip[s+1] - Lsip[s] );
             if ( Sparent[s] >= 0 )
             {
-                ST_Next[nsubtree] = ST_Head [ ST_Map [ Sparent[s] ] ];
-                ST_Head [ ST_Map [ Sparent[s] ] ] = nsubtree;
+                ST_Next[nstage] = ST_Head [ ST_Map [ Sparent[s] ] ];
+                ST_Head [ ST_Map [ Sparent[s] ] ] = nstage;
             }
             else
             {
-                ST_Next[nsubtree] = ST_Next[0];
-                ST_Next[0] = nsubtree;
+                ST_Next[nstage] = ST_Next[0];
+                ST_Next[0] = nstage;
             }
-            nsubtree++;
+            nstage++;
         }
     }
 
     for ( Long s = 0; s < nsuper; s++ )
     {
-        ST_Map[s] = nsubtree - 1 - ST_Map[s];
+        ST_Map[s] = nstage - 1 - ST_Map[s];
     }
 
-    ST_Pointer = calloc ( nsubtree + 1, sizeof(Long) );
+    ST_Pointer = calloc ( nstage + 1, sizeof(Long) );
     ST_Index = malloc ( nsuper * sizeof(Long) );
 
     for ( Long s = 0; s < nsuper; s++ )
         ST_Pointer [ ST_Map[s] + 1 ] ++;
 
-    for ( Long st = 0; st < nsubtree; st++ )
+    for ( Long st = 0; st < nstage; st++ )
         ST_Pointer[st+1] += ST_Pointer[st];
 
-    memcpy ( workspace, ST_Pointer, nsubtree * sizeof(Long) );
+    memcpy ( workspace, ST_Pointer, nstage * sizeof(Long) );
 
     for ( Long s = 0; s < nsuper; s++ )
     {
         ST_Index [ workspace [ ST_Map[s] ] ++ ] = s;
     }
 
-    matrix_info->nsubtree = nsubtree;
+    matrix_info->nstage = nstage;
     matrix_info->ST_Map = ST_Map;
     matrix_info->ST_Pointer = ST_Pointer;
     matrix_info->ST_Index = ST_Index;
@@ -1808,7 +1808,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     Aoffset = malloc ( nsuper * sizeof(size_t) );
     Moffset = malloc ( nsuper * sizeof(size_t) );
 
-    for ( Long st = 0; st < nsubtree; st++ )
+    for ( Long st = 0; st < nstage; st++ )
     {
         size_t Asize, Msize;
 
@@ -1840,7 +1840,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     matrix_info->Moffset = Moffset;
 
 #ifdef PRINT_INFO
-    printf ("nrow = %ld nfsuper = %ld nsuper = %ld nsubtree = %ld\n", nrow, nfsuper, nsuper, nsubtree);
+    printf ("nrow = %ld nfsuper = %ld nsuper = %ld nstage = %ld\n", nrow, nfsuper, nsuper, nstage);
 #endif
 
     return 0;
@@ -2083,9 +2083,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Float *Lsx;
     Long *Head, *Next, *Lpos, *Lpos_next, *Nschild, *LeafQueue;
 
-    Long nsubtree;
+    Long nstage;
 
     Long *GPUSerial, *NodeSTPass;
+
+    enum NodeLocationType { NODE_LOCATION_NULL, NODE_LOCATION_MAIN, NODE_LOCATION_GPU };
+
+    enum NodeLocationType *NodeLocation;
 
     size_t *Aoffset, *Moffset;
 
@@ -2128,7 +2132,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     nsleaf = matrix_info->nsleaf;
     LeafQueue = matrix_info->LeafQueue;
 
-    nsubtree = matrix_info->nsubtree;
+    nstage = matrix_info->nstage;
 
     ST_Map = matrix_info->ST_Map;
     ST_Pointer = matrix_info->ST_Pointer;
@@ -2146,6 +2150,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     Nschild = workspace + 4 * nsuper;
     GPUSerial = workspace + 5 * nsuper;
     NodeSTPass = workspace + 6 * nsuper;
+    NodeLocation = (void*) ( workspace + 7 * nsuper );
 
     for ( Long s = 0; s < nsuper; s++ )
     {
@@ -2173,6 +2178,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     {
         GPUSerial[s] = -1;
         NodeSTPass[s] = -1;
+        NodeLocation = NODE_LOCATION_NULL;
     }
 
     for ( Long s = 0; s < nsuper; s++ )
@@ -2225,7 +2231,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
             Long s, nscol, nsrow;
             Long sn, sm, slda;
-            Long st;
 
             s = LeafQueue[leafQueueIndex];
 
@@ -2235,13 +2240,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             sn = nscol;
             sm = nsrow - nscol;
             slda = sn + sm;
-
-            st = ST_Map[s];
-
-            if ( st != st_last )
-                stPass++;
-
-            NodeSTPass[s] = stPass;
 
             gpuIndex = 0;
             while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
@@ -2253,8 +2251,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                 Long d_count, cpu_blas_count, gpu_blas_count;
                 Long d_index_small;
-
-                GPUSerial[s] = gpuIndex;
 
                 useCpuPotrf = set_factorize_location ( nscol, nsrow );
 
@@ -2304,6 +2300,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 {
                     struct gpu_info_struct *gpu_info;
 
+                    Long st;
                     Long d_dlast;
 
                     void *A, *h_A, *d_A, *d_A_, *d_A_reserve;
@@ -2317,10 +2314,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     cudaSetDevice ( gpu_info->gpuIndex_physical );
 
-                    d_dlast = -1;
-                    if ( cpu_blas_count < d_count )
-                        if ( gpu_info->d_lastMatrix == matrix_info->serial && gpu_info->d_lastNode >= 0 && SuperMap [ Lsi [ Lsip [ gpu_info->d_lastNode ] + Lpos [ gpu_info->d_lastNode ] ] ]  == s )
-                            d_dlast = gpu_info->d_lastNode;
+                    GPUSerial[s] = gpuIndex;
+
+                    st = ST_Map[s];
+
+                    if ( st != st_last || gpu_info->d_lastMatrix != matrix_info->serial )
+                        stPass++;
+
+                    NodeSTPass[s] = stPass;
 
                     if ( !isComplex )
                         A = (Float*) Lsx + Lsxp[s];
@@ -2334,6 +2335,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     d_info = gpu_info->devMem + devASize;
                     d_workspace = gpu_info->devMem + devASize + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
+
+                    d_dlast = -1;
+                    if ( cpu_blas_count < d_count )
+                        if ( gpu_info->d_lastMatrix == matrix_info->serial && gpu_info->d_lastNode >= 0 && SuperMap [ Lsi [ Lsip [ gpu_info->d_lastNode ] + Lpos [ gpu_info->d_lastNode ] ] ]  == s )
+                            d_dlast = gpu_info->d_lastNode;
 
                     if ( d_dlast >= 0 )
                     {
@@ -2900,6 +2906,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             }
                         }
                     }
+
+                    st_last = st;
                 }
             }
             else
@@ -2936,8 +2944,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 else
                     leafQueueIndex = leafQueueHead++;
             }
-
-            st_last = st;
         }
 
         if ( Map != NULL ) free ( Map );
