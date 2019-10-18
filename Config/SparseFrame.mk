@@ -4,7 +4,7 @@ ifneq ($(shell which icc 2> /dev/null),)
 	CC = icc -D_GNU_SOURCE
 	CXX = $(CC)
 	CFOPENMP = -qopenmp
-	LDLIBS = -lm -lirc
+	LDLIBS = -lirc
 else
 	CC = gcc
 	CXX = g++
