@@ -2305,11 +2305,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     st = ST_Map[s];
 
-                    for ( Long d = Head[s]; d >= 0; d = Next[d] )
+                    for ( Long d_index = 0; d_index < d_count; d_index++ )
                     {
+                        Long d;
                         Long ndcol, ndrow;
                         Long lpos, lpos_next;
                         Long dn, dm, dk;
+
+                        d = node_size_queue[d_index].node;
 
                         ndcol = Super[d+1] - Super[d];
                         ndrow = Lsip[d+1] - Lsip[d];
@@ -2323,8 +2326,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         if ( GPUSerial[d] == gpuIndex )
                         {
-                            if ( gpu_info->d_lastMatrix == matrix_info->serial && ST_Map[d] == st_last && NodeSTPass[d] == stPass && NodeLocation[d] != NODE_LOCATION_NULL && get_node_score_from_dimension ( dn + dm, dk ) > 0 )
+                            if ( gpu_info->d_lastMatrix == matrix_info->serial && ST_Map[d] == st_last && NodeSTPass[d] == stPass && NodeLocation[d] != NODE_LOCATION_NULL )
                             {
+                                if ( get_node_score ( node_size_queue + d_index ) < 0 )
+                                {
+                                    node_size_queue[d_count].score = 1;
+                                    cpu_blas_count--;
+                                    gpu_blas_count++;
+                                }
+
                                 if ( NodeLocation[d] == NODE_LOCATION_MAIN )
                                 {
                                     void *h_R, *d_R;
