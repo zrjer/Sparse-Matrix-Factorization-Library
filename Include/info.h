@@ -54,10 +54,7 @@ struct gpu_info_struct
 
     cusolverDnHandle_t s_cusolverDnHandle;
 
-    int h_lastMatrix;
-    Long h_lastNode;
     int d_lastMatrix;
-    Long d_lastNode;
 };
 
 struct matrix_info_struct
