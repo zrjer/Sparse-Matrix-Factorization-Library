@@ -2309,8 +2309,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     {
                         Long d;
                         Long ndcol, ndrow;
-                        Long lpos, lpos_next;
-                        Long dn, dm, dk;
+                        Long lpos;
 
                         d = node_size_queue[d_index].node;
 
@@ -2318,11 +2317,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         ndrow = Lsip[d+1] - Lsip[d];
 
                         lpos = Lpos[d];
-                        lpos_next = Lpos_next[d];
-
-                        dn = lpos_next - lpos;
-                        dm = ndrow - lpos_next;
-                        dk = ndcol;
 
                         if ( GPUSerial[d] == gpuIndex )
                         {
