@@ -2322,13 +2322,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         {
                             if ( gpu_info->d_lastMatrix == matrix_info->serial && ST_Map[d] == st_last && NodeSTPass[d] == stPass && NodeLocation[d] != NODE_LOCATION_NULL )
                             {
-                                if ( get_node_score ( node_size_queue + d_index ) < 0 )
-                                {
-                                    node_size_queue[d_count].score = 1;
-                                    cpu_blas_count--;
-                                    gpu_blas_count++;
-                                }
-
                                 if ( NodeLocation[d] == NODE_LOCATION_MAIN )
                                 {
                                     void *h_R, *d_R;
