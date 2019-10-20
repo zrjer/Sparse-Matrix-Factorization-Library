@@ -186,7 +186,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 #endif
             }
 
-            (*gpu_info_list_ptr)[gpuIndex].d_lastMatrix = -1;
+            (*gpu_info_list_ptr)[gpuIndex].lastMatrix = -1;
         }
     }
 
@@ -2320,7 +2320,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                         if ( GPUSerial[d] == gpuIndex )
                         {
-                            if ( gpu_info->d_lastMatrix == matrix_info->serial && ST_Map[d] == st_last && NodeSTPass[d] == stPass && NodeLocation[d] != NODE_LOCATION_NULL )
+                            if ( gpu_info->lastMatrix == matrix_info->serial && ST_Map[d] == st_last && NodeSTPass[d] == stPass && NodeLocation[d] != NODE_LOCATION_NULL )
                             {
                                 if ( NodeLocation[d] == NODE_LOCATION_MAIN )
                                 {
@@ -2799,10 +2799,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                     NodeLocation[s] = useCpuPotrf ? NODE_LOCATION_MAIN : NODE_LOCATION_GPU;
 
-                    if ( st != st_last || gpu_info->d_lastMatrix != matrix_info->serial )
+                    if ( st != st_last || gpu_info->lastMatrix != matrix_info->serial )
                         stPass++;
 
-                    gpu_info->d_lastMatrix = matrix_info->serial;
+                    gpu_info->lastMatrix = matrix_info->serial;
 
                     NodeSTPass[s] = stPass;
 
