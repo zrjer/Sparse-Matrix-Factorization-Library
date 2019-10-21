@@ -54,15 +54,13 @@ struct node_size_struct
     Long score;
 };
 
-const Long dimension_threshold_n[2] = { 32, 32 };
-const Long dimension_threshold_m[2] = { 64, 64 };
-const Long dimension_threshold_k[2] = { 32, 32 };
+const Long dimension_threshold_n = 32;
+const Long dimension_threshold_m = 64;
+const Long dimension_threshold_k = 32;
 
 Long get_node_score_from_dimension ( Long n, Long m, Long k )
 {
-    if ( n <= dimension_threshold_n[0] && n + m <= dimension_threshold_m[0] && k <= dimension_threshold_k[0] )
-        return 0;
-    else if ( n >= dimension_threshold_n[1] && n + m >= dimension_threshold_m[1] && k >= dimension_threshold_k[1] )
+    if ( n >= dimension_threshold_n && n + m >= dimension_threshold_m && k >= dimension_threshold_k )
         return ( ( n + m ) * k );
     else
         return ( - ( n + m ) * k );

@@ -1,15 +1,15 @@
 MAKE = make
 
-ifneq ($(shell which icc 2> /dev/null),)
-	CC = icc -D_GNU_SOURCE
-	CXX = $(CC)
-	CFOPENMP = -qopenmp
-	LDLIBS = -lirc
-else
+#ifneq ($(shell which icc 2> /dev/null),)
+#	CC = icc -D_GNU_SOURCE
+#	CXX = $(CC)
+#	CFOPENMP = -qopenmp
+#	LDLIBS = -lirc
+#else
 	CC = gcc
 	CXX = g++
 	CFOPENMP = -fopenmp
-endif
+#endif
 
 ifneq ($(shell which ifort 2> /dev/null),)
 	F77 = ifort
