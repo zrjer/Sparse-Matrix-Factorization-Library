@@ -2232,7 +2232,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         Long *Map, *RelativeMap;
         Float *C;
         struct node_size_struct *node_size_queue;
-        Long *h_Lsi, *d_Lsi, *h_Map, *d_Map;
+        Long *h_Lsi, *d_Lsi, *d_Map;
 
         Long st_last, stPass;
 
@@ -2250,7 +2250,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         node_size_queue = NULL;
         h_Lsi = NULL;
         d_Lsi = NULL;
-        h_Map = NULL;
         d_Map = NULL;
 
 #pragma omp critical (leafQueue)
@@ -2277,7 +2276,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 for ( int i = 0; i < isize; i++ )
                     h_Lsi[i] = Lsi[i];
                 cudaMemcpyAsync ( d_Lsi, h_Lsi, isize * sizeof(Long), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                h_Map = h_Lsi + isize;
                 d_Map = d_Lsi + isize;
             }
         }
@@ -2959,7 +2957,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         node_size_queue = NULL;
         h_Lsi = NULL;
         d_Lsi = NULL;
-        h_Map = NULL;
         d_Map = NULL;
 
         omp_unset_lock ( &( gpu_info->gpuLock ) );
