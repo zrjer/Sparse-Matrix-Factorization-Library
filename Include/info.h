@@ -21,9 +21,6 @@ struct common_info_struct
 
     int numSparseMatrix;
 
-    int AMultiple;
-    int BMultiple;
-    int BCMultiple;
     size_t devSlotSize;
 
     double allocateTime;
@@ -43,6 +40,15 @@ struct gpu_info_struct
     size_t hostMemSize;
 
     size_t sharedMemSize;
+
+    void *h_A[A_MULTIPLE];
+    void *h_B[B_MULTIPLE];
+    void *h_Ls;
+
+    void *d_A[A_MULTIPLE+1];
+    void *d_B[B_MULTIPLE];
+    void *d_C[C_MULTIPLE];
+    void *d_Ls;
 
     cudaEvent_t d_cudaEvent_onDevice[MAX_D_STREAM];
     cudaEvent_t d_cudaEvent_applied[MAX_D_STREAM];

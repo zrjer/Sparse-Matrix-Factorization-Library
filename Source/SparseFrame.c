@@ -19,7 +19,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     size_t minDevMemSize, minHostMemSize;
 
-    int AMultiple, BMultiple, BCMultiple;
     size_t devSlotSize;
 
 #ifdef PRINT_CALLS
@@ -62,13 +61,6 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
 
     if ( *gpu_info_list_ptr == NULL ) return 1;
 
-    AMultiple = A_MULTIPLE;
-    BMultiple = B_MULTIPLE;
-    BCMultiple = BC_MULTIPLE;
-    common_info->AMultiple = AMultiple;
-    common_info->BMultiple = BMultiple;
-    common_info->BCMultiple = BCMultiple;
-
     minDevMemSize = ( numGPU_physical > 0 ) ? SIZE_MAX : 0;
     minHostMemSize = ( numGPU_physical > 0 ) ? SIZE_MAX : 0;
 
@@ -89,10 +81,10 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
         devMemSize = prop.totalGlobalMem;
         devMemSize = ( size_t ) ( ( ( double ) devMemSize - 64 * ( 0x400 * 0x400 ) ) * 0.9 );
         devMemSize /= numSplit;
-        devMemSize /= ( AMultiple + BCMultiple + 1 );
+        devMemSize /= ( A_MULTIPLE + 1 + B_MULTIPLE + C_MULTIPLE );
         devMemSize = devMemSize - devMemSize % ( 0x400 * 0x400 ); // align to 1 MB
-        hostMemSize = devMemSize * ( AMultiple + BMultiple );
-        devMemSize = devMemSize * ( AMultiple + BCMultiple + 1 );
+        hostMemSize = devMemSize * ( A_MULTIPLE + B_MULTIPLE );
+        devMemSize = devMemSize * ( A_MULTIPLE + 1 + B_MULTIPLE + C_MULTIPLE );
 
         for ( int gpuIndex = gpuIndex_physical; gpuIndex < numGPU; gpuIndex += numGPU_physical )
         {
@@ -199,8 +191,52 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
     common_info->minDevMemSize = minDevMemSize;
     common_info->minHostMemSize = minHostMemSize;
 
-    devSlotSize = ( common_info->minDevMemSize ) / ( AMultiple + BCMultiple + 1 );
+    devSlotSize = ( common_info->minDevMemSize ) / ( A_MULTIPLE + 1 + B_MULTIPLE + C_MULTIPLE );
     common_info->devSlotSize = devSlotSize;
+
+    for ( int gpuIndex = 0; gpuIndex < numGPU; gpuIndex++ )
+    {
+        for ( int k = 0; k < A_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].h_A[k] = (*gpu_info_list_ptr)[gpuIndex].hostMem + k * devSlotSize;
+
+        for ( int k = 0; k < B_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].h_B[k] = (*gpu_info_list_ptr)[gpuIndex].hostMem + ( A_MULTIPLE + k ) * devSlotSize;
+
+        (*gpu_info_list_ptr)[gpuIndex].h_Ls = (*gpu_info_list_ptr)[gpuIndex].hostMem + ( A_MULTIPLE + B_MULTIPLE ) * devSlotSize;
+
+        for ( int k = 0; k < A_MULTIPLE + 1; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].d_A[k] = (*gpu_info_list_ptr)[gpuIndex].devMem + k * devSlotSize;
+
+        for ( int k = 0; k < B_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].d_B[k] = (*gpu_info_list_ptr)[gpuIndex].devMem + ( A_MULTIPLE + 1 + k ) * devSlotSize;
+
+        for ( int k = 0; k < C_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].d_C[k] = (*gpu_info_list_ptr)[gpuIndex].devMem + ( A_MULTIPLE + 1 + B_MULTIPLE + k ) * devSlotSize;
+
+        (*gpu_info_list_ptr)[gpuIndex].d_Ls = (*gpu_info_list_ptr)[gpuIndex].devMem + ( A_MULTIPLE + 1 + B_MULTIPLE + C_MULTIPLE ) * devSlotSize;
+    }
+
+    for ( int gpuIndex = numGPU; gpuIndex < numGPU + numCPU; gpuIndex++ )
+    {
+        for ( int k = 0; k < A_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].h_A[k] = NULL;
+
+        for ( int k = 0; k < B_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].h_B[k] = NULL;
+
+        (*gpu_info_list_ptr)[gpuIndex].h_Ls = NULL;
+
+        for ( int k = 0; k < A_MULTIPLE + 1; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].d_A[k] = NULL;
+
+        for ( int k = 0; k < B_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].d_B[k] = NULL;
+
+        for ( int k = 0; k < C_MULTIPLE; k++ )
+            (*gpu_info_list_ptr)[gpuIndex].d_C[k] = NULL;
+
+        (*gpu_info_list_ptr)[gpuIndex].d_Ls = NULL;
+    }
 
     for ( int gpuIndex = numGPU; gpuIndex < numGPU + numCPU; gpuIndex++ )
     {
@@ -2064,9 +2100,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 {
     int numCPU, numGPU, numGPU_physical;
 
-    int AMultiple, BCMultiple;
-    size_t devSlotSize, devASize;
-
     int isComplex;
     Long nrow;
     Long *Lp, *Li;
@@ -2098,12 +2131,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     numCPU = common_info->numCPU;
     numGPU = common_info->numGPU;
     numGPU_physical = common_info->numGPU_physical;
-
-    AMultiple = common_info->AMultiple;
-    BCMultiple = common_info->BCMultiple;
-
-    devSlotSize = common_info->devSlotSize;
-    devASize = AMultiple * devSlotSize;
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
@@ -2181,12 +2208,18 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
 #pragma omp parallel num_threads( numGPU + numCPU )
     {
+        int gpuIndex;
+
         Long leafQueueIndex;
         Long *Map, *RelativeMap;
         Float *C;
         struct node_size_struct *node_size_queue;
 
         Long st_last, stPass;
+
+        gpuIndex = omp_get_thread_num();
+
+        omp_set_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
 
         Map = NULL;
         RelativeMap = NULL;
@@ -2217,8 +2250,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
         while ( leafQueueIndex < nsuper )
         {
-            int gpuIndex;
-
             Long s, nscol, nsrow;
             Long sn, sm, slda;
 
@@ -2230,10 +2261,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             sn = nscol;
             sm = nsrow - nscol;
             slda = sn + sm;
-
-            gpuIndex = 0;
-            while ( omp_test_lock ( &( gpu_info_list[gpuIndex].gpuLock ) ) == FALSE )
-                gpuIndex = ( gpuIndex + 1 ) % ( numGPU + numCPU );
 
             if ( gpuIndex < numGPU )
             {
@@ -2307,13 +2334,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         A = (Float*) Lsx + Lsxp[s];
                     else
                         A = (Complex*) Lsx + Lsxp[s];
-                    h_A = gpu_info->hostMem + Aoffset[s];
-                    d_A = gpu_info->devMem + Aoffset[s];
-                    d_A_ = gpu_info->devMem + devSlotSize + Aoffset[s];
-                    d_A_reserve = gpu_info->devMem + ( AMultiple + BCMultiple ) * devSlotSize + Aoffset[s];
+                    h_A = gpu_info->h_A[0] + Aoffset[s];
+                    d_A = gpu_info->d_A[0] + Aoffset[s];
+                    d_A_ = gpu_info->d_A[1] + Aoffset[s];
+                    d_A_reserve = gpu_info->d_A[2] + Aoffset[s];
 
-                    d_info = gpu_info->devMem + devASize;
-                    d_workspace = gpu_info->devMem + devASize + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
+                    d_info = gpu_info->d_B[0];
+                    d_workspace = gpu_info->d_B[0] + MAX ( sizeof(int), MAX ( sizeof(Float), sizeof(Complex) ) );
 
                     GPUSerial[s] = gpuIndex;
 
@@ -2342,13 +2369,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                     if (!isComplex)
                                     {
-                                        h_R = (Float*) ( gpu_info->hostMem + Aoffset[d] ) + lpos;
-                                        d_R = (Float*) ( gpu_info->devMem + Aoffset[d] ) + lpos;
+                                        h_R = (Float*) ( gpu_info->h_A[0] + Aoffset[d] ) + lpos;
+                                        d_R = (Float*) ( gpu_info->d_A[0] + Aoffset[d] ) + lpos;
                                     }
                                     else
                                     {
-                                        h_R = (Complex*) ( gpu_info->hostMem + Aoffset[d] ) + lpos;
-                                        d_R = (Complex*) ( gpu_info->devMem + Aoffset[d] ) + lpos;
+                                        h_R = (Complex*) ( gpu_info->h_A[0] + Aoffset[d] ) + lpos;
+                                        d_R = (Complex*) ( gpu_info->d_A[0] + Aoffset[d] ) + lpos;
                                     }
 
                                     if ( !isComplex )
@@ -2462,19 +2489,19 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 dlda = dn + dm;
                                 dldc = dn + dm;
 
-                                d_C = gpu_info->devMem + devASize + ( stream_index + MAX_D_STREAM ) * devSlotSize;
+                                d_C = gpu_info->d_C[stream_index];
 
                                 if ( GPUSerial[d] == gpuIndex && NodeLocation[d] == NODE_LOCATION_GPU )
                                 {
                                     void *d_R;
 
                                     if (!isComplex)
-                                        d_R = (Float*) ( gpu_info->devMem + Aoffset[d] ) + lpos;
+                                        d_R = (Float*) ( gpu_info->d_A[0] + Aoffset[d] ) + lpos;
                                     else
-                                        d_R = (Complex*) ( gpu_info->devMem + Aoffset[d] ) + lpos;
+                                        d_R = (Complex*) ( gpu_info->d_A[0] + Aoffset[d] ) + lpos;
 
-                                    h_RelativeMap = gpu_info->hostMem + devSlotSize + Moffset[d];
-                                    d_RelativeMap = gpu_info->devMem + Moffset[d];
+                                    h_RelativeMap = gpu_info->h_A[1] + Moffset[d];
+                                    d_RelativeMap = gpu_info->d_A[0] + Moffset[d];
 
                                     if (!isComplex)
                                         cublasDsyrk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_R, ndrow, zero, d_C, dldc);
@@ -2502,8 +2529,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 {
                                     void *h_B, *d_B;
 
-                                    h_B = gpu_info->hostMem + devASize + stream_index * devSlotSize;
-                                    d_B = gpu_info->devMem + devASize + stream_index * devSlotSize;
+                                    h_B = gpu_info->h_B[stream_index];
+                                    d_B = gpu_info->d_B[stream_index];
 
                                     if ( !isComplex )
                                     {
@@ -2836,8 +2863,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nscol, nsrow, sn, sm, slda, C );
             }
 
-            omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
-
             Lpos[s] = Super[s+1] - Super[s];
 
             if ( nscol < nsrow )
@@ -2876,6 +2901,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         RelativeMap = NULL;
         C = NULL;
         node_size_queue = NULL;
+
+        omp_unset_lock ( &( gpu_info_list[gpuIndex].gpuLock ) );
     }
 
     return 0;

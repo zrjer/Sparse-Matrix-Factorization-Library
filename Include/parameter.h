@@ -101,7 +101,7 @@ Long get_node_score ( const struct node_size_struct *node )
 
 #define A_MULTIPLE (2) // must be at least 2
 #define B_MULTIPLE MAX_D_STREAM
-#define BC_MULTIPLE ( 2 * MAX_D_STREAM )
+#define C_MULTIPLE MAX_D_STREAM
 
 #define CUDA_BLOCKDIM_X (16)
 #define CUDA_BLOCKDIM_Y (24)
