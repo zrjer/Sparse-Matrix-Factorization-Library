@@ -19,24 +19,44 @@ __device__ double atomicAdd(double* address, double val)
 }
 #endif
 
-__global__ void createRelativeMap_kernel ( Long *d_RelativeMap, Long di_offset, Long *d_Map, Long *d_Lsi, Long dip_offset, Long ldd )
+__global__ void createMap_kernel ( Long *d_Map, Long *d_Lsi, Long sip_offset, Long lds )
+{
+    Long si;
+
+    si = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if ( si < lds )
+        d_Map [ d_Lsi [ sip_offset + si ] ] = si;
+}
+
+void createMap ( Long *d_Map, Long *d_Lsi, Long sip_offset, Long lds, cudaStream_t stream )
+{
+    dim3 block, thread;
+
+    thread.x = CUDA_BLOCKDIM_X * CUDA_BLOCKDIM_Y;
+    block.x = ( lds + thread.x - 1 ) / thread.x;
+
+    createMap_kernel <<< block, thread, 0, stream >>> ( d_Map, d_Lsi, sip_offset, lds );
+}
+
+__global__ void createRelativeMap_kernel ( Long *d_RelativeMap, Long *d_Map, Long *d_Lsi, Long dip_offset, Long ldd )
 {
     Long di;
 
-    di = di_offset + blockIdx.x * blockDim.x + threadIdx.x;
+    di = blockIdx.x * blockDim.x + threadIdx.x;
 
     if ( di < ldd )
         d_RelativeMap[di] = d_Map [ d_Lsi [ dip_offset + di ] ];
 }
 
-void createRelativeMap ( Long *d_RelativeMap, Long di_offset, Long *d_Map, Long *d_Lsi, Long dip_offset, Long ldd, cudaStream_t stream )
+void createRelativeMap ( Long *d_RelativeMap, Long *d_Map, Long *d_Lsi, Long dip_offset, Long ldd, cudaStream_t stream )
 {
     dim3 block, thread;
 
     thread.x = CUDA_BLOCKDIM_X * CUDA_BLOCKDIM_Y;
     block.x = ( ldd + thread.x - 1 ) / thread.x;
 
-    createRelativeMap_kernel <<< block, thread, 0, stream >>> ( d_RelativeMap, di_offset, d_Map, d_Lsi, dip_offset, ldd );
+    createRelativeMap_kernel <<< block, thread, 0, stream >>> ( d_RelativeMap, d_Map, d_Lsi, dip_offset, ldd );
 }
 
 __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap )

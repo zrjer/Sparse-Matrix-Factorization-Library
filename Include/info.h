@@ -43,17 +43,19 @@ struct gpu_info_struct
 
     void *h_A[A_MULTIPLE];
     void *h_B[B_MULTIPLE];
-    void *h_Ls;
+    void *h_Lsi;
 
     void *d_A[A_MULTIPLE+1];
     void *d_B[B_MULTIPLE];
     void *d_C[C_MULTIPLE];
-    void *d_Ls;
+    void *d_Lsi;
 
+    cudaEvent_t s_cudaEvent_factorized;
     cudaEvent_t d_cudaEvent_onDevice[MAX_D_STREAM];
     cudaEvent_t d_cudaEvent_applied[MAX_D_STREAM];
 
     cudaStream_t s_cudaStream;
+    cudaStream_t s_cudaStream_copyback;
     cudaStream_t d_cudaStream[MAX_D_STREAM];
     cudaStream_t d_cudaStream_copy[MAX_D_STREAM];
 
