@@ -2806,10 +2806,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         else
                         {
                             const Long sjblock =
-                                ( nscol >= 64 * potrf_split_block ) ? ( 16 * potrf_split_block ) :
-                                ( nscol >= 32 * potrf_split_block ) ? (  8 * potrf_split_block ) :
-                                ( nscol >= 16 * potrf_split_block ) ? (  4 * potrf_split_block ) :
-                                ( nscol >=  8 * potrf_split_block ) ? (  2 * potrf_split_block ) : potrf_split_block;
+                                potrf_split_block;
                             Long sjl, sjr, sjl_last, sjr_last;
 
                             for ( sjl = 0; sjl < nscol; sjl += sjblock )
