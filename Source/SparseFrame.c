@@ -2301,13 +2301,14 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             {
                 int useCpuPotrf;
 
-                Long d_count, cpu_blas_count, gpu_blas_count;
+                Long d_count, cpu_blas_count, gpu_blas_count, gpu_blas_single_count;
 
                 useCpuPotrf = set_factorize_location ( nscol, nsrow );
 
                 d_count = 0;
                 cpu_blas_count = 0;
                 gpu_blas_count = 0;
+                gpu_blas_single_count = 0;
 
                 for ( Long d = Head[s]; d >= 0; d = Next[d] )
                 {
@@ -2338,7 +2339,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     if ( score < 0 )
                         cpu_blas_count++;
                     else
+                    {
                         gpu_blas_count++;
+                        if ( score > 0 )
+                            gpu_blas_single_count++;
+                    }
 
                     d_count++;
                 }
@@ -2504,9 +2509,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 Long dn, dm, dk, dlda, dldc;
 
                                 void *d_C;
-                                Long *h_RelativeMap, *d_RelativeMap;
 
                                 stream_index = ( d_index + stream_offset ) % MAX_D_STREAM;
+
+                                d_C = gpu_info->d_C[stream_index];
 
                                 d = node_size_queue[d_index].node;
 
@@ -2521,11 +2527,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 dlda = dn + dm;
                                 dldc = dn + dm;
 
-                                d_C = gpu_info->d_C[stream_index];
-
                                 if ( GPUSerial[d] == gpuIndex && NodeLocation[d] == NODE_LOCATION_GPU )
                                 {
                                     void *d_R;
+                                    Long *h_RelativeMap, *d_RelativeMap;
 
                                     if (!isComplex)
                                         d_R = (Float*) ( gpu_info->d_A[0] + Aoffset[d] ) + lpos;
@@ -2565,6 +2570,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 else
                                 {
                                     void *h_B, *d_B;
+                                    Long *h_RelativeMap, *d_RelativeMap;
 
                                     h_B = gpu_info->h_B[stream_index];
                                     d_B = gpu_info->d_B[stream_index];
