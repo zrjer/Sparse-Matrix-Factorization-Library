@@ -11,19 +11,18 @@
 
 #include <omp.h>
 
+#include <cblas.h>
+
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
+#include <cusolverDn.h>
+#include <cuda_profiler_api.h>
+
 #include <amd.h>
 #include <camd.h>
 #include <colamd.h>
 #include <ccolamd.h>
 #include <metis.h>
-
-#include <cuda_runtime.h>
-#include <cublas_v2.h>
-#include <cusolverDn.h>
-
-#include <cuda_profiler_api.h>
-
-#include <cblas.h>
 
 #include "extern.h"
 

@@ -3279,6 +3279,8 @@ int SparseFrame ( int argc, char **argv )
     int numSparseMatrix, nextMatrixIndex;
     int matrixThreadNum;
 
+    int ompThreadNum;
+
     struct common_info_struct common_info_object;
     struct common_info_struct *common_info = &common_info_object;
     struct gpu_info_struct *gpu_info_list;
@@ -3303,6 +3305,10 @@ int SparseFrame ( int argc, char **argv )
 #ifdef PRINT_INFO
     printf ("Num of matrices = %d\n\n", numSparseMatrix);
 #endif
+
+    ompThreadNum = MIN ( omp_get_max_threads(), OMP_THREAD_NUM );
+
+    openblas_set_num_threads ( ompThreadNum );
 
     SparseFrame_allocate_matrix ( common_info, &matrix_info_list );
 

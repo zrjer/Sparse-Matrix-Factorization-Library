@@ -9,6 +9,7 @@
 
 #define MATRIX_THREAD_NUM (2)
 
+#define OMP_THREAD_NUM (16)
 #define CP_NUM_THREAD (4)
 #define CP_THREAD_THRESHOLD (256)
 
