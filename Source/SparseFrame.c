@@ -2301,12 +2301,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             {
                 int useCpuPotrf;
 
-                Long d_count, cpu_blas_count, gpu_blas_count, gpu_blas_single_count;
+                Long d_count, gpu_blas_count, gpu_blas_single_count;
 
                 useCpuPotrf = set_factorize_location ( nscol, nsrow );
 
                 d_count = 0;
-                cpu_blas_count = 0;
                 gpu_blas_count = 0;
                 gpu_blas_single_count = 0;
 
@@ -2336,9 +2335,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     node_size_queue[d_count].k = dk;
                     score = set_node_score ( node_size_queue + d_count );
 
-                    if ( score < 0 )
-                        cpu_blas_count++;
-                    else
+                    if ( score >= 0 )
                     {
                         gpu_blas_count++;
                         if ( score > 0 )
@@ -2348,7 +2345,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     d_count++;
                 }
 
-                if ( cpu_blas_count >= d_count && useCpuPotrf )
+                if ( gpu_blas_count <= 0 && useCpuPotrf )
                 {
                     SparseFrame_cpuApplyFactorize ( isComplex, Lp, Li, Lx, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nscol, nsrow, sn, sm, slda, C );
 
@@ -2430,7 +2427,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         Map [ Lsi [ Lsip[s] + si ] ] = si;
                     }
 
-                    if ( d_Lsi_valid )
+                    if ( d_Lsi_valid && gpu_blas_count > 0 )
                         createMap ( d_Map, d_Lsi, Lsip[s], nsrow, gpu_info->s_cudaStream );
 
                     if ( !isComplex )
@@ -2459,7 +2456,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     if ( d_count > 0 )
                         qsort ( node_size_queue, d_count, sizeof(struct node_size_struct), SparseFrame_node_size_cmp );
 
-                    if ( cpu_blas_count >= d_count )
+                    if ( gpu_blas_count <= 0 )
                     {
                         while ( Head[s] >= 0 )
                         {
