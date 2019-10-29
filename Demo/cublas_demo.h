@@ -11,7 +11,7 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
-#define BATCH 16384
+#define BATCH (1 << 16)
 #define DIM_M 64
 #define DIM_N 64
 #define DIM_K 32

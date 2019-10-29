@@ -22,7 +22,7 @@ int main (int argc, char **argv)
     struct timespec tp;
     double timestamp, timeSingle, timeBatch, timeKernel, timeCPU;
 
-    FILE *file;
+    //FILE *file;
 
     size_A = k * ( n + m ) * sizeof(double);
     size_C = n * ( n + m ) * sizeof(double);
@@ -156,6 +156,7 @@ int main (int argc, char **argv)
         cudaMemcpy ( h_C, d_C, batch * size_C, cudaMemcpyDeviceToHost );
         memcpy ( C, h_C, batch * size_C );
 
+        /*
         file = fopen ( "cublas_demo_single.log", "w" );
 
         for ( int idx = 0; idx < batch; idx++ )
@@ -170,6 +171,7 @@ int main (int argc, char **argv)
         }
 
         fclose ( file );
+        */
     }
 
     {
@@ -201,6 +203,7 @@ int main (int argc, char **argv)
         cudaMemcpy ( h_C, d_C, batch * size_C, cudaMemcpyDeviceToHost );
         memcpy ( C, h_C, batch * size_C );
 
+        /*
         file = fopen ( "cublas_demo_batch.log", "w" );
 
         for ( int idx = 0; idx < batch; idx++ )
@@ -215,6 +218,7 @@ int main (int argc, char **argv)
         }
 
         fclose ( file );
+        */
     }
 
     {
@@ -241,6 +245,7 @@ int main (int argc, char **argv)
         cudaMemcpy ( h_C, d_C, batch * size_C, cudaMemcpyDeviceToHost );
         memcpy ( C, h_C, batch * size_C );
 
+        /*
         file = fopen ( "cublas_demo_kernel.log", "w" );
 
         for ( int idx = 0; idx < batch; idx++ )
@@ -255,6 +260,7 @@ int main (int argc, char **argv)
         }
 
         fclose ( file );
+        */
     }
 
     {
@@ -280,6 +286,7 @@ int main (int argc, char **argv)
 
         printf ("CPU: %lf sec rate: %lf\n", timeCPU, timeCPU / timeSingle);
 
+        /*
         file = fopen ( "cublas_demo_kernel.log", "w" );
 
         for ( int idx = 0; idx < batch; idx++ )
@@ -294,6 +301,7 @@ int main (int argc, char **argv)
         }
 
         fclose ( file );
+        */
     }
 
     return 0;
