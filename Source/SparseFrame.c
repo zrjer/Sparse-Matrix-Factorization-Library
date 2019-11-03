@@ -102,6 +102,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                     (*gpu_info_list_ptr)[gpuIndex].hostMemSize = hostMemSize;
                     (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = sharedMemSize;
 
+                    cudaEventCreateWithFlags ( &( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice ), cudaEventDisableTiming );
                     cudaEventCreateWithFlags ( &( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_factorized ), cudaEventDisableTiming );
                     for ( int k = 0; k < MAX_D_STREAM; k++ )
                     {
@@ -140,6 +141,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                     (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
                     (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
                     (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
+                    (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
                     (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_factorized = 0;
                     for ( int k = 0; k < MAX_D_STREAM; k++ )
                     {
@@ -168,6 +170,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
                 (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
                 (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
                 (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
+                (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
                 (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_factorized = 0;
                 for ( int k = 0; k < MAX_D_STREAM; k++ )
                 {
@@ -252,6 +255,7 @@ int SparseFrame_allocate_gpu ( struct common_info_struct *common_info, struct gp
         (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
         (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
         (*gpu_info_list_ptr)[gpuIndex].sharedMemSize = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
         (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_factorized = 0;
         for ( int k = 0; k < MAX_D_STREAM; k++ )
         {
@@ -307,6 +311,8 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
             cudaFree ( (*gpu_info_list_ptr)[gpuIndex].devMem );
         if ( (*gpu_info_list_ptr)[gpuIndex].hostMem != NULL )
             cudaFreeHost ( (*gpu_info_list_ptr)[gpuIndex].hostMem );
+        if ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice != 0 )
+            cudaEventDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice );
         if ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_factorized != 0 )
             cudaEventDestroy ( (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_factorized );
         for ( int k = 0; k < MAX_D_STREAM; k++ )
@@ -339,6 +345,7 @@ int SparseFrame_free_gpu ( struct common_info_struct *common_info, struct gpu_in
         (*gpu_info_list_ptr)[gpuIndex].devMemSize = 0;
         (*gpu_info_list_ptr)[gpuIndex].hostMem = NULL;
         (*gpu_info_list_ptr)[gpuIndex].hostMemSize = 0;
+        (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_onDevice = 0;
         (*gpu_info_list_ptr)[gpuIndex].s_cudaEvent_factorized = 0;
         for ( int k = 0; k < MAX_D_STREAM; k++ )
         {
@@ -2111,7 +2118,7 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
 
 int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, struct gpu_info_struct *gpu_info_list, struct matrix_info_struct *matrix_info )
 {
-    int numCPU, numGPU, numGPU_physical;
+    int numCPU, numGPU;
 
     int isComplex;
     Long nrow;
@@ -2145,7 +2152,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     numCPU = common_info->numCPU;
     numGPU = common_info->numGPU;
-    numGPU_physical = common_info->numGPU_physical;
 
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
@@ -2355,7 +2361,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                 {
                     Long st;
 
-                    void *A, *h_A, *d_A, *d_A_, *d_A_reserve;
+                    void *A, *h_A, *h_A_reserve, *d_A, *d_A_, *d_A_reserve;
 
                     int devWorkSize;
                     Float *d_workspace;
@@ -2366,6 +2372,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     else
                         A = (Complex*) Lsx + Lsxp[s];
                     h_A = gpu_info->h_A[0] + Aoffset[s];
+                    h_A_reserve = gpu_info->h_A[1] + Aoffset[s];
                     d_A = gpu_info->d_A[0] + Aoffset[s];
                     d_A_ = gpu_info->d_A[1] + Aoffset[s];
                     d_A_reserve = gpu_info->d_A[2] + Aoffset[s];
@@ -2431,9 +2438,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         createMap ( d_Map, d_Lsi, Lsip[s], nsrow, gpu_info->s_cudaStream );
 
                     if ( !isComplex )
-                        memset ( h_A, 0, nscol * nsrow * sizeof(Float) );
+                        memset ( h_A_reserve, 0, nscol * nsrow * sizeof(Float) );
                     else
-                        memset ( h_A, 0, nscol * nsrow * sizeof(Complex) );
+                        memset ( h_A_reserve, 0, nscol * nsrow * sizeof(Complex) );
 
 #pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
                     for ( Long j = Super[s]; j < Super[s+1]; j++ )
@@ -2444,11 +2451,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             Long i = Li[p];
                             Long si = Map[i];
                             if ( !isComplex )
-                                ( (Float*) h_A ) [ sj * nsrow + si ] = Lx[p];
+                                ( (Float*) h_A_reserve ) [ sj * nsrow + si ] = Lx[p];
                             else
                             {
-                                ( (Complex*) h_A ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
-                                ( (Complex*) h_A ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
+                                ( (Complex*) h_A_reserve ) [ sj * nsrow + si ].x = ( (Complex*) Lx )[p].x;
+                                ( (Complex*) h_A_reserve ) [ sj * nsrow + si ].y = ( (Complex*) Lx )[p].y;
                             }
                         }
                     }
@@ -2465,13 +2472,13 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             d = Head[s];
                             Head[s] = Next[d];
 
-                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, C );
+                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A_reserve, d, C );
                         }
 
                         if ( !isComplex )
-                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                            cudaMemcpyAsync ( d_A, h_A_reserve, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                         else
-                            cudaMemcpyAsync ( d_A, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                            cudaMemcpyAsync ( d_A, h_A_reserve, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                     }
                     else
                     {
@@ -2484,9 +2491,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         else
                             cudaMemsetAsync ( d_A_, 0, nscol * nsrow * sizeof(Complex), gpu_info->s_cudaStream );
 
-                        qsort ( node_size_queue, MIN ( gpu_blas_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
+                        cudaEventRecord ( gpu_info->s_cudaEvent_onDevice, gpu_info->s_cudaStream );
 
-                        cudaStreamSynchronize ( gpu_info->s_cudaStream );
+                        qsort ( node_size_queue, MIN ( gpu_blas_count, MAX_D_STREAM ), sizeof(struct node_size_struct), SparseFrame_node_size_cmp_reverse );
 
                         for ( Long d_index = 0; d_index < gpu_blas_count; d_index++ )
                         {
@@ -2534,7 +2541,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     else
                                         d_R = (Complex*) ( gpu_info->d_A[0] + Aoffset[d] ) + lpos;
 
-                                    h_RelativeMap = gpu_info->h_A[1] + Moffset[d];
+                                    h_RelativeMap = gpu_info->h_A[0] + Moffset[d];
                                     d_RelativeMap = gpu_info->d_A[0] + Moffset[d];
 
                                     if (!isComplex)
@@ -2561,6 +2568,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     }
                                     else
                                         createRelativeMap ( d_RelativeMap, d_Map, d_Lsi, Lsip[d] + lpos, ndrow - lpos, gpu_info->d_cudaStream[stream_index] );
+
+                                    if ( d_index < MAX_D_STREAM )
+                                        cudaStreamWaitEvent ( gpu_info->d_cudaStream[stream_index], gpu_info->s_cudaEvent_onDevice, 0 );
 
                                     mappedSubtract ( TRUE, isComplex, d_A_, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[stream_index] );
                                 }
@@ -2673,27 +2683,19 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                     d = node_size_queue[d_index_small].node;
 
-                                    SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, C );
+                                    SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A_reserve, d, C );
                                 }
                                 else if ( d_index_small == gpu_blas_count )
                                 {
                                     d_index_small--;
 
                                     if ( !isComplex )
-                                        cudaMemcpyAsync ( d_A_reserve, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                                        cudaMemcpyAsync ( d_A_reserve, h_A_reserve, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                                     else
-                                        cudaMemcpyAsync ( d_A_reserve, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                                        cudaMemcpyAsync ( d_A_reserve, h_A_reserve, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                                 }
                             }
                         }
-
-                        if ( numGPU > numGPU_physical )
-                        {
-                            for ( int index = 0; index < MAX_D_STREAM; index++ )
-                                cudaStreamSynchronize ( gpu_info->d_cudaStream[index] );
-                        }
-                        else
-                            cudaDeviceSynchronize();
 
                         while ( d_index_small > gpu_blas_count )
                         {
@@ -2703,16 +2705,19 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                             d = node_size_queue[d_index_small].node;
 
-                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A, d, C );
+                            SparseFrame_cpuApply ( isComplex, SuperMap, Super, Lsip, Lsi, Lsxp, Lsx, Head, Next, Lpos, Map, RelativeMap, s, nsrow, h_A_reserve, d, C );
                         }
 
                         if ( d_index_small == gpu_blas_count )
                         {
                             if ( !isComplex )
-                                cudaMemcpyAsync ( d_A_reserve, h_A, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                                cudaMemcpyAsync ( d_A_reserve, h_A_reserve, nscol * nsrow * sizeof(Float), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                             else
-                                cudaMemcpyAsync ( d_A_reserve, h_A, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                                cudaMemcpyAsync ( d_A_reserve, h_A_reserve, nscol * nsrow * sizeof(Complex), cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                         }
+
+                        for ( int index = 0; index < MAX_D_STREAM; index++ )
+                            cudaStreamWaitEvent ( gpu_info->s_cudaStream, gpu_info->d_cudaEvent_applied[index], 0 );
 
                         deviceSum ( isComplex, d_A, d_A_reserve, d_A_, nscol, nsrow, gpu_info->s_cudaStream );
 
@@ -2810,19 +2815,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 potrf_split_block;
                             Long sjl, sjr, sjl_last, sjr_last;
 
+                            sjl_last = 0;
+                            sjr_last = 0;
+
                             for ( sjl = 0; sjl < nscol; sjl += sjblock )
                             {
                                 sjr = MIN ( sjl + sjblock, nscol );
 
                                 if ( sjl > 0 )
                                 {
-                                    cudaStreamWaitEvent ( gpu_info->s_cudaStream_copyback, gpu_info->s_cudaEvent_factorized, 0 );
-
-                                    if ( !isComplex )
-                                        cudaMemcpy2DAsync ( (Float*) h_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Float), (Float*) d_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Float), ( nsrow - sjl_last ) * sizeof(Float), sjblock, cudaMemcpyDeviceToHost, gpu_info->s_cudaStream_copyback );
-                                    else
-                                        cudaMemcpy2DAsync ( (Complex*) h_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Complex), (Complex*) d_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Complex), ( nsrow - sjl_last ) * sizeof(Complex), sjblock, cudaMemcpyDeviceToHost, gpu_info->s_cudaStream_copyback );
-
                                     if (!isComplex)
                                         cublasDsyrk ( gpu_info->s_cublasHandle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, sjr - sjl, sjl, minus_one, (Float*) d_A + sjl, slda, one, (Float*) d_A + sjl * ( slda + 1 ), slda);
                                     else
@@ -2834,23 +2835,6 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             cublasDgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, nsrow - sjr, sjr - sjl, sjl, minus_one, (Float*) d_A + sjr, slda, (Float*) d_A + sjl, slda, one, (Float*) d_A + sjl * slda + sjr, slda );
                                         else
                                             cublasZgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_C, nsrow - sjr, sjr - sjl, sjl, (Complex*) minus_one, (Complex*) d_A + sjr, slda, (Complex*) d_A + sjl, slda, (Complex*) one, (Complex*) d_A + sjl * slda + sjr, slda );
-                                    }
-
-                                    cudaStreamSynchronize ( gpu_info->s_cudaStream_copyback );
-
-#pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(sjblock>=CP_THREAD_THRESHOLD)
-                                    for ( Long sj = sjl_last; sj < sjr_last; sj++ )
-                                    {
-                                        for ( Long si = sj; si < nsrow; si++ )
-                                        {
-                                            if ( !isComplex )
-                                                ( (Float*) A ) [ sj * nsrow + si ] = ( (Float*) h_A ) [ sj * nsrow + si ];
-                                            else
-                                            {
-                                                ( (Complex*) A ) [ sj * nsrow + si ].x = ( (Complex*) h_A ) [ sj * nsrow + si ].x;
-                                                ( (Complex*) A ) [ sj * nsrow + si ].y = ( (Complex*) h_A ) [ sj * nsrow + si ].y;
-                                            }
-                                        }
                                     }
                                 }
 
@@ -2871,6 +2855,33 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT, nsrow - sjr, sjr - sjl, one, (Float*) d_A + sjl * ( slda + 1 ), slda, (Float*) d_A + sjl * slda + sjr, slda );
                                     else
                                         cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_C, CUBLAS_DIAG_NON_UNIT, nsrow - sjr, sjr - sjl, (Complex*) one, (Complex*) d_A + sjl * ( slda + 1 ), slda, (Complex*) d_A + sjl * slda + sjr, slda );
+                                }
+
+                                if ( sjl > 0 )
+                                {
+                                    cudaStreamWaitEvent ( gpu_info->s_cudaStream_copyback, gpu_info->s_cudaEvent_factorized, 0 );
+
+                                    if ( !isComplex )
+                                        cudaMemcpy2DAsync ( (Float*) h_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Float), (Float*) d_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Float), ( nsrow - sjl_last ) * sizeof(Float), sjblock, cudaMemcpyDeviceToHost, gpu_info->s_cudaStream_copyback );
+                                    else
+                                        cudaMemcpy2DAsync ( (Complex*) h_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Complex), (Complex*) d_A + sjl_last * ( slda + 1 ), nsrow * sizeof(Complex), ( nsrow - sjl_last ) * sizeof(Complex), sjblock, cudaMemcpyDeviceToHost, gpu_info->s_cudaStream_copyback );
+
+                                    cudaStreamSynchronize ( gpu_info->s_cudaStream_copyback );
+
+#pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(sjblock>=CP_THREAD_THRESHOLD)
+                                    for ( Long sj = sjl_last; sj < sjr_last; sj++ )
+                                    {
+                                        for ( Long si = sj; si < nsrow; si++ )
+                                        {
+                                            if ( !isComplex )
+                                                ( (Float*) A ) [ sj * nsrow + si ] = ( (Float*) h_A ) [ sj * nsrow + si ];
+                                            else
+                                            {
+                                                ( (Complex*) A ) [ sj * nsrow + si ].x = ( (Complex*) h_A ) [ sj * nsrow + si ].x;
+                                                ( (Complex*) A ) [ sj * nsrow + si ].y = ( (Complex*) h_A ) [ sj * nsrow + si ].y;
+                                            }
+                                        }
+                                    }
                                 }
 
                                 cudaEventRecord ( gpu_info->s_cudaEvent_factorized, gpu_info->s_cudaStream );
