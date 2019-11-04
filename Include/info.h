@@ -50,7 +50,6 @@ struct gpu_info_struct
     void *d_C[C_MULTIPLE];
     void *d_Lsi;
 
-    cudaEvent_t s_cudaEvent_onDevice;
     cudaEvent_t s_cudaEvent_factorized;
     cudaEvent_t d_cudaEvent_onDevice[MAX_D_STREAM];
     cudaEvent_t d_cudaEvent_applied[MAX_D_STREAM];
