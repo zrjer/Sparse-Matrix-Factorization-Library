@@ -1,12 +1,11 @@
 include Config/SparseFrame.mk
 
 all:
-	( cd Lib ; $(MAKE) )
-	( cd Demo ; $(MAKE) )
-
-library:
-	( cd Lib ; $(MAKE) )
+	( cd Cholesky ; $(MAKE) )
+	( cd LU ; $(MAKE) )
+	( cd Misc ; $(MAKE) )
 
 clean:
-	( cd Lib ; $(MAKE) clean )
-	( cd Demo ; $(MAKE) clean )
+	( cd Cholesky ; $(MAKE) clean )
+	( cd LU ; $(MAKE) clean )
+	( cd Misc ; $(MAKE) clean )

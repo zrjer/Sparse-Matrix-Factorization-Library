@@ -1,4 +1,4 @@
-include ../Config/SparseFrame.mk
+include ../../Config/SparseFrame.mk
 
 LIBRARY = libSparseFrame
 
