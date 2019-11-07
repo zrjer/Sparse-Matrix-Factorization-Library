@@ -12,5 +12,5 @@
 *.so.*
 *.swp
 
-Demo/demo
-Demo/cublas_demo
+demo
+cublas_demo
