@@ -482,29 +482,39 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
     {
         if ( strcmp (*buf_ptr, "") != 0 )
         {
-            if ( nz >= nzmax )
+            n_scanned = sscanf ( *buf_ptr, "%ld %ld %lg %lg\n", &Ti, &Tj, &Tx, &Ty );
+            if ( n_scanned < 3 )
             {
-                printf ( "Error: nzmax exceeded\n" );
+                printf ( "Error: invalid matrix entry\n" );
                 return 1;
             }
-            n_scanned = sscanf ( *buf_ptr, "%ld %ld %lg %lg\n", &Ti, &Tj, &Tx, &Ty );
             if ( isComplex && n_scanned < 4 )
             {
                 printf ( "Error: imaginary part not present\n" );
                 return 1;
             }
-            matrix_info->Tj[nz] = Tj - 1;
-            matrix_info->Ti[nz] = Ti - 1;
-            if ( !isComplex )
-                matrix_info->Tx[nz] = Tx;
-            else
+            if ( Tx != 0 || ( n_scanned >= 4 && Ty != 0 ) )
             {
-                ( (Complex*) (matrix_info->Tx) )[nz].x = Tx;
-                ( (Complex*) (matrix_info->Tx) )[nz].y = Ty;
+                if ( nz >= nzmax )
+                {
+                    printf ( "Error: nzmax exceeded\n" );
+                    return 1;
+                }
+                matrix_info->Tj[nz] = Tj - 1;
+                matrix_info->Ti[nz] = Ti - 1;
+                if ( !isComplex )
+                    matrix_info->Tx[nz] = Tx;
+                else
+                {
+                    ( (Complex*) (matrix_info->Tx) )[nz].x = Tx;
+                    ( (Complex*) (matrix_info->Tx) )[nz].y = Ty;
+                }
+                nz++;
             }
-            nz++;
         }
     }
+
+    nzmax = nz;
 
     matrix_info->ncol = ncol;
     matrix_info->nrow = nrow;
