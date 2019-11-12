@@ -77,9 +77,8 @@ struct matrix_info_struct
 
     enum FactorizeType factorizeType;
 
-    int isComplex;
-
     int isSymmetric;
+    int isComplex;
 
     Long ncol;
     Long nrow;
@@ -108,7 +107,7 @@ struct matrix_info_struct
     enum PermMethod permMethod;
 
     Long *Perm;
-    Long *Pinv;
+    Long *Perm1;
 
     Long *Parent;
     Long *Post;
@@ -142,7 +141,9 @@ struct matrix_info_struct
     size_t *Moffset;
 
     void *workspace;
+    void *workspace1;
     size_t workSize;
+    size_t work1Size;
 
     Float residual;
 

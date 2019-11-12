@@ -409,7 +409,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 
     int n_scanned;
 
-    int isComplex, isSymmetric;
+    int isSymmetric, isComplex;
     Long ncol, nrow, nzmax;
     Long Tj, Ti;
     Float Tx, Ty;
@@ -459,11 +459,11 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 
 #ifdef PRINT_INFO
     printf ( "matrix %s is ", basename( (char*) ( matrix_info->path ) ) );
-    if ( !isComplex && isSymmetric )
+    if ( isSymmetric && !isComplex )
         printf ("real symmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
-    else if ( isComplex && isSymmetric )
+    else if ( isSymmetric && isComplex )
         printf ("complex symmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
-    else if ( !isComplex && !isSymmetric )
+    else if ( !isSymmetric && !isComplex )
         printf ("real unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
     else
         printf ("complex unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
@@ -609,7 +609,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Ux = NULL;
 
     matrix_info->Perm = NULL;
-    matrix_info->Pinv = NULL;
+    matrix_info->Perm1 = NULL;
     matrix_info->Post = NULL;
     matrix_info->Parent = NULL;
     matrix_info->ColCount = NULL;
@@ -642,6 +642,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
 
     matrix_info->workSize = 0;
     matrix_info->workspace = NULL;
+    matrix_info->workspace1 = NULL;
 
     matrix_info->Bx = NULL;
     matrix_info->Xx = NULL;
@@ -682,7 +683,9 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
                 ( 10 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(Long),
                 ( 3 * matrix_info->nrow + ( 2 * matrix_info->nzmax - matrix_info->nrow ) + 1 ) * sizeof(idx_t)
               );
+    matrix_info->work1Size = matrix_info->workSize;
     matrix_info->workspace = malloc ( matrix_info->workSize );
+    matrix_info->workspace1 = malloc ( matrix_info->work1Size );
 
     SparseFrame_compress ( matrix_info );
 
@@ -864,17 +867,21 @@ int SparseFrame_camd ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
 {
+    int isSymmetric;
     Long ncol, nrow;
     Long *Cp, *Ci;
-    Long *Perm;
+    Long *Perm, *Perm1;
 
-    idx_t *Mworkspace;
-    Long mnz;
+    idx_t *Mworkspace, *Mworkspace1;
+    Long mnz, mnz1;
     idx_t *Mp, *Mi, *Mperm, *Miperm;
+    idx_t *Mp1, *Mi1, *Mperm1, *Miperm1;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_metis================\n\n");
 #endif
+
+    isSymmetric = matrix_info->isSymmetric;
 
     ncol = matrix_info->ncol;
     nrow = matrix_info->nrow;
@@ -894,17 +901,45 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     Mp     = Mworkspace + 2 * nrow;
     Mi     = Mworkspace + 3 * nrow + 1;
 
+    if ( !isSymmetric )
+    {
+        Perm1 = matrix_info->Perm1;
+
+        Mworkspace1 = matrix_info->workspace1;
+
+        if ( sizeof(idx_t) == sizeof(Long) )
+            Mperm1 = (idx_t*) Perm1;
+        else
+            Mperm1  = Mworkspace1;
+        Miperm1 = Mworkspace1 + 1 * nrow;
+        Mp1     = Mworkspace1 + 2 * nrow;
+        Mi1     = Mworkspace1 + 3 * nrow + 1;
+    }
+
     memset ( Mp, 0, ( nrow + 1 ) * sizeof(idx_t) );
+    if ( !isSymmetric )
+        memset ( Mp1, 0, ( nrow + 1 ) * sizeof(idx_t) );
 
     for ( Long j = 0; j < ncol; j++ )
     {
         for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
             Long i = Ci[p];
-            if (i > j)
+            if ( !isSymmetric )
             {
-                Mp[i+1]++;
-                Mp[j+1]++;
+                if ( j != i )
+                {
+                    Mp[j+1]++;
+                    Mp1[i+1]++;
+                }
+            }
+            else
+            {
+                if ( j < i )
+                {
+                    Mp[j+1]++;
+                    Mp[i+1]++;
+                }
             }
         }
     }
@@ -915,18 +950,42 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     }
 
     mnz = Mp[nrow];
+    mnz1 = 0;
+
+    if ( !isSymmetric )
+    {
+        for ( Long i = 0; i < nrow; i++)
+        {
+            Mp1[i+1] += Mp1[i];
+        }
+
+        mnz1 = Mp1[nrow];
+    }
 
     memcpy ( Mworkspace, Mp, nrow * sizeof(idx_t) ); // Be careful of overwriting Mp
+    if ( !isSymmetric )
+        memcpy ( Mworkspace1, Mp1, nrow * sizeof(idx_t) ); // Be careful of overwriting Mp1
 
     for ( Long j = 0; j < ncol; j++ )
     {
         for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
             Long i = Ci[p];
-            if (i > j)
+            if ( !isSymmetric )
             {
-                Mi [ Mworkspace[i]++ ] = j;
-                Mi [ Mworkspace[j]++ ] = i;
+                if ( j != i )
+                {
+                    Mi [ Mworkspace[j]++ ] = i;
+                    Mi1 [ Mworkspace[i]++ ] = j;
+                }
+            }
+            else
+            {
+                if ( j < i )
+                {
+                    Mi [ Mworkspace[j]++ ] = i;
+                    Mi [ Mworkspace[i]++ ] = j;
+                }
             }
         }
     }
@@ -940,7 +999,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     }
     else
     {
-        METIS_NodeND ( (idx_t*) &nrow, Mp, Mi, NULL, NULL, Mperm, Miperm);
+        METIS_NodeND ( (idx_t*) &nrow, Mp, Mi, NULL, NULL, Mperm, Miperm );
     }
 
     if ( sizeof(idx_t) != sizeof(Long) )
@@ -951,12 +1010,35 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
         }
     }
 
+    if ( !isSymmetric )
+    {
+        if ( mnz1 == 0 )
+        {
+            for ( Long j = 0; j < nrow; j++ )
+            {
+                Mperm1[j] = j;
+            }
+        }
+        else
+        {
+            METIS_NodeND ( (idx_t*) &nrow, Mp1, Mi1, NULL, NULL, Mperm1, Miperm1 );
+        }
+
+        if ( sizeof(idx_t) != sizeof(Long) )
+        {
+            for ( Long j = 0; j < nrow; j++ )
+            {
+                Perm1[j] = Mperm1[j];
+            }
+        }
+    }
+
     return 0;
 }
 
 int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
 {
-    int isComplex;
+    int isSymmetric, isComplex;
     Long nrow;
     Long *Cp, *Ci;
     Float *Cx;
@@ -965,6 +1047,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Long *Up, *Ui;
     Float *Ux;
     Long *Perm, *Pinv;
+    Long *Perm1, *Pinv1;
 
     Long *Lworkspace, *Uworkspace;
 
@@ -972,6 +1055,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     printf ("\n================SparseFrame_perm================\n\n");
 #endif
 
+    isSymmetric = matrix_info->isSymmetric;
     isComplex = matrix_info->isComplex;
 
     nrow = matrix_info->nrow;
@@ -989,10 +1073,16 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Ux = matrix_info->Ux;
 
     Perm = matrix_info->Perm;
-    Pinv = matrix_info->Pinv;
+    Pinv = matrix_info->workspace;
 
-    Lworkspace = matrix_info->workspace;
-    Uworkspace = matrix_info->workspace + nrow * sizeof(Long);
+    if ( !isSymmetric )
+    {
+        Perm1 = matrix_info->Perm1;
+        Pinv1 = matrix_info->workspace + nrow * sizeof(Long);
+    }
+
+    Lworkspace = matrix_info->workspace + 2 * nrow * sizeof(Long);
+    Uworkspace = matrix_info->workspace + 3 * nrow * sizeof(Long);
 
     memset ( Lp, 0, ( nrow + 1 ) * sizeof(Long) );
     memset ( Up, 0, ( nrow + 1 ) * sizeof(Long) );
@@ -1009,6 +1099,21 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
             Pinv[ jold ] = j;
     }
 
+    if ( !isSymmetric )
+    {
+        for ( Long i = 0; i < nrow; i++ )
+        {
+            Pinv1[i] = -1;
+        }
+
+        for ( Long i = 0; i < nrow; i++ )
+        {
+            Long iold = Perm1[i];
+            if ( iold >= 0 )
+                Pinv1[ iold ] = i;
+        }
+    }
+
     for ( Long j = 0; j < nrow; j++ )
     {
         Long jold = Perm[j];
@@ -1017,18 +1122,38 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
             for ( Long pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
             {
                 Long iold = Ci[pold];
-                Long i = Pinv[iold];
+                if ( !isSymmetric )
+                {
+                    Long i = Pinv1[iold];
 
-                Lp [ MIN (i, j) + 1 ] ++;
-                Up [ MAX (i, j) + 1 ] ++;
+                    Lp [ j + 1 ] ++;
+                    Up [ i + 1 ] ++;
+                }
+                else
+                {
+                    Long i = Pinv[iold];
+
+                    Lp [ MIN (i, j) + 1 ] ++;
+                    Up [ MAX (i, j) + 1 ] ++;
+                }
             }
         }
     }
 
-    for ( Long j = 0; j < nrow; j++ )
+    if ( !isSymmetric )
     {
-        Lp[j+1] += Lp[j];
-        Up[j+1] += Up[j];
+        for ( Long j = 0; j < nrow; j++ )
+            Lp[j+1] += Lp[j];
+        for ( Long i = 0; i < nrow; i++ )
+            Up[i+1] += Up[i];
+    }
+    else
+    {
+        for ( Long j = 0; j < nrow; j++ )
+        {
+            Lp[j+1] += Lp[j];
+            Up[j+1] += Up[j];
+        }
     }
 
     memcpy ( Lworkspace, Lp, nrow * sizeof(Long) );
@@ -1044,22 +1169,42 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
                 Long lp, up;
 
                 Long iold = Ci[pold];
-                Long i = Pinv[iold];
+                if ( !isSymmetric )
+                {
+                    Long i = Pinv1[iold];
 
-                lp = Lworkspace [ MIN(i, j) ] ++;
-                Li[lp] = MAX(i, j);
-                if ( !isComplex )
-                    Lx[lp] = Cx[pold];
-                else
-                    ( (Complex*) Lx ) [lp] = ( (Complex*) Cx ) [pold];
+                    lp = Lworkspace [ j ] ++;
+                    Li[lp] = i;
+                    if ( !isComplex )
+                        Lx[lp] = Cx[pold];
+                    else
+                        ( (Complex*) Lx ) [lp] = ( (Complex*) Cx ) [pold];
 
-                Li[lp] = MAX(i, j);
-                up = Uworkspace [ MAX(i, j) ] ++;
-                Ui[up] = MIN(i, j);
-                if ( !isComplex )
-                    Ux[up] = Cx[pold];
+                    up = Uworkspace [ i ] ++;
+                    Ui[up] = j;
+                    if ( !isComplex )
+                        Ux[up] = Cx[pold];
+                    else
+                        ( (Complex*) Ux ) [up] = ( (Complex*) Cx ) [pold];
+                }
                 else
-                    ( (Complex*) Ux ) [up] = ( (Complex*) Cx ) [pold];
+                {
+                    Long i = Pinv[iold];
+
+                    lp = Lworkspace [ MIN(i, j) ] ++;
+                    Li[lp] = MAX(i, j);
+                    if ( !isComplex )
+                        Lx[lp] = Cx[pold];
+                    else
+                        ( (Complex*) Lx ) [lp] = ( (Complex*) Cx ) [pold];
+
+                    up = Uworkspace [ MAX(i, j) ] ++;
+                    Ui[up] = MIN(i, j);
+                    if ( !isComplex )
+                        Ux[up] = Cx[pold];
+                    else
+                        ( (Complex*) Ux ) [up] = ( (Complex*) Cx ) [pold];
+                }
             }
         }
     }
@@ -1069,7 +1214,9 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 {
+    int isSymmetric;
     Long nrow;
+    Long *Lp, *Li;
     Long *Up, *Ui;
     Long *Parent;
 
@@ -1080,8 +1227,12 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
     printf ("\n================SparseFrame_etree================\n\n");
 #endif
 
+    isSymmetric = matrix_info->isSymmetric;
+
     nrow = matrix_info->nrow;
 
+    Lp = matrix_info->Lp;
+    Li = matrix_info->Li;
     Up = matrix_info->Up;
     Ui = matrix_info->Ui;
 
@@ -1099,28 +1250,88 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     for ( Long j = 0; j < nrow; j++ )
     {
-        for ( Long p = Up[j]; p < Up[j+1]; p++ )
+        if ( !isSymmetric )
         {
-            Long i = Ui[p];
-            if ( i < j )
+            Long p0, p1;
+
+            p0 = Up[j];
+            p1 = Lp[j];
+
+            while ( ( p0 < Up[j+1] && Ui[p0] < j ) || ( p1 < Lp[j+1] && Li[p1] < j ) )
             {
-                Long ancestor;
-                do
+                Long i;
+
+                if ( Ui[p0] >= j )
+                    p0 = Up[j+1];
+                if ( Li[p1] >= j )
+                    p1 = Lp[j+1];
+
+                if ( p0 >= Up[j+1] )
                 {
-                    ancestor = Ancestor[i];
-                    if ( ancestor < 0 )
+                    i = Li[p1];
+                    p1++;
+                }
+                else if ( p1 >= Lp[j+1] )
+                {
+                    i = Ui[p0];
+                    p0++;
+                }
+                else
+                {
+                    i = MIN ( Ui[p0], Li[p1] );
+                    if ( i == Ui[p0] )
+                        p0++;
+                    if ( i == Li[p1] )
+                        p1++;
+                }
+
+                if ( i < j )
+                {
+                    Long ancestor;
+                    do
                     {
-                        Parent[i] = j;
-                        Ancestor[i] = j;
-                    }
-                    else if ( ancestor != j )
+                        ancestor = Ancestor[i];
+                        if ( ancestor < 0 )
+                        {
+                            Parent[i] = j;
+                            Ancestor[i] = j;
+                        }
+                        else if ( ancestor != j )
+                        {
+                            Ancestor[i] = j;
+                            i = ancestor;
+                        }
+                        else
+                            ancestor = -1;
+                    } while ( ancestor >= 0 );
+                }
+            }
+        }
+        else
+        {
+            for ( Long p = Up[j]; p < Up[j+1]; p++ )
+            {
+                Long i = Ui[p];
+                if ( i < j )
+                {
+                    Long ancestor;
+                    do
                     {
-                        Ancestor[i] = j;
-                        i = ancestor;
-                    }
-                    else
-                        ancestor = -1;
-                } while ( ancestor >= 0 );
+                        ancestor = Ancestor[i];
+                        if ( ancestor < 0 )
+                        {
+                            Parent[i] = j;
+                            Ancestor[i] = j;
+                        }
+                        else if ( ancestor != j )
+                        {
+                            Ancestor[i] = j;
+                            i = ancestor;
+                        }
+                        else
+                            ancestor = -1;
+                    } while ( ancestor >= 0 );
+                }
             }
         }
     }
@@ -1904,7 +2115,7 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
 {
     double timestamp;
 
-    int isComplex;
+    int isSymmetric, isComplex;
     Long nrow, nzmax;
 
 #ifdef PRINT_CALLS
@@ -1913,12 +2124,14 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
 
     timestamp = SparseFrame_time ();
 
+    isSymmetric = matrix_info->isSymmetric;
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
     nzmax = matrix_info->nzmax;
 
     matrix_info->Perm = malloc ( nrow * sizeof(Long) );
-    matrix_info->Pinv = malloc ( nrow * sizeof(Long) );
+    if ( ! isSymmetric )
+        matrix_info->Perm1 = malloc ( nrow * sizeof(Long) );
 
     //SparseFrame_amd ( matrix_info );
     //SparseFrame_camd ( matrix_info );
@@ -3249,7 +3462,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Ux != NULL ) free ( matrix_info->Ux );
 
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
-    if ( matrix_info->Pinv != NULL ) free ( matrix_info->Pinv );
+    if ( matrix_info->Perm1 != NULL ) free ( matrix_info->Perm1 );
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
@@ -3273,6 +3486,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Moffset != NULL ) free ( matrix_info->Moffset );
 
     if ( matrix_info->workspace != NULL ) free ( matrix_info->workspace );
+    if ( matrix_info->workspace1 != NULL ) free ( matrix_info->workspace1 );
 
     if ( matrix_info->Bx != NULL ) free ( matrix_info->Bx );
     if ( matrix_info->Xx != NULL ) free ( matrix_info->Xx );

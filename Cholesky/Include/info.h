@@ -77,9 +77,8 @@ struct matrix_info_struct
 
     enum FactorizeType factorizeType;
 
-    int isComplex;
-
     int isSymmetric;
+    int isComplex;
 
     Long ncol;
     Long nrow;
@@ -108,7 +107,6 @@ struct matrix_info_struct
     enum PermMethod permMethod;
 
     Long *Perm;
-    Long *Pinv;
 
     Long *Parent;
     Long *Post;

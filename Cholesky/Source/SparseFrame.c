@@ -409,7 +409,7 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 
     int n_scanned;
 
-    int isComplex, isSymmetric;
+    int isSymmetric, isComplex;
     Long ncol, nrow, nzmax;
     Long Tj, Ti;
     Float Tx, Ty;
@@ -459,11 +459,11 @@ int SparseFrame_read_matrix_triplet ( char **buf_ptr, struct matrix_info_struct 
 
 #ifdef PRINT_INFO
     printf ( "matrix %s is ", basename( (char*) ( matrix_info->path ) ) );
-    if ( !isComplex && isSymmetric )
+    if ( isSymmetric && !isComplex )
         printf ("real symmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
-    else if ( isComplex && isSymmetric )
+    else if ( isSymmetric && isComplex )
         printf ("complex symmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
-    else if ( !isComplex && !isSymmetric )
+    else if ( !isSymmetric && !isComplex )
         printf ("real unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
     else
         printf ("complex unsymmetric, ncol = %ld nrow = %ld nzmax = %ld\n\n", ncol, nrow, nzmax);
@@ -609,7 +609,6 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Ux = NULL;
 
     matrix_info->Perm = NULL;
-    matrix_info->Pinv = NULL;
     matrix_info->Post = NULL;
     matrix_info->Parent = NULL;
     matrix_info->ColCount = NULL;
@@ -901,10 +900,10 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
         for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
             Long i = Ci[p];
-            if (i > j)
+            if ( j < i )
             {
-                Mp[i+1]++;
                 Mp[j+1]++;
+                Mp[i+1]++;
             }
         }
     }
@@ -923,10 +922,10 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
         for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
             Long i = Ci[p];
-            if (i > j)
+            if ( j < i )
             {
-                Mi [ Mworkspace[i]++ ] = j;
                 Mi [ Mworkspace[j]++ ] = i;
+                Mi [ Mworkspace[i]++ ] = j;
             }
         }
     }
@@ -940,7 +939,7 @@ int SparseFrame_metis ( struct matrix_info_struct *matrix_info )
     }
     else
     {
-        METIS_NodeND ( (idx_t*) &nrow, Mp, Mi, NULL, NULL, Mperm, Miperm);
+        METIS_NodeND ( (idx_t*) &nrow, Mp, Mi, NULL, NULL, Mperm, Miperm );
     }
 
     if ( sizeof(idx_t) != sizeof(Long) )
@@ -989,10 +988,10 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Ux = matrix_info->Ux;
 
     Perm = matrix_info->Perm;
-    Pinv = matrix_info->Pinv;
+    Pinv = matrix_info->workspace;
 
-    Lworkspace = matrix_info->workspace;
-    Uworkspace = matrix_info->workspace + nrow * sizeof(Long);
+    Lworkspace = matrix_info->workspace + 2 * nrow * sizeof(Long);
+    Uworkspace = matrix_info->workspace + 3 * nrow * sizeof(Long);
 
     memset ( Lp, 0, ( nrow + 1 ) * sizeof(Long) );
     memset ( Up, 0, ( nrow + 1 ) * sizeof(Long) );
@@ -1053,7 +1052,6 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
                 else
                     ( (Complex*) Lx ) [lp] = ( (Complex*) Cx ) [pold];
 
-                Li[lp] = MAX(i, j);
                 up = Uworkspace [ MAX(i, j) ] ++;
                 Ui[up] = MIN(i, j);
                 if ( !isComplex )
@@ -1918,7 +1916,6 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
     nzmax = matrix_info->nzmax;
 
     matrix_info->Perm = malloc ( nrow * sizeof(Long) );
-    matrix_info->Pinv = malloc ( nrow * sizeof(Long) );
 
     //SparseFrame_amd ( matrix_info );
     //SparseFrame_camd ( matrix_info );
@@ -3249,7 +3246,6 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Ux != NULL ) free ( matrix_info->Ux );
 
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
-    if ( matrix_info->Pinv != NULL ) free ( matrix_info->Pinv );
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
