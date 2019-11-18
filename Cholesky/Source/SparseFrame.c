@@ -604,13 +604,13 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Lp = NULL;
     matrix_info->Li = NULL;
     matrix_info->Lx = NULL;
-    matrix_info->Up = NULL;
-    matrix_info->Ui = NULL;
-    matrix_info->Ux = NULL;
+    matrix_info->LTp = NULL;
+    matrix_info->LTi = NULL;
+    matrix_info->LTx = NULL;
 
     matrix_info->Perm = NULL;
-    matrix_info->Post = NULL;
     matrix_info->Parent = NULL;
+    matrix_info->Post = NULL;
     matrix_info->ColCount = NULL;
     matrix_info->RowCount = NULL;
 
@@ -635,6 +635,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->ST_Map = NULL;
     matrix_info->ST_Pointer = NULL;
     matrix_info->ST_Index = NULL;
+    matrix_info->ST_Parent = NULL;
 
     matrix_info->Aoffset = NULL;
     matrix_info->Moffset = NULL;
@@ -961,11 +962,11 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Float *Cx;
     Long *Lp, *Li;
     Float *Lx;
-    Long *Up, *Ui;
-    Float *Ux;
+    Long *LTp, *LTi;
+    Float *LTx;
     Long *Perm, *Pinv;
 
-    Long *Lworkspace, *Uworkspace;
+    Long *Lworkspace, *LTworkspace;
 
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_perm================\n\n");
@@ -983,18 +984,18 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     Li = matrix_info->Li;
     Lx = matrix_info->Lx;
 
-    Up = matrix_info->Up;
-    Ui = matrix_info->Ui;
-    Ux = matrix_info->Ux;
+    LTp = matrix_info->LTp;
+    LTi = matrix_info->LTi;
+    LTx = matrix_info->LTx;
 
     Perm = matrix_info->Perm;
     Pinv = matrix_info->workspace;
 
     Lworkspace = matrix_info->workspace + 2 * nrow * sizeof(Long);
-    Uworkspace = matrix_info->workspace + 3 * nrow * sizeof(Long);
+    LTworkspace = matrix_info->workspace + 3 * nrow * sizeof(Long);
 
     memset ( Lp, 0, ( nrow + 1 ) * sizeof(Long) );
-    memset ( Up, 0, ( nrow + 1 ) * sizeof(Long) );
+    memset ( LTp, 0, ( nrow + 1 ) * sizeof(Long) );
 
     for ( Long j = 0; j < nrow; j++ )
     {
@@ -1019,7 +1020,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
                 Long i = Pinv[iold];
 
                 Lp [ MIN (i, j) + 1 ] ++;
-                Up [ MAX (i, j) + 1 ] ++;
+                LTp [ MAX (i, j) + 1 ] ++;
             }
         }
     }
@@ -1027,11 +1028,11 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     for ( Long j = 0; j < nrow; j++ )
     {
         Lp[j+1] += Lp[j];
-        Up[j+1] += Up[j];
+        LTp[j+1] += LTp[j];
     }
 
     memcpy ( Lworkspace, Lp, nrow * sizeof(Long) );
-    memcpy ( Uworkspace, Up, nrow * sizeof(Long) );
+    memcpy ( LTworkspace, LTp, nrow * sizeof(Long) );
 
     for ( Long j = 0; j < nrow; j++ )
     {
@@ -1040,7 +1041,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
         {
             for ( Long pold = Cp[jold]; pold < Cp[jold+1]; pold++ )
             {
-                Long lp, up;
+                Long lp, ltp;
 
                 Long iold = Ci[pold];
                 Long i = Pinv[iold];
@@ -1052,12 +1053,12 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
                 else
                     ( (Complex*) Lx ) [lp] = ( (Complex*) Cx ) [pold];
 
-                up = Uworkspace [ MAX(i, j) ] ++;
-                Ui[up] = MIN(i, j);
+                ltp = LTworkspace [ MAX(i, j) ] ++;
+                LTi[ltp] = MIN(i, j);
                 if ( !isComplex )
-                    Ux[up] = Cx[pold];
+                    LTx[ltp] = Cx[pold];
                 else
-                    ( (Complex*) Ux ) [up] = ( (Complex*) Cx ) [pold];
+                    ( (Complex*) LTx ) [ltp] = ( (Complex*) Cx ) [pold];
             }
         }
     }
@@ -1068,7 +1069,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
 int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 {
     Long nrow;
-    Long *Up, *Ui;
+    Long *LTp, *LTi;
     Long *Parent;
 
     Long *workspace;
@@ -1080,8 +1081,8 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     nrow = matrix_info->nrow;
 
-    Up = matrix_info->Up;
-    Ui = matrix_info->Ui;
+    LTp = matrix_info->LTp;
+    LTi = matrix_info->LTi;
 
     Parent = matrix_info->Parent;
 
@@ -1097,9 +1098,9 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     for ( Long j = 0; j < nrow; j++ )
     {
-        for ( Long p = Up[j]; p < Up[j+1]; p++ )
+        for ( Long p = LTp[j]; p < LTp[j+1]; p++ )
         {
-            Long i = Ui[p];
+            Long i = LTi[p];
             if ( i < j )
             {
                 Long ancestor;
@@ -1360,7 +1361,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Long nrow;
 
-    Long *Up, *Ui;
+    Long *LTp, *LTi;
 
     Long *Perm, *Post, *Parent, *ColCount;
 
@@ -1406,8 +1407,8 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     nrow = matrix_info->nrow;
 
-    Up = matrix_info->Up;
-    Ui = matrix_info->Ui;
+    LTp = matrix_info->LTp;
+    LTi = matrix_info->LTi;
 
     Perm = matrix_info->Perm;
     Post = matrix_info->Post;
@@ -1680,9 +1681,9 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     {
         for ( Long j = Super[s]; j < Super[s+1]; j++ )
         {
-            for ( Long p = Up[j]; p < Up[j+1]; p++ )
+            for ( Long p = LTp[j]; p < LTp[j+1]; p++ )
             {
-                Long i = Ui[p];
+                Long i = LTi[p];
                 for ( Long sdescendant = SuperMap[i]; sdescendant >= 0 && Marker[sdescendant] <= j; sdescendant = Sparent[sdescendant] )
                 {
                     Lsi [ Lsip_copy[sdescendant]++ ] = j;
@@ -1928,12 +1929,12 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
     else
         matrix_info->Lx = malloc ( nzmax * sizeof(Complex) );
 
-    matrix_info->Up = malloc ( ( nrow + 1 ) * sizeof(Long) );
-    matrix_info->Ui = malloc ( nzmax * sizeof(Long) );
+    matrix_info->LTp = malloc ( ( nrow + 1 ) * sizeof(Long) );
+    matrix_info->LTi = malloc ( nzmax * sizeof(Long) );
     if ( !isComplex )
-        matrix_info->Ux = malloc ( nzmax * sizeof(Float) );
+        matrix_info->LTx = malloc ( nzmax * sizeof(Float) );
     else
-        matrix_info->Ux = malloc ( nzmax * sizeof(Complex) );
+        matrix_info->LTx = malloc ( nzmax * sizeof(Complex) );
 
     SparseFrame_perm ( matrix_info );
 
@@ -3241,9 +3242,9 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Li != NULL ) free ( matrix_info->Li );
     if ( matrix_info->Lx != NULL ) free ( matrix_info->Lx );
 
-    if ( matrix_info->Up != NULL ) free ( matrix_info->Up );
-    if ( matrix_info->Ui != NULL ) free ( matrix_info->Ui );
-    if ( matrix_info->Ux != NULL ) free ( matrix_info->Ux );
+    if ( matrix_info->LTp != NULL ) free ( matrix_info->LTp );
+    if ( matrix_info->LTi != NULL ) free ( matrix_info->LTi );
+    if ( matrix_info->LTx != NULL ) free ( matrix_info->LTx );
 
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
@@ -3348,46 +3349,48 @@ int SparseFrame ( int argc, char **argv )
 
         while ( matrixIndex < numSparseMatrix )
         {
+            struct matrix_info_struct *matrix_info = matrix_info_list + matrixThreadIndex;
+
             // Initialize
-            matrix_info_list[matrixThreadIndex].serial = matrixIndex;
-            SparseFrame_initialize_matrix ( matrix_info_list + matrixThreadIndex );
+            matrix_info->serial = matrixIndex;
+            SparseFrame_initialize_matrix ( matrix_info );
 
             // Read matrices
 
             path = argv [ 1 + matrixIndex ];
-            ( matrix_info_list + matrixThreadIndex )->path = path;
+            matrix_info->path = path;
 
-            SparseFrame_read_matrix ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_read_matrix ( matrix_info );
 
             // Analyze
 
-            SparseFrame_analyze ( common_info, matrix_info_list + matrixThreadIndex );
+            SparseFrame_analyze ( common_info, matrix_info );
 
             // Factorize
 
             cudaProfilerStart();
 
-            SparseFrame_factorize ( common_info, gpu_info_list, matrix_info_list + matrixThreadIndex );
+            SparseFrame_factorize ( common_info, gpu_info_list, matrix_info );
 
             cudaProfilerStop();
 
             // Validate
 
-            SparseFrame_validate ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_validate ( matrix_info );
 
             // Cleanup
 
-            SparseFrame_cleanup_matrix ( matrix_info_list + matrixThreadIndex );
+            SparseFrame_cleanup_matrix ( matrix_info );
 
             // Output
 
 #ifdef PRINT_INFO
             printf ( "Matrix name:    %s\n", basename ( (char*) path ) );
-            printf ( "Read time:      %lf\n", (matrix_info_list+matrixThreadIndex)->readTime );
-            printf ( "Analyze time:   %lf\n", (matrix_info_list+matrixThreadIndex)->analyzeTime );
-            printf ( "Factorize time: %lf\n", (matrix_info_list+matrixThreadIndex)->factorizeTime );
-            printf ( "Solve time:     %lf\n", (matrix_info_list+matrixThreadIndex)->solveTime );
-            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", (matrix_info_list+matrixThreadIndex)->residual );
+            printf ( "Read time:      %lf\n", matrix_info->readTime );
+            printf ( "Analyze time:   %lf\n", matrix_info->analyzeTime );
+            printf ( "Factorize time: %lf\n", matrix_info->factorizeTime );
+            printf ( "Solve time:     %lf\n", matrix_info->solveTime );
+            printf ( "residual (|Ax-b|)/(|A||x|+|b|): %le\n\n", matrix_info->residual );
 #endif
 
 #pragma omp critical ( nextMatrixIndex )

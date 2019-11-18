@@ -92,22 +92,32 @@ struct matrix_info_struct
     Long *Ci;
     Float *Cx;
 
+    Long *CTp;
+    Long *CTi;
+
+    Long nzCPCT;
+    Long *CPCTp;
+    Long *CPCTi;
+
     Long *Lp;
     Long *Li;
     Float *Lx;
+
+    Long *LTp;
+    Long *LTi;
+    Float *LTx;
 
     Long *Up;
     Long *Ui;
     Float *Ux;
 
-    Float *Bx;
-    Float *Xx;
-    Float *Rx;
+    Long *UTp;
+    Long *UTi;
+    Float *UTx;
 
     enum PermMethod permMethod;
 
     Long *Perm;
-    Long *Perm1;
 
     Long *Parent;
     Long *Post;
@@ -141,9 +151,11 @@ struct matrix_info_struct
     size_t *Moffset;
 
     void *workspace;
-    void *workspace1;
     size_t workSize;
-    size_t work1Size;
+
+    Float *Bx;
+    Float *Xx;
+    Float *Rx;
 
     Float residual;
 

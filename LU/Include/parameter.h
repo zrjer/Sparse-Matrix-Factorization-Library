@@ -3,7 +3,7 @@
 
 #include "macro.h"
 
-//#define PRINT_CALLS
+#define PRINT_CALLS
 //#define PRINT_DEBUG
 #define PRINT_INFO
 

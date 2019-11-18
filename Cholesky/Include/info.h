@@ -96,13 +96,9 @@ struct matrix_info_struct
     Long *Li;
     Float *Lx;
 
-    Long *Up;
-    Long *Ui;
-    Float *Ux;
-
-    Float *Bx;
-    Float *Xx;
-    Float *Rx;
+    Long *LTp;
+    Long *LTi;
+    Float *LTx;
 
     enum PermMethod permMethod;
 
@@ -141,6 +137,10 @@ struct matrix_info_struct
 
     void *workspace;
     size_t workSize;
+
+    Float *Bx;
+    Float *Xx;
+    Float *Rx;
 
     Float residual;
 
