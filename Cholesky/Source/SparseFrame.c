@@ -612,7 +612,6 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Parent = NULL;
     matrix_info->Post = NULL;
     matrix_info->ColCount = NULL;
-    matrix_info->RowCount = NULL;
 
     matrix_info->nsuper = 0;
     matrix_info->Super = NULL;
@@ -1240,7 +1239,7 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 {
     Long nrow;
     Long *Lp, *Li;
-    Long *Post, *Parent, *ColCount, *RowCount;
+    Long *Post, *Parent, *ColCount;
 
     Long *workspace;
     Long *Level, *First, *SetParent, *PrevLeaf, *PrevNbr;
@@ -1258,7 +1257,6 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     Parent = matrix_info->Parent;
 
     ColCount = matrix_info->ColCount;
-    RowCount = matrix_info->RowCount;
 
     workspace = matrix_info->workspace;
 
@@ -1296,7 +1294,6 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     {
         Long j = Post[k];
         ColCount[j] = 0;
-        RowCount[j] = 1;
     }
 
     for ( Long k = 0; k < nrow; k++ )
@@ -1327,7 +1324,6 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
                     }
                     ColCount[j]++;
                     ColCount[q]--;
-                    RowCount[i] += ( Level[j] - Level[q] );
                     PrevLeaf[i] = j;
                 }
                 PrevNbr[i] = k;
@@ -1947,7 +1943,6 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
     SparseFrame_postorder ( matrix_info );
 
     matrix_info->ColCount = malloc ( nrow * sizeof(Long) );
-    matrix_info->RowCount = malloc ( nrow * sizeof(Long) );
 
     SparseFrame_colcount ( matrix_info );
 
@@ -3250,7 +3245,6 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
-    if ( matrix_info->RowCount != NULL ) free ( matrix_info->RowCount );
 
     if ( matrix_info->Super != NULL ) free ( matrix_info->Super );
     if ( matrix_info->SuperMap != NULL ) free ( matrix_info->SuperMap );

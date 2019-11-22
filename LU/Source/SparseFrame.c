@@ -1268,6 +1268,53 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
         }
         else
         {
+            Long p, q;
+
+            p = LTp[j];
+            q = UTp[j];
+
+            while ( p < LTp[j+1] || q < UTp[j+1] )
+            {
+                Long i;
+
+                if ( q >= UTp[j+1] || ( p < LTp[j+1] && LTi[p] < UTi[q] ) )
+                {
+                    i = LTi[p];
+                    p++;
+                }
+                else if ( p >= LTp[j+1] || ( q < UTp[j+1] && LTi[p] > UTi[q] ) )
+                {
+                    i = UTi[q];
+                    q++;
+                }
+                else
+                {
+                    i = LTi[p];
+                    p++;
+                    q++;
+                }
+
+                if ( i < j )
+                {
+                    Long ancestor;
+                    do
+                    {
+                        ancestor = Ancestor[i];
+                        if ( ancestor < 0 )
+                        {
+                            Parent[i] = j;
+                            Ancestor[i] = j;
+                        }
+                        else if ( ancestor != j )
+                        {
+                            Ancestor[i] = j;
+                            i = ancestor;
+                        }
+                        else
+                            ancestor = -1;
+                    } while ( ancestor >= 0 );
+                }
+            }
         }
     }
 
@@ -1387,6 +1434,7 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 {
     Long nrow;
     Long *Lp, *Li;
+    Long *Up, *Ui;
     Long *Post, *Parent, *ColCount, *RowCount;
 
     Long *workspace;
@@ -1400,6 +1448,8 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
     Lp = matrix_info->Lp;
     Li = matrix_info->Li;
+    Up = matrix_info->Up;
+    Ui = matrix_info->Ui;
 
     Post = matrix_info->Post;
     Parent = matrix_info->Parent;
@@ -1457,10 +1507,34 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     for ( Long k = 0; k < nrow; k++ )
     {
         Long j = Post[k];
+        Long p, q;
+
         PrevNbr[j] = k;
-        for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
+
+        p = Lp[j];
+        q = Up[j];
+
+        while ( p < Lp[j+1] || q < Up[j+1] )
         {
-            Long i = Li[p];
+            Long i;
+
+            if ( q >= Up[j+1] || ( p < Lp[j+1] && Li[p] < Ui[q] ) )
+            {
+                i = Li[p];
+                p++;
+            }
+            else if ( p >= Lp[j+1] || ( q < Up[j+1] && Li[p] > Ui[q] ) )
+            {
+                i = Ui[q];
+                q++;
+            }
+            else
+            {
+                i = Li[p];
+                p++;
+                q++;
+            }
+
             if ( i > j )
             {
                 if ( First[j] > PrevNbr[i] )

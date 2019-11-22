@@ -107,7 +107,6 @@ struct matrix_info_struct
     Long *Parent;
     Long *Post;
     Long *ColCount;
-    Long *RowCount;
 
     Long nsuper;
     Long *Super;
