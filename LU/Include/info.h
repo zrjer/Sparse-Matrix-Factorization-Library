@@ -137,6 +137,7 @@ struct matrix_info_struct
     Long *Lsxp;
     Long *Lsi;
     Float *Lsx;
+    Float *Usx;
 
     Long csize;
 

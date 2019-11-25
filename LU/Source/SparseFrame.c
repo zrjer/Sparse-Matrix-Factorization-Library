@@ -1598,7 +1598,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Long isize, xsize;
     Long *Lsip, *Lsxp, *Lsi;
-    Float *Lsx;
+    Float *Lsx, *Usx;
 
     Long csize;
 
@@ -1705,7 +1705,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                 (
                  !isComplex &&
                  (
-                  ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Float)
+                  2 * ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Float)
                   + ColCount [ Super[nfsuper-1] ] * sizeof(Long)
                   > devSlotSize
                  )
@@ -1714,7 +1714,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                 (
                  isComplex &&
                  (
-                  ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Complex)
+                  2 * ( j - Super[nfsuper-1] + 1 ) * ColCount [ Super[nfsuper-1] ] * sizeof(Complex)
                   + ColCount [ Super[nfsuper-1] ] * sizeof(Long)
                   > devSlotSize
                  )
@@ -1783,7 +1783,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                         (
                          !isComplex &&
                          (
-                          ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Float)
+                          2 * ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Float)
                           + ( s_ncol + p_colcount ) * sizeof(Long)
                           <= devSlotSize
                          )
@@ -1792,7 +1792,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                         (
                          isComplex &&
                          (
-                          ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Complex)
+                          2 * ( s_ncol + p_ncol ) * ( s_ncol + p_colcount ) * sizeof(Complex)
                           + ( s_ncol + p_colcount ) * sizeof(Long)
                           <= devSlotSize
                          )
@@ -1872,9 +1872,15 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
     Lsi = malloc ( isize * sizeof(Long) );
     if ( !isComplex )
+    {
         Lsx = malloc ( xsize * sizeof(Float) );
+        Usx = malloc ( xsize * sizeof(Float) );
+    }
     else
+    {
         Lsx = malloc ( xsize * sizeof(Complex) );
+        Usx = malloc ( xsize * sizeof(Complex) );
+    }
 
     matrix_info->isize = isize;
     matrix_info->xsize = xsize;
@@ -1882,6 +1888,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     matrix_info->Lsxp = Lsxp;
     matrix_info->Lsi = Lsi;
     matrix_info->Lsx = Lsx;
+    matrix_info->Usx = Usx;
 
     Lsip_copy = workspace + 2 * nrow; // don't overwrite Super
     Marker = workspace + 3 * nrow;
@@ -1967,12 +1974,12 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
             if (
                     (
                      !isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && 2 * ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
                     )
                     ||
                     (
                      isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && 2 * ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
                     )
                )
             {
@@ -1992,12 +1999,12 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
             if (
                     (
                      !isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && 2 * ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
                     )
                     ||
                     (
                      isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
+                     && 2 * ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex) + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long) <= devSlotSize
                     )
                )
             {
@@ -2101,9 +2108,9 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
 
             Aoffset[s] = Asize;
             if ( !isComplex )
-                Asize += nscol * nsrow * sizeof(Float);
+                Asize += 2 * nscol * nsrow * sizeof(Float);
             else
-                Asize += nscol * nsrow * sizeof(Complex);
+                Asize += 2 * nscol * nsrow * sizeof(Complex);
 
             Moffset[s] = Msize;
             Msize += nsrow * sizeof(Long);
