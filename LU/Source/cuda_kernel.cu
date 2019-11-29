@@ -59,7 +59,7 @@ void createRelativeMap ( Long *d_RelativeMap, Long *d_Map, Long *d_Lsi, Long dip
     createRelativeMap_kernel <<< block, thread, 0, stream >>> ( d_RelativeMap, d_Map, d_Lsi, dip_offset, ldd );
 }
 
-__global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap )
+__global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, Long nscol, Long nsrow, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap )
 {
     __shared__ Long shRelativeMap_j[CUDA_BLOCKDIM_X];
     __shared__ Long shRelativeMap_i[CUDA_BLOCKDIM_Y];
@@ -82,7 +82,11 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
         if ( !isComplex )
         {
             if ( cj < nccol && ci < ncrow )
+            {
                 ( (Float*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] -= ( (Float*) d_C )  [ cj * ldc + ci ];
+                if ( ci >= nccol )
+                    ( (Float*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] -= ( (Float*) d_C + ncrow )  [ cj * ldc + ci ];
+            }
         }
         else
         {
@@ -90,6 +94,11 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
             {
                 ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x -= ( (Complex*) d_C ) [ cj * ldc + ci ].x;
                 ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y -= ( (Complex*) d_C ) [ cj * ldc + ci ].y;
+                if ( ci >= nccol )
+                {
+                    ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x -= ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].x;
+                    ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y -= ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].y;
+                }
             }
         }
     }
@@ -111,7 +120,7 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
     }
 }
 
-void mappedSubtract ( int isAtomic, int isComplex, void *d_A, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap, cudaStream_t stream )
+void mappedSubtract ( int isAtomic, int isComplex, void *d_A, Long nscol, Long nsrow, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap, cudaStream_t stream )
 {
     dim3 block, thread;
 
@@ -120,7 +129,7 @@ void mappedSubtract ( int isAtomic, int isComplex, void *d_A, Long lda, void *d_
     block.x = ( nccol + thread.x - 1 ) / thread.x;
     block.y = ( ncrow + thread.y - 1 ) / thread.y;
 
-    mappedSubtract_kernel <<< block, thread, 0, stream >>> ( isAtomic, isComplex, d_A, lda, d_C, cj_offset, ci_offset, nccol, ncrow, ldc, d_RelativeMap );
+    mappedSubtract_kernel <<< block, thread, 0, stream >>> ( isAtomic, isComplex, d_A, nscol, nsrow, lda, d_C, cj_offset, ci_offset, nccol, ncrow, ldc, d_RelativeMap );
 }
 
 __global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow )

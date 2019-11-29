@@ -2513,7 +2513,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 int stream_index;
 
                                 Long d, ndcol, ndrow ,lpos, lpos_next;
-                                Long dn, dm, dk, dlda, dldc;
+                                Long dn, dm, dk, dldc;
 
                                 void *d_C;
 
@@ -2531,13 +2531,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 dn = lpos_next - lpos;
                                 dm = ndrow - lpos_next;
                                 dk = ndcol;
-                                dlda = dn + dm;
                                 dldc = dn + dm;
 
                                 if ( GPUSerial[d] == gpuIndex && NodeLocation[d] == NODE_LOCATION_GPU )
                                 {
+                                    Long dlda;
                                     void *d_R;
                                     Long *h_RelativeMap, *d_RelativeMap;
+
+                                    dlda = ndrow;
 
                                     if (!isComplex)
                                         d_R = (Float*) ( gpu_info->d_A[0] + Aoffset[d] ) + lpos;
@@ -2548,16 +2550,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     d_RelativeMap = gpu_info->d_A[0] + Moffset[d];
 
                                     if (!isComplex)
-                                        cublasDsyrk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_R, ndrow, zero, d_C, dldc);
+                                        cublasDsyrk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_R, dlda, zero, d_C, dldc);
                                     else
-                                        cublasZherk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_R, ndrow, zero, d_C, dldc);
+                                        cublasZherk ( gpu_info->d_cublasHandle[stream_index], CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, dn, dk, one, d_R, dlda, zero, d_C, dldc);
 
                                     if ( dm > 0 )
                                     {
                                         if (!isComplex)
-                                            cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, (Float*) d_R + dn, ndrow, d_R, ndrow, zero, (Float*) d_C + dn, dldc );
+                                            cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, (Float*) d_R + dn, dlda, d_R, dlda, zero, (Float*) d_C + dn, dldc );
                                         else
-                                            cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, (Complex*) d_R + dn, ndrow, d_R, ndrow, (Complex*) zero, (Complex*) d_C + dn, dldc );
+                                            cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_C, dm, dn, dk, (Complex*) one, (Complex*) d_R + dn, dlda, d_R, dlda, (Complex*) zero, (Complex*) d_C + dn, dldc );
                                     }
 
                                     if ( !d_Lsi_valid )
@@ -2576,8 +2578,11 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 }
                                 else
                                 {
+                                    Long dlda;
                                     void *h_B, *d_B;
                                     Long *h_RelativeMap, *d_RelativeMap;
+
+                                    dlda = dn + dm;
 
                                     h_B = gpu_info->h_B[stream_index];
                                     d_B = gpu_info->d_B[stream_index];
