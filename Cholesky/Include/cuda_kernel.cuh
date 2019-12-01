@@ -18,9 +18,9 @@ extern "C"
 
     __host__ void mappedSubtract ( int isAtomic, int isComplex, void *d_A, Long lda, void *d_C, Long cj_offset, Long ci_offset, Long nccol, Long ncrow, Long ldc, Long *d_RelativeMap, cudaStream_t stream );
 
-    __global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow );
+    __global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow, Long lda );
 
-    __host__ void deviceSum ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow, cudaStream_t stream );
+    __host__ void deviceSum ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow, Long lda, cudaStream_t stream );
 
 #ifdef __cplusplus
 }

@@ -107,7 +107,11 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
         if ( !isComplex )
         {
             if ( cj < nccol && ci < ncrow )
+            {
                 atomicAdd ( & ( ( (Float*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] ), - ( (Float*) d_C ) [ cj * ldc + ci ] );
+                if ( ci >= nccol )
+                    atomicAdd ( & ( ( (Float*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] ), - ( (Float*) d_C + ncrow )  [ cj * ldc + ci ] );
+            }
         }
         else
         {
@@ -115,6 +119,11 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
             {
                 atomicAdd ( & ( ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x ), - ( (Complex*) d_C ) [ cj * ldc + ci ].x );
                 atomicAdd ( & ( ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y ), - ( (Complex*) d_C ) [ cj * ldc + ci ].y );
+                if ( ci >= nccol )
+                {
+                    atomicAdd ( & ( ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x ), - ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].x );
+                    atomicAdd ( & ( ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y ), - ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].y );
+                }
             }
         }
     }
@@ -132,7 +141,7 @@ void mappedSubtract ( int isAtomic, int isComplex, void *d_A, Long nscol, Long n
     mappedSubtract_kernel <<< block, thread, 0, stream >>> ( isAtomic, isComplex, d_A, nscol, nsrow, lda, d_C, cj_offset, ci_offset, nccol, ncrow, ldc, d_RelativeMap );
 }
 
-__global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow )
+__global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow, Long lda )
 {
     Long sj, si;
 
@@ -142,19 +151,19 @@ __global__ void deviceSum_kernel ( int isComplex, void *d_A, void *d_B, void *d_
     if ( !isComplex )
     {
         if ( sj < nscol && si < nsrow )
-            ( (Float*) d_A ) [ sj * nsrow + si ] = ( (Float*) d_B )  [ sj * nsrow + si ] + ( (Float*) d_C )  [ sj * nsrow + si ];
+            ( (Float*) d_A ) [ sj * lda + si ] = ( (Float*) d_B )  [ sj * lda + si ] + ( (Float*) d_C )  [ sj * lda + si ];
     }
     else
     {
         if ( sj < nscol && si < nsrow )
         {
-            ( (Complex*) d_A ) [ sj * nsrow + si ].x = ( (Complex*) d_B ) [ sj * nsrow + si ].x + ( (Complex*) d_C ) [ sj * nsrow + si ].x;
-            ( (Complex*) d_A ) [ sj * nsrow + si ].y = ( (Complex*) d_B ) [ sj * nsrow + si ].y + ( (Complex*) d_C ) [ sj * nsrow + si ].y;
+            ( (Complex*) d_A ) [ sj * lda + si ].x = ( (Complex*) d_B ) [ sj * lda + si ].x + ( (Complex*) d_C ) [ sj * lda + si ].x;
+            ( (Complex*) d_A ) [ sj * lda + si ].y = ( (Complex*) d_B ) [ sj * lda + si ].y + ( (Complex*) d_C ) [ sj * lda + si ].y;
         }
     }
 }
 
-void deviceSum ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow, cudaStream_t stream )
+void deviceSum ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Long nsrow, Long lda, cudaStream_t stream )
 {
     dim3 block, thread;
 
@@ -163,5 +172,5 @@ void deviceSum ( int isComplex, void *d_A, void *d_B, void *d_C, Long nscol, Lon
     block.x = ( nscol + thread.x - 1 ) / thread.x;
     block.y = ( nsrow + thread.y - 1 ) / thread.y;
 
-    deviceSum_kernel <<< block, thread, 0, stream >>> ( isComplex, d_A, d_B, d_C, nscol, nsrow );
+    deviceSum_kernel <<< block, thread, 0, stream >>> ( isComplex, d_A, d_B, d_C, nscol, nsrow, lda );
 }
