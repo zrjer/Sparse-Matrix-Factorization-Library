@@ -2920,12 +2920,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     if ( !isComplex )
                                     {
                                         cudaMemcpy2DAsync ( (Float*) d_R, dlda * sizeof(Float), (Float*) h_R, dlda * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                                        cudaMemcpy2DAsync ( (Float*) d_R + ndrow - ndcol, dlda * sizeof(Float), (Float*) h_R + ndrow - ndcol, dlda * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                                        cudaMemcpy2DAsync ( (Float*) d_R + ( ndrow - ndcol ), dlda * sizeof(Float), (Float*) h_R + ( ndrow - ndcol ), dlda * sizeof(Float), ( ndrow - lpos ) * sizeof(Float), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                                     }
                                     else
                                     {
                                         cudaMemcpy2DAsync ( (Complex*) d_R, dlda * sizeof(Complex), (Complex*) h_R, dlda * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
-                                        cudaMemcpy2DAsync ( (Complex*) d_R + ndrow - ndcol, dlda * sizeof(Complex), (Complex*) h_R + ndrow - ndcol, dlda * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
+                                        cudaMemcpy2DAsync ( (Complex*) d_R + ( ndrow - ndcol ), dlda * sizeof(Complex), (Complex*) h_R + ( ndrow - ndcol ), dlda * sizeof(Complex), ( ndrow - lpos ) * sizeof(Complex), ndcol, cudaMemcpyHostToDevice, gpu_info->s_cudaStream );
                                     }
                                 }
 
@@ -3040,9 +3040,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     if ( dm > 0 )
                                     {
                                         if (!isComplex)
-                                            cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, (Float*) d_R + ( ndrow - ndcol ) + dn, dlda, (Float*) d_R + dn, dlda, zero, (Float*) d_C + ( dn + dm ), dldc );
+                                            cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, (Float*) d_R + ( ndrow - ndcol ) + dn, dlda, (Float*) d_R, dlda, zero, (Float*) d_C + ( dn + dm ), dldc );
                                         else
-                                            cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, (Complex*) one, (Complex*) d_R + ( ndrow - ndcol ) + dn, dlda, (Complex*) d_R + dn, dlda, (Complex*) zero, (Complex*) d_C + ( dn + dm ), dldc );
+                                            cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, (Complex*) one, (Complex*) d_R + ( ndrow - ndcol ) + dn, dlda, (Complex*) d_R, dlda, (Complex*) zero, (Complex*) d_C + ( dn + dm ), dldc );
                                     }
 
                                     if ( !d_Lsi_valid )
@@ -3088,15 +3088,15 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         {
                                             if (!isComplex)
                                             {
-                                                ( (Float*) h_B ) [ dj * dlda + di ] = ( Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ];
-                                                ( (Float*) h_B + ( dn + dm ) ) [ dj * dlda + di ] = ( Lsx + Lsxp[d] + ( ndrow - ndcol ) + lpos ) [ dj * ndrow + di ];
+                                                ( (Float*) h_B ) [ dj * dlda + di ] = ( Lsx + Lsxp[d] + lpos ) [ dj * ( 2 * ndrow - ndcol ) + di ];
+                                                ( (Float*) h_B + ( dn + dm ) ) [ dj * dlda + di ] = ( Lsx + Lsxp[d] + ( ndrow - ndcol ) + lpos ) [ dj * ( 2 * ndrow - ndcol ) + di ];
                                             }
                                             else
                                             {
-                                                ( (Complex*) h_B ) [ dj * dlda + di ].x = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].x;
-                                                ( (Complex*) h_B ) [ dj * dlda + di ].y = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ndrow + di ].y;
-                                                ( (Complex*) h_B + ( dn + dm ) ) [ dj * dlda + di ].x = ( (Complex*) Lsx + Lsxp[d] + ( ndrow - ndcol ) + lpos ) [ dj * ndrow + di ].x;
-                                                ( (Complex*) h_B + ( dn + dm ) ) [ dj * dlda + di ].y = ( (Complex*) Lsx + Lsxp[d] + ( ndrow - ndcol ) + lpos ) [ dj * ndrow + di ].y;
+                                                ( (Complex*) h_B ) [ dj * dlda + di ].x = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ( 2 * ndrow - ndcol ) + di ].x;
+                                                ( (Complex*) h_B ) [ dj * dlda + di ].y = ( (Complex*) Lsx + Lsxp[d] + lpos ) [ dj * ( 2 * ndrow - ndcol ) + di ].y;
+                                                ( (Complex*) h_B + ( dn + dm ) ) [ dj * dlda + di ].x = ( (Complex*) Lsx + Lsxp[d] + ( ndrow - ndcol ) + lpos ) [ dj * ( 2 * ndrow - ndcol ) + di ].x;
+                                                ( (Complex*) h_B + ( dn + dm ) ) [ dj * dlda + di ].y = ( (Complex*) Lsx + Lsxp[d] + ( ndrow - ndcol ) + lpos ) [ dj * ( 2 * ndrow - ndcol ) + di ].y;
                                             }
                                         }
                                     }
@@ -3141,9 +3141,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     if ( dm > 0 )
                                     {
                                         if (!isComplex)
-                                            cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, (Float*) d_B + ( dn + dm ) + dn, dlda, (Float*) d_B + dn, dlda, zero, (Float*) d_C + ( dn + dm ), dldc );
+                                            cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, one, (Float*) d_B + ( dn + dm ) + dn, dlda, (Float*) d_B, dlda, zero, (Float*) d_C + ( dn + dm ), dldc );
                                         else
-                                            cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, (Complex*) one, (Complex*) d_B + ( dn + dm ) + dn, dlda, (Complex*) d_B + dn, dlda, (Complex*) zero, (Complex*) d_C + ( dn + dm ), dldc );
+                                            cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, (Complex*) one, (Complex*) d_B + ( dn + dm ) + dn, dlda, (Complex*) d_B, dlda, (Complex*) zero, (Complex*) d_C + ( dn + dm ), dldc );
                                     }
 
                                     mappedSubtract ( TRUE, isComplex, d_A_, slda, nscol, nsrow, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[stream_index] );
@@ -3302,7 +3302,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 #pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
                             for ( Long sj = 0; sj < nscol; sj++ )
                             {
-                                for ( Long si = sj; si < 2 * nsrow - nscol; si++ )
+                                for ( Long si = 0; si < 2 * nsrow - nscol; si++ )
                                 {
                                     if ( !isComplex )
                                         ( (Float*) A ) [ sj * slda + si ] = ( (Float*) h_A ) [ sj * slda + si ];
@@ -3340,12 +3340,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                         if (!isComplex)
                                         {
                                             cublasDgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, sjr - sjl, nscol - sjr, sjl, minus_one, (Float*) d_A + sjl, slda, (Float*) d_A + sjr * slda, slda, one, (Float*) d_A + sjr * slda + sjl, slda );
-                                            cublasDgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, nsrow - nscol, sjr - sjl, sjl, minus_one, (Float*) d_A + ( nsrow - nscol ) + nscol, slda, (Float*) d_A + sjr, slda, one, (Float*) d_A + ( nsrow - nscol ) + sjl * slda + nscol, slda );
+                                            cublasDgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, nsrow - nscol, sjr - sjl, sjl, minus_one, (Float*) d_A + ( nsrow - nscol ) + nscol, slda, (Float*) d_A + sjl, slda, one, (Float*) d_A + ( nsrow - nscol ) + sjl * slda + nscol, slda );
                                         }
                                         else
                                         {
                                             cublasZgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, sjr - sjl, nscol - sjr, sjl, (Complex*) minus_one, (Complex*) d_A + sjl, slda, (Complex*) d_A + sjr * slda, slda, (Complex*) one, (Complex*) d_A + sjr * slda + sjl, slda );
-                                            cublasZgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, nsrow - nscol, sjr - sjl, sjl, (Complex*) minus_one, (Complex*) d_A + ( nsrow - nscol ) + nscol, slda, (Complex*) d_A + sjr, slda, (Complex*) one, (Complex*) d_A + ( nsrow - nscol ) + sjl * slda + nscol, slda );
+                                            cublasZgemm ( gpu_info->s_cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, nsrow - nscol, sjr - sjl, sjl, (Complex*) minus_one, (Complex*) d_A + ( nsrow - nscol ) + nscol, slda, (Complex*) d_A + sjl, slda, (Complex*) one, (Complex*) d_A + ( nsrow - nscol ) + sjl * slda + nscol, slda );
                                         }
                                     }
                                 }
