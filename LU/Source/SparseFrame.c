@@ -2285,17 +2285,17 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
             {
                 if ( q >= CTp[j+1] )
                 {
-                    CPCTp[j] += ( Cp[j+1] - p );
+                    CPCTp[j+1] += ( Cp[j+1] - p );
                     p = Cp[j+1];
                 }
                 else if ( p >= Cp[j+1] )
                 {
-                    CPCTp[j] += ( CTp[j+1] - q );
+                    CPCTp[j+1] += ( CTp[j+1] - q );
                     q = CTp[j+1];
                 }
                 else
                 {
-                    CPCTp[j]++;
+                    CPCTp[j+1]++;
                     if ( Ci[p] < CTi[q] )
                         p++;
                     else if ( Ci[p] > CTi[q] )
