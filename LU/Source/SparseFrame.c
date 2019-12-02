@@ -2557,7 +2557,7 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
             {
                 ( (Float*) A ) [ RelativeMap [cj] * slda + RelativeMap[ci] ] -= ( (Float*) C ) [ cj * dldc + ci ];
                 if ( ci >= dn )
-                    ( (Float*) A + ( nsrow - nscol ) ) [ RelativeMap [cj] * slda + RelativeMap[ci] ] -= ( (Float*) C + ( dn + dm ) ) [ cj * dldc + ci ];
+                    ( (Float*) A + ( nsrow - nscol ) ) [ RelativeMap [cj] * slda + RelativeMap[ci] ] -= ( (Float*) C + dm ) [ cj * dldc + ci ];
             }
             else
             {
@@ -2565,8 +2565,8 @@ int SparseFrame_cpuApply ( int isComplex, Long *SuperMap, Long *Super, Long *Lsi
                 ( (Complex*) A ) [ RelativeMap [cj] * slda + RelativeMap[ci] ].y -= ( (Complex*) C ) [ cj * dldc + ci ].y;
                 if ( ci >= dn )
                 {
-                    ( (Complex*) A + ( nsrow - nscol ) ) [ RelativeMap [cj] * slda + RelativeMap[ci] ].x -= ( (Complex*) C + ( dn + dm ) ) [ cj * dldc + ci ].x;
-                    ( (Complex*) A + ( nsrow - nscol ) ) [ RelativeMap [cj] * slda + RelativeMap[ci] ].y -= ( (Complex*) C + ( dn + dm ) ) [ cj * dldc + ci ].y;
+                    ( (Complex*) A + ( nsrow - nscol ) ) [ RelativeMap [cj] * slda + RelativeMap[ci] ].x -= ( (Complex*) C + dm ) [ cj * dldc + ci ].x;
+                    ( (Complex*) A + ( nsrow - nscol ) ) [ RelativeMap [cj] * slda + RelativeMap[ci] ].y -= ( (Complex*) C + dm ) [ cj * dldc + ci ].y;
                 }
             }
         }
@@ -2627,13 +2627,13 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
     {
         if (!isComplex)
         {
-            dtrsm_ ( "R", "L", "T", "U", &sm, &sn, one, A, &slda, (Float*) A + sn, &slda );
-            dtrsm_ ( "R", "U", "N", "N", &sm, &sn, one, A, &slda, (Float*) A + ( sn + sm ), &slda );
+            dtrsm_ ( "R", "U", "N", "N", &sm, &sn, one, A, &slda, (Float*) A + sn, &slda );
+            dtrsm_ ( "R", "L", "T", "U", &sm, &sn, one, A, &slda, (Float*) A + ( sn + sm ), &slda );
         }
         else
         {
-            ztrsm_ ( "R", "L", "T", "U", &sm, &sn, (Complex*) one, A, &slda, (Complex*) A + sn, &slda );
-            ztrsm_ ( "R", "U", "N", "N", &sm, &sn, (Complex*) one, A, &slda, (Complex*) A + ( sn + sm ), &slda );
+            ztrsm_ ( "R", "U", "N", "N", &sm, &sn, (Complex*) one, A, &slda, (Complex*) A + sn, &slda );
+            ztrsm_ ( "R", "L", "T", "U", &sm, &sn, (Complex*) one, A, &slda, (Complex*) A + ( sn + sm ), &slda );
         }
     }
 
@@ -2769,7 +2769,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     leafQueueTail = nsleaf;
 
 //#pragma omp parallel num_threads( numGPU + numCPU )
-#pragma omp parallel num_threads( 1 )
+#pragma omp parallel num_threads( 1 ) // checkpoint
     {
         int gpuIndex;
         struct gpu_info_struct *gpu_info;
@@ -3058,7 +3058,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                 dk = ndcol;
                                 dldc = dn + 2 * dm;
 
-                                if ( GPUSerial[d] == gpuIndex && NodeLocation[d] == NODE_LOCATION_GPU )
+                                //if ( GPUSerial[d] == gpuIndex && NodeLocation[d] == NODE_LOCATION_GPU )
+                                 if ( FALSE ) // checkpoint
                                 {
                                     Long dlda;
                                     void *d_R;
@@ -3077,7 +3078,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     if (!isComplex)
                                         cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dn + dm, dn, dk, one, (Float*) d_R, dlda, (Float*) d_R + ( ndrow - ndcol ), dlda, zero, (Float*) d_C, dldc );
                                     else
-                                        cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dn + dm, dn, dk, (Complex*) one, d_R, dlda, (Complex*) d_R + ( ndrow - ndcol ), dlda, (Complex*) zero, (Complex*) d_C, dldc );
+                                        cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dn + dm, dn, dk, (Complex*) one, (Complex*) d_R, dlda, (Complex*) d_R + ( ndrow - ndcol ), dlda, (Complex*) zero, (Complex*) d_C, dldc );
 
                                     if ( dm > 0 )
                                     {
@@ -3178,7 +3179,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     if (!isComplex)
                                         cublasDgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dn + dm, dn, dk, one, (Float*) d_B, dlda, (Float*) d_B + ( dn + dm ), dlda, zero, (Float*) d_C, dldc );
                                     else
-                                        cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dn + dm, dn, dk, (Complex*) one, d_B, dlda, (Complex*) d_B + ( dn + dm ), dlda, (Complex*) zero, (Complex*) d_C, dldc );
+                                        cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dn + dm, dn, dk, (Complex*) one, (Complex*) d_B, dlda, (Complex*) d_B + ( dn + dm ), dlda, (Complex*) zero, (Complex*) d_C, dldc );
 
                                     if ( dm > 0 )
                                     {
@@ -3188,7 +3189,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                             cublasZgemm ( gpu_info->d_cublasHandle[stream_index], CUBLAS_OP_N, CUBLAS_OP_T, dm, dn, dk, (Complex*) one, (Complex*) d_B + ( dn + dm ) + dn, dlda, (Complex*) d_B, dlda, (Complex*) zero, (Complex*) d_C + ( dn + dm ), dldc );
                                     }
 
-                                    mappedSubtract ( TRUE, isComplex, d_A_, slda, nscol, nsrow, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[stream_index] );
+                                    mappedSubtract ( TRUE, isComplex, d_A_, nscol, nsrow, slda, d_C, 0, 0, dn, dn + dm, dldc, d_RelativeMap, gpu_info->d_cudaStream[stream_index] );
 
                                     cudaEventRecord ( gpu_info->d_cudaEvent_applied[stream_index], gpu_info->d_cudaStream[stream_index] );
                                 }

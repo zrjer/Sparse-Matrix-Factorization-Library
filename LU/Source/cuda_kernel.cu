@@ -85,7 +85,7 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
             {
                 ( (Float*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] -= ( (Float*) d_C )  [ cj * ldc + ci ];
                 if ( ci >= nccol )
-                    ( (Float*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] -= ( (Float*) d_C + ncrow )  [ cj * ldc + ci ];
+                    ( (Float*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] -= ( (Float*) d_C + ( ncrow - nccol ) )  [ cj * ldc + ci ];
             }
         }
         else
@@ -96,8 +96,8 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
                 ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y -= ( (Complex*) d_C ) [ cj * ldc + ci ].y;
                 if ( ci >= nccol )
                 {
-                    ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x -= ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].x;
-                    ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y -= ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].y;
+                    ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x -= ( (Complex*) d_C + ( ncrow - nccol ) ) [ cj * ldc + ci ].x;
+                    ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y -= ( (Complex*) d_C + ( ncrow - nccol ) ) [ cj * ldc + ci ].y;
                 }
             }
         }
@@ -110,7 +110,7 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
             {
                 atomicAdd ( & ( ( (Float*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] ), - ( (Float*) d_C ) [ cj * ldc + ci ] );
                 if ( ci >= nccol )
-                    atomicAdd ( & ( ( (Float*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] ), - ( (Float*) d_C + ncrow )  [ cj * ldc + ci ] );
+                    atomicAdd ( & ( ( (Float*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ] ), - ( (Float*) d_C + ( ncrow - nccol ) )  [ cj * ldc + ci ] );
             }
         }
         else
@@ -121,8 +121,8 @@ __global__ void mappedSubtract_kernel ( int isAtomic, int isComplex, void *d_A, 
                 atomicAdd ( & ( ( (Complex*) d_A ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y ), - ( (Complex*) d_C ) [ cj * ldc + ci ].y );
                 if ( ci >= nccol )
                 {
-                    atomicAdd ( & ( ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x ), - ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].x );
-                    atomicAdd ( & ( ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y ), - ( (Complex*) d_C + ncrow ) [ cj * ldc + ci ].y );
+                    atomicAdd ( & ( ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].x ), - ( (Complex*) d_C + ( ncrow - nccol ) ) [ cj * ldc + ci ].x );
+                    atomicAdd ( & ( ( (Complex*) d_A + ( nsrow - nscol ) ) [ shRelativeMap_j[threadIdx.x] * lda + shRelativeMap_i[threadIdx.y] ].y ), - ( (Complex*) d_C + ( ncrow - nccol ) ) [ cj * ldc + ci ].y );
                 }
             }
         }
