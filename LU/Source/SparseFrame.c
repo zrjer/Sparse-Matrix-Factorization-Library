@@ -1436,6 +1436,7 @@ int SparseFrame_postorder ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 {
+    int isSymmetric;
     Long nrow;
     Long *Lp, *Li;
     Long *Up, *Ui;
@@ -1447,6 +1448,8 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_colcount================\n\n");
 #endif
+
+    isSymmetric = matrix_info->isSymmetric;
 
     nrow = matrix_info->nrow;
 
@@ -1509,50 +1512,78 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     for ( Long k = 0; k < nrow; k++ )
     {
         Long j = Post[k];
-        Long p, q;
 
         PrevNbr[j] = k;
 
-        p = Lp[j];
-        q = Up[j];
-
-        while ( p < Lp[j+1] || q < Up[j+1] )
+        if ( isSymmetric )
         {
-            Long i;
-
-            if ( q >= Up[j+1] || ( p < Lp[j+1] && Li[p] < Ui[q] ) )
+            for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
             {
-                i = Li[p];
-                p++;
-            }
-            else if ( p >= Lp[j+1] || ( q < Up[j+1] && Li[p] > Ui[q] ) )
-            {
-                i = Ui[q];
-                q++;
-            }
-            else
-            {
-                i = Li[p];
-                p++;
-                q++;
-            }
-
-            if ( i > j )
-            {
-                if ( First[j] > PrevNbr[i] )
+                Long i = Li[p];
+                if ( i > j )
                 {
-                    Long q;
-                    Long prevleaf = PrevLeaf[i];
-                    for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
-                    for ( Long s = prevleaf; s != q; s = SetParent[s] )
+                    if ( First[j] > PrevNbr[i] )
                     {
-                        SetParent[s] = q;
+                        Long q;
+                        Long prevleaf = PrevLeaf[i];
+                        for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
+                        for ( Long s = prevleaf; s != q; s = SetParent[s] )
+                        {
+                            SetParent[s] = q;
+                        }
+                        ColCount[j]++;
+                        ColCount[q]--;
+                        PrevLeaf[i] = j;
                     }
-                    ColCount[j]++;
-                    ColCount[q]--;
-                    PrevLeaf[i] = j;
+                    PrevNbr[i] = k;
                 }
-                PrevNbr[i] = k;
+            }
+        }
+        else
+        {
+            Long p, q;
+
+            p = Lp[j];
+            q = Up[j];
+
+            while ( p < Lp[j+1] || q < Up[j+1] )
+            {
+                Long i;
+
+                if ( q >= Up[j+1] || ( p < Lp[j+1] && Li[p] < Ui[q] ) )
+                {
+                    i = Li[p];
+                    p++;
+                }
+                else if ( p >= Lp[j+1] || ( q < Up[j+1] && Li[p] > Ui[q] ) )
+                {
+                    i = Ui[q];
+                    q++;
+                }
+                else
+                {
+                    i = Li[p];
+                    p++;
+                    q++;
+                }
+
+                if ( i > j )
+                {
+                    if ( First[j] > PrevNbr[i] )
+                    {
+                        Long q;
+                        Long prevleaf = PrevLeaf[i];
+                        for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
+                        for ( Long s = prevleaf; s != q; s = SetParent[s] )
+                        {
+                            SetParent[s] = q;
+                        }
+                        ColCount[j]++;
+                        ColCount[q]--;
+                        PrevLeaf[i] = j;
+                    }
+                    PrevNbr[i] = k;
+                }
             }
         }
         SetParent[j] = Parent[j];
@@ -2029,7 +2060,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                )
             {
                 ST_Map[s] = st;
-                ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+                ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( 2 * ( Lsip[s+1] - Lsip[s] ) - ( Super[s+1] - Super[s] ) ) );
                 ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
                 continue;
             }
@@ -2058,7 +2089,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
                )
             {
                 ST_Map[s] = st;
-                ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+                ST_Asize[st] += ( ( Super[s+1] - Super[s] ) * ( 2 * ( Lsip[s+1] - Lsip[s] ) - ( Super[s+1] - Super[s] ) ) );
                 ST_Msize[st] += ( Lsip[s+1] - Lsip[s] );
                 break;
             }
@@ -2069,7 +2100,7 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
         if ( st < 0 )
         {
             ST_Map[s] = nstage;
-            ST_Asize[nstage] = ( ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) );
+            ST_Asize[st] = ( ( Super[s+1] - Super[s] ) * ( 2 * ( Lsip[s+1] - Lsip[s] ) - ( Super[s+1] - Super[s] ) ) );
             ST_Msize[nstage] = ( Lsip[s+1] - Lsip[s] );
             if ( Sparent[s] >= 0 )
             {
@@ -2588,9 +2619,9 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
     }
 
     if (!isComplex)
-        dgetrf_ ( &sn, &sn, A, &slda, NULL, &info );
+        magma_dgetrf_nopiv ( sn, sn, A, slda, &info );
     else
-        zgetrf_ ( &sn, &sn, A, &slda, NULL, &info );
+        magma_zgetrf_nopiv ( sn, sn, A, slda, &info );
 
     if ( nscol < nsrow )
     {
@@ -2613,7 +2644,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 {
     int numCPU, numGPU;
 
-    int isComplex;
+    int isSymmetric, isComplex;
     Long nrow;
     Long *Lp, *Li;
     Float *Lx;
@@ -2648,15 +2679,25 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     numCPU = common_info->numCPU;
     numGPU = common_info->numGPU;
 
+    isSymmetric = matrix_info->isSymmetric;
     isComplex = matrix_info->isComplex;
     nrow = matrix_info->nrow;
 
     Lp = matrix_info->Lp;
     Li = matrix_info->Li;
     Lx = matrix_info->Lx;
-    Up = matrix_info->Up;
-    Ui = matrix_info->Ui;
-    Ux = matrix_info->Ux;
+    if ( isSymmetric )
+    {
+        Up = matrix_info->Lp;
+        Ui = matrix_info->Li;
+        Ux = matrix_info->Lx;
+    }
+    else
+    {
+        Up = matrix_info->Up;
+        Ui = matrix_info->Ui;
+        Ux = matrix_info->Ux;
+    }
 
     nsuper = matrix_info->nsuper;
     Super = matrix_info->Super;
@@ -2727,7 +2768,8 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
     leafQueueHead = 0;
     leafQueueTail = nsleaf;
 
-#pragma omp parallel num_threads( numGPU + numCPU )
+//#pragma omp parallel num_threads( numGPU + numCPU )
+#pragma omp parallel num_threads( 1 )
     {
         int gpuIndex;
         struct gpu_info_struct *gpu_info;
@@ -2995,7 +3037,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             {
                                 int stream_index;
 
-                                Long d, ndcol, ndrow,lpos, lpos_next;
+                                Long d, ndcol, ndrow, lpos, lpos_next;
                                 Long dn, dm, dk, dldc;
 
                                 void *d_C;
@@ -3230,9 +3272,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         int info;
 
                         if (!isComplex)
-                            dgetrf_ ( &sn, &sn, h_A, &slda, NULL, &info );
+                            magma_dgetrf_nopiv ( sn, sn, h_A, slda, &info );
                         else
-                            zgetrf_ ( &sn, &sn, A, &slda, NULL, &info );
+                            magma_zgetrf_nopiv ( sn, sn, h_A, slda, &info );
 
                         if ( nscol < nsrow )
                         {

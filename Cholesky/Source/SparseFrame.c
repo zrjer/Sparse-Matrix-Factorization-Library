@@ -2512,7 +2512,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             {
                                 int stream_index;
 
-                                Long d, ndcol, ndrow ,lpos, lpos_next;
+                                Long d, ndcol, ndrow, lpos, lpos_next;
                                 Long dn, dm, dk, dldc;
 
                                 void *d_C;
@@ -2896,9 +2896,9 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                             }
 
                             if ( !isComplex )
-                                cudaMemcpy2DAsync ( (Float*) h_A + sjl_last * slda + sjl_last, slda * sizeof(Float), (Float*) d_A + sjl_last * slda + sjl_last, slda * sizeof(Float), ( nsrow - sjl_last ) * sizeof(Float), ( sjr_last - sjl_last ) , cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
+                                cudaMemcpy2DAsync ( (Float*) h_A + sjl_last * slda + sjl_last, slda * sizeof(Float), (Float*) d_A + sjl_last * slda + sjl_last, slda * sizeof(Float), ( nsrow - sjl_last ) * sizeof(Float), ( sjr_last - sjl_last ), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
                             else
-                                cudaMemcpy2DAsync ( (Complex*) h_A + sjl_last * slda + sjl_last, slda * sizeof(Complex), (Complex*) d_A + sjl_last * slda + sjl_last, slda * sizeof(Complex), ( nsrow - sjl_last ) * sizeof(Complex), ( sjr_last - sjl_last ) , cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
+                                cudaMemcpy2DAsync ( (Complex*) h_A + sjl_last * slda + sjl_last, slda * sizeof(Complex), (Complex*) d_A + sjl_last * slda + sjl_last, slda * sizeof(Complex), ( nsrow - sjl_last ) * sizeof(Complex), ( sjr_last - sjl_last ), cudaMemcpyDeviceToHost, gpu_info->s_cudaStream );
 
                             cudaStreamSynchronize ( gpu_info->s_cudaStream );
 

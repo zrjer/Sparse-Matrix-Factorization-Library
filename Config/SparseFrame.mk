@@ -34,7 +34,7 @@ NVCCFLAGS = -Xcompiler -O3,-fexceptions,-fPIC,-Wall \
 			-gencode arch=compute_70,code=sm_70 \
 			-gencode arch=compute_72,code=sm_72
 
-LBLAS = -lopenblas
+LBLAS = -lopenblas -lmagma
 LCUDA = -lcublas -lcusolver -lcudart -lcudadevrt
 LDLIBS += -lgfortran -lm -lrt -lamd -lcamd -lcolamd -lccolamd -lmetis $(LBLAS) $(LCUDA)
 
