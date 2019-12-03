@@ -1738,17 +1738,21 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
             st = ST_Map [ Sparent[s] ];
             if (
                     (
-                     !isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float)
-                     + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
-                     <= devSlotSize
+                     !isComplex &&
+                     (
+                      ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float)
+                      + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
+                      <= devSlotSize
+                     )
                     )
                     ||
                     (
-                     isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex)
-                     + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
-                     <= devSlotSize
+                     isComplex &&
+                     (
+                      ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex)
+                      + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
+                      <= devSlotSize
+                     )
                     )
                )
             {
@@ -1767,17 +1771,21 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
         {
             if (
                     (
-                     !isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float)
-                     + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
-                     <= devSlotSize
+                     !isComplex &&
+                     (
+                      ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Float)
+                      + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
+                      <= devSlotSize
+                     )
                     )
                     ||
                     (
-                     isComplex
-                     && ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex)
-                     + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
-                     <= devSlotSize
+                     isComplex &&
+                     (
+                      ( ST_Asize[st] + ( Super[s+1] - Super[s] ) * ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Complex)
+                      + ( ST_Msize[st] + ( Lsip[s+1] - Lsip[s] ) ) * sizeof(Long)
+                      <= devSlotSize
+                     )
                     )
                )
             {
@@ -2328,13 +2336,12 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
             {
                 int useCpuPotrf;
 
-                Long d_count, gpu_blas_count, gpu_blas_single_count;
+                Long d_count, gpu_blas_count;
 
                 useCpuPotrf = set_factorize_location ( nscol, nsrow );
 
                 d_count = 0;
                 gpu_blas_count = 0;
-                gpu_blas_single_count = 0;
 
                 for ( Long d = Head[s]; d >= 0; d = Next[d] )
                 {
@@ -2363,11 +2370,7 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                     score = set_node_score ( node_size_queue + d_count );
 
                     if ( score >= 0 )
-                    {
                         gpu_blas_count++;
-                        if ( score > 0 )
-                            gpu_blas_single_count++;
-                    }
 
                     d_count++;
                 }
