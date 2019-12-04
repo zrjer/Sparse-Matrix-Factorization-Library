@@ -620,6 +620,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->UTx = NULL;
 
     matrix_info->Perm = NULL;
+    matrix_info->Piv = NULL;
     matrix_info->Parent = NULL;
     matrix_info->Post = NULL;
     matrix_info->ColCount = NULL;
@@ -3671,10 +3672,12 @@ int SparseFrame_solve_supernodal ( struct matrix_info_struct *matrix_info )
 
 int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
 {
-    int isComplex;
+    int isSymmetric, isComplex;
     Long nrow;
     Long *Lp, *Li;
     Float *Lx;
+    Long *Up, *Ui;
+    Float *Ux;
     Float *Bx, *Xx, *Rx;
     Float anorm, bnorm, xnorm, rnorm;
     Float residual;
@@ -3685,6 +3688,7 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
     printf ("\n================SparseFrame_validate================\n\n");
 #endif
 
+    isSymmetric = matrix_info->isSymmetric;
     isComplex = matrix_info->isComplex;
 
     nrow = matrix_info->nrow;
@@ -3692,6 +3696,17 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
     Lp = matrix_info->Lp;
     Li = matrix_info->Li;
     Lx = matrix_info->Lx;
+    if ( isSymmetric )
+    {
+        Up = matrix_info->Lp;
+        Ui = matrix_info->Li;
+        Ux = matrix_info->Lx;
+    }
+    {
+        Up = matrix_info->Up;
+        Ui = matrix_info->Ui;
+        Ux = matrix_info->Ux;
+    }
 
     if ( !isComplex )
     {
@@ -3742,8 +3757,12 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
         {
             Long i = Li[p];
             Rx[i] += ( Lx[p] * Xx[j] );
+        }
+        for ( Long p = Up[j]; p < Up[j+1]; p++ )
+        {
+            Long i = Ui[p];
             if ( i != j )
-                Rx[j] += ( Lx[p] * Xx[i] );
+                Rx[j] += ( Ux[p] * Xx[i] );
         }
     }
 
@@ -3759,12 +3778,25 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
             if ( !isComplex )
             {
                 workspace[j] += fabs ( Lx[p] );
-                if ( i != j )
-                    workspace[i] += fabs ( Lx[p] );
             }
             else
             {
                 // TODO
+            }
+        }
+        for ( Long p = Up[j]; p < Up[j+1]; p++ )
+        {
+            Long i = Ui[p];
+            if ( i != j )
+            {
+                if ( !isComplex )
+                {
+                    workspace[i] += fabs ( Ux[p] );
+                }
+                else
+                {
+                    // TODO
+                }
             }
         }
     }
@@ -3827,6 +3859,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->UTx != NULL ) free ( matrix_info->UTx );
 
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
+    if ( matrix_info->Piv != NULL ) free ( matrix_info->Piv );
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
