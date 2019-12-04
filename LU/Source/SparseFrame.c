@@ -586,6 +586,104 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
+int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
+{
+    Long ncol, nrow;
+    Long *Cp, *Ci;
+    Long *Piv, *PivInv;
+
+    Long *workspace;
+
+    Long i_next;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_pivot================\n\n");
+#endif
+
+    ncol = matrix_info->ncol;
+    nrow = matrix_info->nrow;
+
+    Cp = matrix_info->Cp;
+    Ci = matrix_info->Ci;
+
+    workspace = matrix_info->workspace;
+
+    Piv = workspace;
+    PivInv = malloc ( nrow * sizeof(Long) );
+
+    for ( Long i = 0; i < nrow; i++ )
+        Piv[i] = -1;
+
+    i_next = 0;
+
+    for ( Long j = 0; j < ncol; j++ )
+    {
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
+        {
+            Long i = Ci[p];
+
+            if ( Piv[i] < 0 )
+            {
+                Ci[p] = i_next;
+                Piv[i] = i_next;
+                PivInv[i_next] = i;
+                i_next++;
+            }
+            else
+                Ci[p] = Piv[i];
+        }
+    }
+
+    matrix_info->PivInv = PivInv;
+
+    {
+        struct map_node
+        {
+            Long key;
+            Complex val;
+        };
+
+        int map_node_cmp ( const void *l, const void *r )
+        {
+            return ( ( (struct map_node *) l )->key - ( (struct map_node *) r )->key );
+        }
+
+        int isComplex;
+        Float *Cx;
+        struct map_node *map;
+
+        isComplex = matrix_info->isComplex;
+        Cx = matrix_info->Cx;
+
+        map = (void*) workspace;
+
+        for ( Long j = 0; j < ncol; j++ )
+        {
+            for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
+            {
+                map [ p - Cp[j] ].key = Ci[p];
+                if ( !isComplex )
+                    * ( (Float*) ( & ( map [ p - Cp[j] ].val ) ) ) = Cx[p];
+                else
+                    map [ p - Cp[j] ].val = ( (Complex*) Cx ) [p];
+            }
+
+            qsort ( map, Cp[j+1] - Cp[j], sizeof(struct map_node), map_node_cmp );
+
+            for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
+            {
+                Ci[p] = map [ p - Cp[j] ].key;
+                if ( !isComplex )
+                    Cx[p] = * ( (Float*) ( & ( map [ p - Cp[j] ].val ) ) );
+                else
+                    ( (Complex*) Cx ) [p] = map [ p - Cp[j] ].val;
+            }
+        }
+    }
+
+    return 0;
+}
+
 int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
 {
 #ifdef PRINT_CALLS
@@ -620,7 +718,7 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->UTx = NULL;
 
     matrix_info->Perm = NULL;
-    matrix_info->Piv = NULL;
+    matrix_info->PivInv = NULL;
     matrix_info->Parent = NULL;
     matrix_info->Post = NULL;
     matrix_info->ColCount = NULL;
@@ -696,6 +794,9 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->workspace = malloc ( matrix_info->workSize );
 
     SparseFrame_compress ( matrix_info );
+
+    //if ( ! ( matrix_info->isSymmetric ) )
+    //    SparseFrame_pivot ( matrix_info );
 
     matrix_info->readTime = SparseFrame_time () - timestamp;
 
@@ -3702,6 +3803,7 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
         Ui = matrix_info->Li;
         Ux = matrix_info->Lx;
     }
+    else
     {
         Up = matrix_info->Up;
         Ui = matrix_info->Ui;
@@ -3774,7 +3876,6 @@ int SparseFrame_validate ( struct matrix_info_struct *matrix_info )
     {
         for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
         {
-            Long i = Li[p];
             if ( !isComplex )
             {
                 workspace[j] += fabs ( Lx[p] );
@@ -3859,7 +3960,7 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->UTx != NULL ) free ( matrix_info->UTx );
 
     if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
-    if ( matrix_info->Piv != NULL ) free ( matrix_info->Piv );
+    if ( matrix_info->PivInv != NULL ) free ( matrix_info->PivInv );
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
