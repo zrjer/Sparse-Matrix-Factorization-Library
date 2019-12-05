@@ -92,9 +92,6 @@ struct matrix_info_struct
     Long *Ci;
     Float *Cx;
 
-    Long *CTp;
-    Long *CTi;
-
     Long nzCPCT;
     Long *CPCTp;
     Long *CPCTi;

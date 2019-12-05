@@ -1307,7 +1307,9 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
     for ( Long k = 0; k < nrow; k++ )
     {
         Long j = Post[k];
+
         PrevNbr[j] = k;
+
         for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
         {
             Long i = Li[p];
@@ -1315,15 +1317,15 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
             {
                 if ( First[j] > PrevNbr[i] )
                 {
-                    Long q;
+                    Long r;
                     Long prevleaf = PrevLeaf[i];
-                    for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
-                    for ( Long s = prevleaf; s != q; s = SetParent[s] )
+                    for ( r = prevleaf; r != SetParent[r]; r = SetParent[r] );
+                    for ( Long s = prevleaf; s != r; s = SetParent[s] )
                     {
-                        SetParent[s] = q;
+                        SetParent[s] = r;
                     }
                     ColCount[j]++;
-                    ColCount[q]--;
+                    ColCount[r]--;
                     PrevLeaf[i] = j;
                 }
                 PrevNbr[i] = k;

@@ -590,6 +590,7 @@ int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
 {
     Long ncol, nrow;
     Long *Cp, *Ci;
+    Float *Cx;
     Long *Piv, *PivInv;
 
     Long *workspace;
@@ -605,6 +606,7 @@ int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
 
     Cp = matrix_info->Cp;
     Ci = matrix_info->Ci;
+    Cx = matrix_info->Cx;
 
     workspace = matrix_info->workspace;
 
@@ -636,51 +638,6 @@ int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
 
     matrix_info->PivInv = PivInv;
 
-    {
-        struct map_node
-        {
-            Long key;
-            Complex val;
-        };
-
-        int map_node_cmp ( const void *l, const void *r )
-        {
-            return ( ( (struct map_node *) l )->key - ( (struct map_node *) r )->key );
-        }
-
-        int isComplex;
-        Float *Cx;
-        struct map_node *map;
-
-        isComplex = matrix_info->isComplex;
-        Cx = matrix_info->Cx;
-
-        map = (void*) workspace;
-
-        for ( Long j = 0; j < ncol; j++ )
-        {
-            for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
-            {
-                map [ p - Cp[j] ].key = Ci[p];
-                if ( !isComplex )
-                    * ( (Float*) ( & ( map [ p - Cp[j] ].val ) ) ) = Cx[p];
-                else
-                    map [ p - Cp[j] ].val = ( (Complex*) Cx ) [p];
-            }
-
-            qsort ( map, Cp[j+1] - Cp[j], sizeof(struct map_node), map_node_cmp );
-
-            for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
-            {
-                Ci[p] = map [ p - Cp[j] ].key;
-                if ( !isComplex )
-                    Cx[p] = * ( (Float*) ( & ( map [ p - Cp[j] ].val ) ) );
-                else
-                    ( (Complex*) Cx ) [p] = map [ p - Cp[j] ].val;
-            }
-        }
-    }
-
     return 0;
 }
 
@@ -699,8 +656,6 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->Cp = NULL;
     matrix_info->Ci = NULL;
     matrix_info->Cx = NULL;
-    matrix_info->CTp = NULL;
-    matrix_info->CTi = NULL;
     matrix_info->nzCPCT = 0;
     matrix_info->CPCTp = NULL;
     matrix_info->CPCTi = NULL;
@@ -795,8 +750,8 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
 
     SparseFrame_compress ( matrix_info );
 
-    //if ( ! ( matrix_info->isSymmetric ) )
-    //    SparseFrame_pivot ( matrix_info );
+    if ( ! ( matrix_info->isSymmetric ) )
+        SparseFrame_pivot ( matrix_info );
 
     matrix_info->readTime = SparseFrame_time () - timestamp;
 
@@ -1221,7 +1176,7 @@ int SparseFrame_perm ( struct matrix_info_struct *matrix_info )
     if ( !isSymmetric )
     {
         memcpy ( Uworkspace, Up, nrow * sizeof(Long) );
-        memcpy ( UTworkspace, LTp, nrow * sizeof(Long) );
+        memcpy ( UTworkspace, UTp, nrow * sizeof(Long) );
     }
 
     for ( Long j = 0; j < nrow; j++ )
@@ -1345,61 +1300,35 @@ int SparseFrame_etree ( struct matrix_info_struct *matrix_info )
 
     for ( Long j = 0; j < nrow; j++ )
     {
-        if ( isSymmetric )
+        for ( Long p = LTp[j]; p < LTp[j+1]; p++ )
         {
-            for ( Long p = LTp[j]; p < LTp[j+1]; p++ )
+            Long i = LTi[p];
+            if ( i < j )
             {
-                Long i = LTi[p];
-                if ( i < j )
+                Long ancestor;
+                do
                 {
-                    Long ancestor;
-                    do
+                    ancestor = Ancestor[i];
+                    if ( ancestor < 0 )
                     {
-                        ancestor = Ancestor[i];
-                        if ( ancestor < 0 )
-                        {
-                            Parent[i] = j;
-                            Ancestor[i] = j;
-                        }
-                        else if ( ancestor != j )
-                        {
-                            Ancestor[i] = j;
-                            i = ancestor;
-                        }
-                        else
-                            ancestor = -1;
-                    } while ( ancestor >= 0 );
-                }
+                        Parent[i] = j;
+                        Ancestor[i] = j;
+                    }
+                    else if ( ancestor != j )
+                    {
+                        Ancestor[i] = j;
+                        i = ancestor;
+                    }
+                    else
+                        ancestor = -1;
+                } while ( ancestor >= 0 );
             }
         }
-        else
+        if ( !isSymmetric )
         {
-            Long p, q;
-
-            p = LTp[j];
-            q = UTp[j];
-
-            while ( p < LTp[j+1] || q < UTp[j+1] )
+            for ( Long p = UTp[j]; p < UTp[j+1]; p++ )
             {
-                Long i;
-
-                if ( q >= UTp[j+1] || ( p < LTp[j+1] && LTi[p] < UTi[q] ) )
-                {
-                    i = LTi[p];
-                    p++;
-                }
-                else if ( p >= LTp[j+1] || ( q < UTp[j+1] && LTi[p] > UTi[q] ) )
-                {
-                    i = UTi[q];
-                    q++;
-                }
-                else
-                {
-                    i = LTi[p];
-                    p++;
-                    q++;
-                }
-
+                Long i = UTi[p];
                 if ( i < j )
                 {
                     Long ancestor;
@@ -1617,71 +1546,45 @@ int SparseFrame_colcount ( struct matrix_info_struct *matrix_info )
 
         PrevNbr[j] = k;
 
-        if ( isSymmetric )
+        for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
         {
-            for ( Long p = Lp[j]; p < Lp[j+1]; p++ )
+            Long i = Li[p];
+            if ( i > j )
             {
-                Long i = Li[p];
-                if ( i > j )
+                if ( First[j] > PrevNbr[i] )
                 {
-                    if ( First[j] > PrevNbr[i] )
+                    Long r;
+                    Long prevleaf = PrevLeaf[i];
+                    for ( r = prevleaf; r != SetParent[r]; r = SetParent[r] );
+                    for ( Long s = prevleaf; s != r; s = SetParent[s] )
                     {
-                        Long q;
-                        Long prevleaf = PrevLeaf[i];
-                        for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
-                        for ( Long s = prevleaf; s != q; s = SetParent[s] )
-                        {
-                            SetParent[s] = q;
-                        }
-                        ColCount[j]++;
-                        ColCount[q]--;
-                        PrevLeaf[i] = j;
+                        SetParent[s] = r;
                     }
-                    PrevNbr[i] = k;
+                    ColCount[j]++;
+                    ColCount[r]--;
+                    PrevLeaf[i] = j;
                 }
+                PrevNbr[i] = k;
             }
         }
-        else
+        if ( !isSymmetric )
         {
-            Long p, q;
-
-            p = Lp[j];
-            q = Up[j];
-
-            while ( p < Lp[j+1] || q < Up[j+1] )
+            for ( Long p = Up[j]; p < Up[j+1]; p++ )
             {
-                Long i;
-
-                if ( q >= Up[j+1] || ( p < Lp[j+1] && Li[p] < Ui[q] ) )
-                {
-                    i = Li[p];
-                    p++;
-                }
-                else if ( p >= Lp[j+1] || ( q < Up[j+1] && Li[p] > Ui[q] ) )
-                {
-                    i = Ui[q];
-                    q++;
-                }
-                else
-                {
-                    i = Li[p];
-                    p++;
-                    q++;
-                }
-
+                Long i = Ui[p];
                 if ( i > j )
                 {
                     if ( First[j] > PrevNbr[i] )
                     {
-                        Long q;
+                        Long r;
                         Long prevleaf = PrevLeaf[i];
-                        for ( q = prevleaf; q != SetParent[q]; q = SetParent[q] );
-                        for ( Long s = prevleaf; s != q; s = SetParent[s] )
+                        for ( r = prevleaf; r != SetParent[r]; r = SetParent[r] );
+                        for ( Long s = prevleaf; s != r; s = SetParent[s] )
                         {
-                            SetParent[s] = q;
+                            SetParent[s] = r;
                         }
                         ColCount[j]++;
-                        ColCount[q]--;
+                        ColCount[r]--;
                         PrevLeaf[i] = j;
                     }
                     PrevNbr[i] = k;
@@ -2048,46 +1951,20 @@ int SparseFrame_analyze_supernodal ( struct common_info_struct *common_info, str
     {
         for ( Long j = Super[s]; j < Super[s+1]; j++ )
         {
-            if ( isSymmetric )
+            for ( Long p = LTp[j]; p < LTp[j+1]; p++ )
             {
-                for ( Long p = LTp[j]; p < LTp[j+1]; p++ )
+                Long i = LTi[p];
+                for ( Long sdescendant = SuperMap[i]; sdescendant >= 0 && Marker[sdescendant] <= j; sdescendant = Sparent[sdescendant] )
                 {
-                    Long i = LTi[p];
-                    for ( Long sdescendant = SuperMap[i]; sdescendant >= 0 && Marker[sdescendant] <= j; sdescendant = Sparent[sdescendant] )
-                    {
-                        Lsi [ Lsip_copy[sdescendant]++ ] = j;
-                        Marker[sdescendant] = j+1;
-                    }
+                    Lsi [ Lsip_copy[sdescendant]++ ] = j;
+                    Marker[sdescendant] = j+1;
                 }
             }
-            else
+            if ( !isSymmetric )
             {
-                Long p, q;
-
-                p = LTp[j];
-                q = UTp[j];
-
-                while ( p < LTp[j+1] || q < UTp[j+1] )
+                for ( Long p = UTp[j]; p < UTp[j+1]; p++ )
                 {
-                    Long i;
-
-                    if ( q >= UTp[j+1] || ( p < LTp[j+1] && LTi[p] < UTi[q] ) )
-                    {
-                        i = LTi[p];
-                        p++;
-                    }
-                    else if ( p >= LTp[j+1] || ( q < UTp[j+1] && LTi[p] > UTi[q] ) )
-                    {
-                        i = UTi[q];
-                        q++;
-                    }
-                    else
-                    {
-                        i = LTi[p];
-                        p++;
-                        q++;
-                    }
-
+                    Long i = UTi[p];
                     for ( Long sdescendant = SuperMap[i]; sdescendant >= 0 && Marker[sdescendant] <= j; sdescendant = Sparent[sdescendant] )
                     {
                         Lsi [ Lsip_copy[sdescendant]++ ] = j;
@@ -2343,8 +2220,13 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
 
     if ( !isSymmetric )
     {
+        int compareLong ( const void *l, const void *r)
+        {
+            return ( ( * ( ( const Long * ) l ) ) - ( * ( ( const Long * ) r ) ) );
+        }
+
         Long *Cp, *Ci;
-        Long *CTp, *CTi;
+        Long *CTp, *Ci_copy, *CTi_copy;
         Long nzCPCT, *CPCTp, *CPCTi;
         Long *workspace;
 
@@ -2353,8 +2235,11 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
 
         workspace = matrix_info->workspace;
 
-        CTp = calloc ( ( nrow + 1 ), sizeof(Long) );
-        CTi = malloc ( nzmax * sizeof(Long) );
+        CTp = workspace + nrow;
+        Ci_copy = workspace + nrow + ( nrow + 1 );
+        CTi_copy = workspace + nrow + ( nrow + 1 ) + nzmax;
+
+        memcpy ( Ci_copy, Ci, nzmax * sizeof(Long) );
 
         for ( Long j = 0; j < ncol; j++ )
         {
@@ -2366,20 +2251,26 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
             }
         }
 
-        for ( Long j = 0; j < ncol; j++ )
+        for ( Long j = 0; j < nrow; j++ )
             CTp[j+1] += CTp[j];
 
-        memcpy ( workspace, CTp, ( nrow + 1 ) * sizeof(Long) );
+        memcpy ( workspace, CTp, nrow * sizeof(Long) );
 
-        for ( Long j = 0; j < ncol; j++ )
+        for ( Long j = 0; j < nrow; j++ )
         {
             for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
             {
                 Long i = Ci[p];
 
-                CTi [ workspace[i]++ ] = j;
+                CTi_copy [ workspace [i]++ ] = j;
             }
         }
+
+        for ( Long j = 0; j < ncol; j++ )
+            qsort ( Ci_copy + Cp[j], Cp[j+1] - Cp[j], sizeof(Long), compareLong );
+
+        for ( Long j = 0; j < nrow; j++ )
+            qsort ( CTi_copy + CTp[j], CTp[j+1] - CTp[j], sizeof(Long), compareLong );
 
         nzCPCT = 0;
         CPCTp = calloc ( ( nrow + 1 ), sizeof(Long) );
@@ -2388,8 +2279,8 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
         {
             Long p, q;
 
-            for ( p = Cp[j]; p < Cp[j+1] && Ci[p] < j; p++ );
-            for ( q = CTp[j]; q < CTp[j+1] && CTi[q] < j; q++ );
+            for ( p = Cp[j]; p < Cp[j+1] && Ci_copy[p] < j; p++ );
+            for ( q = CTp[j]; q < CTp[j+1] && CTi_copy[q] < j; q++ );
 
             while ( p < Cp[j+1] || q < CTp[j+1] )
             {
@@ -2406,9 +2297,9 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
                 else
                 {
                     CPCTp[j+1]++;
-                    if ( Ci[p] < CTi[q] )
+                    if ( Ci_copy[p] < CTi_copy[q] )
                         p++;
-                    else if ( Ci[p] > CTi[q] )
+                    else if ( Ci_copy[p] > CTi_copy[q] )
                         q++;
                     else
                     {
@@ -2422,7 +2313,7 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
         for ( Long j = 0; j < nrow; j++ )
             CPCTp[j+1] += CPCTp[j];
 
-        memcpy ( workspace, CPCTp, ( nrow + 1 ) * sizeof(Long) );
+        memcpy ( workspace, CPCTp, nrow * sizeof(Long) );
 
         nzCPCT = CPCTp[nrow];
 
@@ -2432,8 +2323,8 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
         {
             Long p, q;
 
-            for ( p = Cp[j]; p < Cp[j+1] && Ci[p] < j; p++ );
-            for ( q = CTp[j]; q < CTp[j+1] && CTi[q] < j; q++ );
+            for ( p = Cp[j]; p < Cp[j+1] && Ci_copy[p] < j; p++ );
+            for ( q = CTp[j]; q < CTp[j+1] && CTi_copy[q] < j; q++ );
 
             while ( p < Cp[j+1] || q < CTp[j+1] )
             {
@@ -2441,33 +2332,30 @@ int SparseFrame_analyze ( struct common_info_struct *common_info, struct matrix_
                 {
                     while ( p < Cp[j+1] )
                     {
-                        CPCTi [ workspace[j]++ ] = Ci[p++];
+                        CPCTi [ workspace[j]++ ] = Ci_copy[p++];
                     }
                 }
                 else if ( p >= Cp[j+1] )
                 {
                     while ( q < CTp[j+1] )
                     {
-                        CPCTi [ workspace[j]++ ] = CTi[q++];
+                        CPCTi [ workspace[j]++ ] = CTi_copy[q++];
                     }
                 }
                 else
                 {
-                    if ( Ci[p] < CTi[q] )
-                        CPCTi [ workspace[j]++ ] = Ci[p++];
-                    else if ( Ci[p] > CTi[q] )
-                        CPCTi [ workspace[j]++ ] = CTi[q++];
+                    if ( Ci_copy[p] < CTi_copy[q] )
+                        CPCTi [ workspace[j]++ ] = Ci_copy[p++];
+                    else if ( Ci_copy[p] > CTi_copy[q] )
+                        CPCTi [ workspace[j]++ ] = CTi_copy[q++];
                     else
                     {
-                        CPCTi [ workspace[j]++ ] = Ci[p++];
+                        CPCTi [ workspace[j]++ ] = Ci_copy[p++];
                         q++;
                     }
                 }
             }
         }
-
-        matrix_info->CTp = CTp;
-        matrix_info->CTi = CTi;
 
         matrix_info->nzCPCT = nzCPCT;
         matrix_info->CPCTp = CPCTp;
