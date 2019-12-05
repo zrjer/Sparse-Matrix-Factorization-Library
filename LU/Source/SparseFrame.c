@@ -586,61 +586,6 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
-int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
-{
-    Long ncol, nrow;
-    Long *Cp, *Ci;
-    Float *Cx;
-    Long *Piv, *PivInv;
-
-    Long *workspace;
-
-    Long i_next;
-
-#ifdef PRINT_CALLS
-    printf ("\n================SparseFrame_pivot================\n\n");
-#endif
-
-    ncol = matrix_info->ncol;
-    nrow = matrix_info->nrow;
-
-    Cp = matrix_info->Cp;
-    Ci = matrix_info->Ci;
-    Cx = matrix_info->Cx;
-
-    workspace = matrix_info->workspace;
-
-    Piv = workspace;
-    PivInv = malloc ( nrow * sizeof(Long) );
-
-    for ( Long i = 0; i < nrow; i++ )
-        Piv[i] = -1;
-
-    i_next = 0;
-
-    for ( Long j = 0; j < ncol; j++ )
-    {
-        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
-        {
-            Long i = Ci[p];
-
-            if ( Piv[i] < 0 )
-            {
-                Ci[p] = i_next;
-                Piv[i] = i_next;
-                PivInv[i_next] = i;
-                i_next++;
-            }
-            else
-                Ci[p] = Piv[i];
-        }
-    }
-
-    matrix_info->PivInv = PivInv;
-
-    return 0;
-}
-
 int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
 {
 #ifdef PRINT_CALLS
@@ -749,9 +694,6 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->workspace = malloc ( matrix_info->workSize );
 
     SparseFrame_compress ( matrix_info );
-
-    if ( ! ( matrix_info->isSymmetric ) )
-        SparseFrame_pivot ( matrix_info );
 
     matrix_info->readTime = SparseFrame_time () - timestamp;
 
