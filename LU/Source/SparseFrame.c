@@ -782,8 +782,10 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
 
     SparseFrame_compress ( matrix_info );
 
+#if 0
     if ( ! ( matrix_info->isSymmetric ) )
         SparseFrame_pivot ( matrix_info );
+#endif
 
     matrix_info->readTime = SparseFrame_time () - timestamp;
 
