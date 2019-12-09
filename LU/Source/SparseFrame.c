@@ -623,38 +623,35 @@ int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
 
     for ( Long j = 0; j < ncol; j++ )
     {
-        if ( PivInv[j] < 0 )
+        Long maxNormRow = -1;
+        Float maxNorm = 0;
+
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
         {
-            Long maxNormRow = -1;
-            Float maxNorm = 0;
+            Long i = Ci[p];
 
-            for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
+            if ( !isComplex )
             {
-                Long i = Ci[p];
-
-                if ( !isComplex )
+                if ( Piv[i] < 0 && Cx[p] * Cx[p] > maxNorm )
                 {
-                    if ( Piv[i] < 0 && Cx[p] * Cx[p] > maxNorm )
-                    {
-                        maxNormRow = i;
-                        maxNorm = Cx[p] * Cx[p];
-                    }
-                }
-                else
-                {
-                    if ( Piv[i] < 0 && ( (Complex*) Cx )[p].x * ( (Complex*) Cx )[p].x + ( (Complex*) Cx )[p].y * ( (Complex*) Cx )[p].y  > maxNorm )
-                    {
-                        maxNormRow = i;
-                        maxNorm = ( (Complex*) Cx )[p].x * ( (Complex*) Cx )[p].x + ( (Complex*) Cx )[p].y * ( (Complex*) Cx )[p].y;
-                    }
+                    maxNormRow = i;
+                    maxNorm = Cx[p] * Cx[p];
                 }
             }
-
-            if ( maxNormRow >= 0 )
+            else
             {
-                Piv[maxNormRow] = j;
-                PivInv[j] = maxNormRow;
+                if ( Piv[i] < 0 && ( (Complex*) Cx )[p].x * ( (Complex*) Cx )[p].x + ( (Complex*) Cx )[p].y * ( (Complex*) Cx )[p].y  > maxNorm )
+                {
+                    maxNormRow = i;
+                    maxNorm = ( (Complex*) Cx )[p].x * ( (Complex*) Cx )[p].x + ( (Complex*) Cx )[p].y * ( (Complex*) Cx )[p].y;
+                }
             }
+        }
+
+        if ( maxNormRow >= 0 )
+        {
+            Piv[maxNormRow] = j;
+            PivInv[j] = maxNormRow;
         }
     }
 
