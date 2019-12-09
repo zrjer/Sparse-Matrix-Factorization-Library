@@ -114,8 +114,8 @@ struct matrix_info_struct
 
     enum PermMethod permMethod;
 
-    Long *Perm;
     Long *PivInv;
+    Long *Perm;
 
     Long *Parent;
     Long *Post;

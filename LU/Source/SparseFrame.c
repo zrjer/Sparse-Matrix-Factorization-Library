@@ -586,6 +586,96 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
     return 0;
 }
 
+int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
+{
+    int isComplex;
+    Long ncol, nrow, nzmax;
+    Long *Cp, *Ci;
+    Float *Cx;
+
+    Long *Piv, *PivInv;
+
+    Long *workspace;
+
+#ifdef PRINT_CALLS
+    printf ("\n================SparseFrame_pivot================\n\n");
+#endif
+
+    isComplex = matrix_info->isComplex;
+    ncol = matrix_info->ncol;
+    nrow = matrix_info->nrow;
+    nzmax = matrix_info->nzmax;
+
+    Cp = matrix_info->Cp;
+    Ci = matrix_info->Ci;
+    Cx = matrix_info->Cx;
+
+    workspace = matrix_info->workspace;
+
+    Piv = workspace;
+    PivInv = malloc ( nrow * sizeof(Float) );
+
+    for ( Long i = 0; i < nrow; i++ )
+    {
+        Piv[i] = -1;
+        PivInv[i] = -1;
+    }
+
+    for ( Long j = 0; j < ncol; j++ )
+    {
+        if ( PivInv[j] < 0 )
+        {
+            Long maxNormRow = -1;
+            Float maxNorm = 0;
+
+            for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
+            {
+                Long i = Ci[p];
+
+                if ( !isComplex )
+                {
+                    if ( Piv[i] < 0 && Cx[p] * Cx[p] > maxNorm )
+                    {
+                        maxNormRow = i;
+                        maxNorm = Cx[p] * Cx[p];
+                    }
+                }
+                else
+                {
+                    if ( Piv[i] < 0 && ( (Complex*) Cx )[p].x * ( (Complex*) Cx )[p].x + ( (Complex*) Cx )[p].y * ( (Complex*) Cx )[p].y  > maxNorm )
+                    {
+                        maxNormRow = i;
+                        maxNorm = ( (Complex*) Cx )[p].x * ( (Complex*) Cx )[p].x + ( (Complex*) Cx )[p].y * ( (Complex*) Cx )[p].y;
+                    }
+                }
+            }
+
+            if ( maxNormRow >= 0 )
+            {
+                Piv[maxNormRow] = j;
+                PivInv[j] = maxNormRow;
+            }
+        }
+    }
+
+    for ( Long j = 0; j < ncol; j++ )
+    {
+        for ( Long p = Cp[j]; p < Cp[j+1]; p++ )
+        {
+            Long i = Ci[p];
+
+            if ( Piv[i] >= 0 )
+            {
+                Ci[p] = Piv[i];
+            }
+        }
+    }
+
+    matrix_info->PivInv = PivInv;
+
+    return 0;
+}
+
 int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
 {
 #ifdef PRINT_CALLS
@@ -617,8 +707,8 @@ int SparseFrame_initialize_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->UTi = NULL;
     matrix_info->UTx = NULL;
 
-    matrix_info->Perm = NULL;
     matrix_info->PivInv = NULL;
+    matrix_info->Perm = NULL;
     matrix_info->Parent = NULL;
     matrix_info->Post = NULL;
     matrix_info->ColCount = NULL;
@@ -694,6 +784,9 @@ int SparseFrame_read_matrix ( struct matrix_info_struct *matrix_info )
     matrix_info->workspace = malloc ( matrix_info->workSize );
 
     SparseFrame_compress ( matrix_info );
+
+    if ( ! ( matrix_info->isSymmetric ) )
+        SparseFrame_pivot ( matrix_info );
 
     matrix_info->readTime = SparseFrame_time () - timestamp;
 
@@ -3789,8 +3882,8 @@ int SparseFrame_cleanup_matrix ( struct matrix_info_struct *matrix_info )
     if ( matrix_info->UTi != NULL ) free ( matrix_info->UTi );
     if ( matrix_info->UTx != NULL ) free ( matrix_info->UTx );
 
-    if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
     if ( matrix_info->PivInv != NULL ) free ( matrix_info->PivInv );
+    if ( matrix_info->Perm != NULL ) free ( matrix_info->Perm );
     if ( matrix_info->Post != NULL ) free ( matrix_info->Post );
     if ( matrix_info->Parent != NULL ) free ( matrix_info->Parent );
     if ( matrix_info->ColCount != NULL ) free ( matrix_info->ColCount );
