@@ -589,7 +589,7 @@ int SparseFrame_compress ( struct matrix_info_struct *matrix_info )
 int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
 {
     int isComplex;
-    Long ncol, nrow, nzmax;
+    Long ncol, nrow;
     Long *Cp, *Ci;
     Float *Cx;
 
@@ -604,7 +604,6 @@ int SparseFrame_pivot ( struct matrix_info_struct *matrix_info )
     isComplex = matrix_info->isComplex;
     ncol = matrix_info->ncol;
     nrow = matrix_info->nrow;
-    nzmax = matrix_info->nzmax;
 
     Cp = matrix_info->Cp;
     Ci = matrix_info->Ci;
