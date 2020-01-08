@@ -2177,6 +2177,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
     Long *workspace;
 
+#ifdef PRINT_DEBUG
+    Long totalHit = 0, totalMiss = 0;
+#endif
+
 #ifdef PRINT_CALLS
     printf ("\n================SparseFrame_factorize_supernodal================\n\n");
 #endif
@@ -2272,6 +2276,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         Long *h_Lsi, *d_Lsi, *d_Map;
 
         Long st_last, stPass;
+
+#ifdef PRINT_DEBUG
+        Long localHit = 0, localMiss = 0;
+#endif
 
         gpuIndex = omp_get_thread_num();
         gpu_info = gpu_info_list + gpuIndex;
@@ -2544,6 +2552,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     void *d_R;
                                     Long *h_RelativeMap, *d_RelativeMap;
 
+#ifdef PRINT_DEBUG
+                                    localHit++;
+#endif
+
                                     dlda = ndrow;
 
                                     if (!isComplex)
@@ -2586,6 +2598,10 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                                     Long dlda;
                                     void *h_B, *d_B;
                                     Long *h_RelativeMap, *d_RelativeMap;
+
+#ifdef PRINT_DEBUG
+                                    localMiss++;
+#endif
 
                                     dlda = dn + dm;
 
@@ -2984,7 +3000,18 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
         d_Map = NULL;
 
         omp_unset_lock ( &( gpu_info->gpuLock ) );
+
+#ifdef PRINT_DEBUG
+#pragma omp atomic
+        totalHit += localHit;
+#pragma omp atomic
+        totalMiss += localMiss;
+#endif
     }
+
+#ifdef PRINT_DEBUG
+    printf ("hit = %ld miss = %ld hit ratio = %lf\n", totalHit, totalMiss, (Float) totalHit / ( totalHit + totalMiss ) );
+#endif
 
     return 0;
 }
