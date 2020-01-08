@@ -2650,22 +2650,16 @@ int SparseFrame_cpuApplyFactorize ( int isComplex, Long *Lp, Long *Li, void *Lx,
     }
 
     if (!isComplex)
-        magma_dgetrf_nopiv ( sn, sn, A, slda, &info );
+        magma_dgetrf_nopiv ( sn + sm, sn, A, slda, &info );
     else
-        magma_zgetrf_nopiv ( sn, sn, A, slda, &info );
+        magma_zgetrf_nopiv ( sn + sm, sn, A, slda, &info );
 
     if ( nscol < nsrow )
     {
         if (!isComplex)
-        {
-            dtrsm_ ( "R", "U", "N", "N", &sm, &sn, one, A, &slda, (Float*) A + sn, &slda );
             dtrsm_ ( "R", "L", "T", "U", &sm, &sn, one, A, &slda, (Float*) A + ( sn + sm ), &slda );
-        }
         else
-        {
-            ztrsm_ ( "R", "U", "N", "N", &sm, &sn, (Complex*) one, A, &slda, (Complex*) A + sn, &slda );
             ztrsm_ ( "R", "L", "T", "U", &sm, &sn, (Complex*) one, A, &slda, (Complex*) A + ( sn + sm ), &slda );
-        }
     }
 
     return 0;
@@ -3297,22 +3291,16 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         int info;
 
                         if (!isComplex)
-                            magma_dgetrf_nopiv ( sn, sn, h_A, slda, &info );
+                            magma_dgetrf_nopiv ( sn + sm, sn, h_A, slda, &info );
                         else
-                            magma_zgetrf_nopiv ( sn, sn, h_A, slda, &info );
+                            magma_zgetrf_nopiv ( sn + sm, sn, h_A, slda, &info );
 
                         if ( nscol < nsrow )
                         {
                             if (!isComplex)
-                            {
-                                dtrsm_ ( "R", "U", "N", "N", &sm, &sn, one, h_A, &slda, (Float*) h_A + sn, &slda );
                                 dtrsm_ ( "R", "L", "T", "U", &sm, &sn, one, h_A, &slda, (Float*) h_A + ( sn + sm ), &slda );
-                            }
                             else
-                            {
-                                ztrsm_ ( "R", "U", "N", "N", &sm, &sn, (Complex*) one, h_A, &slda, (Complex*) h_A + sn, &slda );
                                 ztrsm_ ( "R", "L", "T", "U", &sm, &sn, (Complex*) one, h_A, &slda, (Complex*) h_A + ( sn + sm ), &slda );
-                            }
                         }
 
 #pragma omp parallel for schedule(auto) num_threads(CP_NUM_THREAD) if(nscol>=CP_THREAD_THRESHOLD)
@@ -3336,27 +3324,21 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
                         {
                             if (!isComplex)
                             {
-                                //cusolverDnDgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, sn, sn, d_A, slda, &devWorkSize );
-                                cusolverDnDgetrf ( gpu_info->s_cusolverDnHandle, sn, sn, d_A, slda, d_workspace, NULL, d_info );
+                                //cusolverDnDgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, sn + sm, sn, d_A, slda, &devWorkSize );
+                                cusolverDnDgetrf ( gpu_info->s_cusolverDnHandle, sn + sm, sn, d_A, slda, d_workspace, NULL, d_info );
                             }
                             else
                             {
-                                //cusolverDnZgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, sn, sn, d_A, slda, &devWorkSize );
-                                cusolverDnZgetrf ( gpu_info->s_cusolverDnHandle, sn, sn, d_A, slda, (Complex*) d_workspace, NULL, d_info );
+                                //cusolverDnZgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, sn + sm, sn, d_A, slda, &devWorkSize );
+                                cusolverDnZgetrf ( gpu_info->s_cusolverDnHandle, sn + sm, sn, d_A, slda, (Complex*) d_workspace, NULL, d_info );
                             }
 
                             if ( nscol < nsrow )
                             {
                                 if (!isComplex)
-                                {
-                                    cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, sm, sn, one, d_A, slda, (Float*) d_A + sn, slda );
                                     cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_UNIT, sm, sn, one, d_A, slda, (Float*) d_A + ( sn + sm ), slda );
-                                }
                                 else
-                                {
-                                    cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, sm, sn, (Complex*) one, d_A, slda, (Complex*) d_A + sn, slda );
                                     cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_UNIT, sm, sn, (Complex*) one, d_A, slda, (Complex*) d_A + ( sn + sm ), slda );
-                                }
                             }
 
                             if ( !isComplex )
@@ -3418,26 +3400,24 @@ int SparseFrame_factorize_supernodal ( struct common_info_struct *common_info, s
 
                                 if (!isComplex)
                                 {
-                                    //cusolverDnDgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, sjr - sjl, sjr - sjl, (Float*) d_A + sjl * slda + sjl, slda, &devWorkSize );
-                                    cusolverDnDgetrf ( gpu_info->s_cusolverDnHandle, sjr - sjl, sjr - sjl, (Float*) d_A + sjl * slda + sjl, slda, d_workspace, NULL, d_info );
+                                    //cusolverDnDgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, nsrow - sjl, sjr - sjl, (Float*) d_A + sjl * slda + sjl, slda, &devWorkSize );
+                                    cusolverDnDgetrf ( gpu_info->s_cusolverDnHandle, nsrow - sjl, sjr - sjl, (Float*) d_A + sjl * slda + sjl, slda, d_workspace, NULL, d_info );
                                 }
                                 else
                                 {
-                                    //cusolverDnZgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, sjr - sjl, sjr - sjl, (Complex*) d_A + sjl * slda + sjl, slda, &devWorkSize );
-                                    cusolverDnZgetrf ( gpu_info->s_cusolverDnHandle, sjr - sjl, sjr - sjl, (Complex*) d_A + sjl * slda + sjl, slda, (Complex*) d_workspace, NULL, d_info );
+                                    //cusolverDnZgetrf_bufferSize ( gpu_info->s_cusolverDnHandle, nsrow - sjl, sjr - sjl, (Complex*) d_A + sjl * slda + sjl, slda, &devWorkSize );
+                                    cusolverDnZgetrf ( gpu_info->s_cusolverDnHandle, nsrow - sjl, sjr - sjl, (Complex*) d_A + sjl * slda + sjl, slda, (Complex*) d_workspace, NULL, d_info );
                                 }
 
                                 if ( sjr < nsrow )
                                 {
                                     if (!isComplex)
                                     {
-                                        cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, nsrow - sjr, sjr - sjl, one, (Float*) d_A + sjl * slda + sjl, slda, (Float*) d_A + sjl * slda + sjr, slda );
                                         cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, CUBLAS_DIAG_UNIT, sjr - sjl, nscol - sjr, one, (Float*) d_A + sjl * slda + sjl, slda, (Float*) d_A + sjr * slda + sjl, slda );
                                         cublasDtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_UNIT, nsrow - nscol, sjr - sjl, one, (Float*) d_A + sjl * slda + sjl, slda, (Float*) d_A + ( nsrow - nscol ) + sjl * slda + nscol, slda );
                                     }
                                     else
                                     {
-                                        cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, nsrow - sjr, sjr - sjl, (Complex*) one, (Complex*) d_A + sjl * slda + sjl, slda, (Complex*) d_A + sjl * slda + sjr, slda );
                                         cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, CUBLAS_DIAG_UNIT, sjr - sjl, nscol - sjr, (Complex*) one, (Complex*) d_A + sjl * slda + sjl, slda, (Complex*) d_A + sjr * slda + sjl, slda );
                                         cublasZtrsm ( gpu_info->s_cublasHandle, CUBLAS_SIDE_RIGHT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_UNIT, nsrow - nscol, sjr - sjl, (Complex*) one, (Complex*) d_A + sjl * slda + sjl, slda, (Complex*) d_A + ( nsrow - nscol ) + sjl * slda + nscol, slda );
                                     }
